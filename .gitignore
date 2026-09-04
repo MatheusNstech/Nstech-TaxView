@@ -35,10 +35,8 @@ Thumbs.db
 *.sln
 *.sw?
 
-# Cursor (keep project skills; ignore local agent junk)
-.cursor/*
-!.cursor/skills/
-!.cursor/skills/**
+# Cursor (local IDE / agents — never commit)
+.cursor/
 
 # Loose dumps at repo root only (avatars/logo/midia go under frontend/)
 /*.jpg
