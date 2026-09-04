@@ -1,0 +1,54 @@
+# Environment / secrets
+.env
+backend/.env
+frontend/.env
+**/credenciais*
+backend/scripts/credenciais_equipe.txt
+
+# Python
+.venv/
+backend/.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node / frontend build
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+*.local
+
+# IDE / OS
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Cursor (keep project skills; ignore local agent junk)
+.cursor/*
+!.cursor/skills/
+!.cursor/skills/**
+
+# Loose dumps at repo root only (avatars/logo/midia go under frontend/)
+/*.jpg
+/*.jpeg
+/*.png
+/*.webp
+/*.gif
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*

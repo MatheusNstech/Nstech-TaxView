@@ -1,0 +1,594 @@
+-- seed cronograma from CSV
+BEGIN;
+INSERT INTO public.empresas (cnpj, razao_social, bu, ativa) VALUES
+('10.683.008/0001-53','ATSLOG TECNOLOGIA LTDA','TMS',true),
+('05.074.351/0006-75','BGMRODOTEC TECNOLOGIA E INFORMATICA LTDA. (RS)','TMS',true),
+('05.074.351/0001-60','BGMRODOTEC TECNOLOGIA E INFORMATICA LTDA. (SBC)','TMS',true),
+('05.074.351/0007-56','BGMRODOTEC TECNOLOGIA E INFORMATICA LTDA. (MG)','TMS',true),
+('05.074.351/0002-41','BGMRODOTEC TECNOLOGIA E INFORMATICA LTDA. (RJ)','TMS',true),
+('05.074.351/0008-37','BGMRODOTEC TECNOLOGIA E INFORMATICA LTDA. (SP)','TMS',true),
+('28.644.310/0001-68','BPS TECNOLOGIA DE SEGURANCA LTDA','Embarcador',true),
+('06.888.683/0001-41','BRK GERENCIAMENTO DE RISCOS LTDA.','Embarcador',true),
+('15.127.839/0001-62','BTRANS INFORMATICA LTDA','TMS',true),
+('15.127.839/0003-24','BTRANS INFORMATICA LTDA','TMS',true),
+('15.127.839/0004-05','BTRANS INFORMATICA LTDA','TMS',true),
+('06.326.025/0001-66','BUONNY PROJETOS E SERVICOS DE RISCOS SECURITARIOS LTDA','PSL',true),
+('06.326.025/0002-47','BUONNY PROJETOS E SERVICOS DE RISCOS SECURITARIOS LTDA','PSL',true),
+('11.007.847/0001-14','CHP SOLUCOES LTDA','Embarcador',true),
+('21.244.758/0001-45','CT6 TECNOLOGIA LTDA','TMS',true),
+('00.708.590/0001-01','DATAMEX TECNOLOGIA DA INFORMACAO LTDA','TMS',true),
+('20.327.872/0001-76','FUSION SOFTWARE E SERVIÇOS S.A.','TMS',true),
+('29.044.316/0001-67','GBM Consultoria','PSL',true),
+('10.663.651/0001-15','GBM Logística Sudeste LTDA','PSL',true),
+('11.360.896/0001-36','GRIDNET TECNOLOGIA LTDA.','TMS',true),
+('07.960.929/0001-01','HIVELOG SOLUCOES EM TECNOLOGIA DA INFORMACAO S/A','TMS',true),
+('38.127.989/0001-71','IAMTECH TECNOLOGIA DA INFORMAÇÃO LTDA','Embarcador',true),
+('02.355.037/0001-68','KMM SOLUCOES TECNOLOGICAS LTDA.','Embarcador',true),
+('02.355.037/0003-20','KMM SOLUCOES TECNOLOGICAS LTDA.','Embarcador',true),
+('02.355.037/0005-91','KMM SOLUCOES TECNOLOGICAS LTDA. SCJ (SIGNA)','Embarcador',true),
+('02.355.037/0006-72','KMM SOLUCOES TECNOLOGICAS LTDA. SP (SIGNA)','Embarcador',true),
+('02.355.037/0002-49','KMM SOLUCOES TECNOLOGICAS LTDA.(ATUA)','Embarcador',true),
+('02.355.037/0004-00','KMM SOLUCOES TECNOLOGICAS LTDA.(LOGONE)','Embarcador',true),
+('15.094.258/0001-71','MAG EDITORA E PROMOTORA DE EVENTOS LTDA','Plataforma',true),
+('20.182.450/0001-50','NS KOTE TECNOLOGIA E INVESTIMENTOS LTDA','TMS',true),
+('05.945.576/0001-45','NSPEDAGIO SOLUCOES PARA PEDAGIO LTDA','Fintech',true),
+('05.945.576/0002-26','NSPEDAGIO SOLUCOES PARA PEDAGIO LTDA','Fintech',true),
+('35.991.709/0001-80','NSTECH FS LTDA','Fintech',true),
+('35.929.201/0001-52','NSTECH GR LTDA','Corporativo',true),
+('35.929.201/0002-33','NSTECH GR LTDA','Embarcador',true),
+('45.145.603/0001-10','NSTECH MK LTDA','Plataforma',true),
+('35.714.295/0001-42','NSTECH S.A.','Corporativo',true),
+('25.265.917/0001-49','ONISYS NA ESTRADA SOFTWARE S.A.','Embarcador',true),
+('04.368.185/0003-04','OPEN TECH SISTEMAS DE GERENCIAMENTO DE RISCOS LTDA','Embarcador',true),
+('04.368.185/0001-42','OPEN TECH SISTEMAS DE GERENCIAMENTO DE RISCOS LTDA','Embarcador',true),
+('11.509.962/0001-97','OTIMIZY SISTEMAS INTELIGENTES LTDA','PSL',true),
+('26.663.987/0001-18','QUALP PORTAL DE INTERNET LTDA.','Fintech',true),
+('23.971.135/0001-08','ROUTEASY SERVICOS DE ASSESSORIA LOGISTICA S.A.','PSL',true),
+('04.134.548/0001-85','RUNTEC INFORMATICA LTDA','Embarcador',true),
+('13.969.629/0001-96','TECCHAPECO SISTEMAS LTDA','Embarcador',true),
+('28.556.723/0001-90','TRIZY TECNOLOGIA EM LOGISTICA LTDA.','Embarcador',true)
+ON CONFLICT (cnpj) DO UPDATE SET razao_social = EXCLUDED.razao_social, bu = EXCLUDED.bu, ativa = true;
+INSERT INTO public.atividades_modelo (nome, requer_apuracao, dia_prazo_legal, dia_prazo_fiscal, recorrencia, ativa) VALUES
+('Apuração Importação',true,20,15,'mensal',true),
+('Apuração CPRB',true,20,15,'mensal',true),
+('Apuração IRPJ/CSLL',true,20,15,'mensal',true),
+('Apuração PIS e COFINS',true,20,15,'mensal',true),
+('DIRBI',true,20,15,'mensal',true),
+('EFD Contribuições',true,20,15,'mensal',true),
+('MIT / DCFTWEB',true,20,15,'mensal',true),
+('REINF',true,20,15,'mensal',true),
+('Apuração ISS Prestados',true,20,15,'mensal',true),
+('Apuração ICMS',true,20,15,'mensal',true),
+('SPED ICMS',true,20,15,'mensal',true)
+ON CONFLICT (nome) DO UPDATE SET requer_apuracao = EXCLUDED.requer_apuracao, ativa = true;
+INSERT INTO public.responsaveis (nome, ativo) VALUES
+('Viviane',true),
+('Flá/Glau/Sol',true),
+('Flávia',true),
+('Solange',true),
+('Felipe',true)
+ON CONFLICT (nome) DO UPDATE SET ativo = true;
+INSERT INTO public.obrigacoes (empresa_id, atividade_id, responsavel_id, competencia, prazo_legal, prazo_fiscal, status)
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '10.683.008/0001-53' AND a.nome = 'Apuração Importação'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '10.683.008/0001-53' AND a.nome = 'Apuração CPRB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flá/Glau/Sol'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '10.683.008/0001-53' AND a.nome = 'Apuração IRPJ/CSLL'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '10.683.008/0001-53' AND a.nome = 'Apuração PIS e COFINS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '10.683.008/0001-53' AND a.nome = 'DIRBI'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '10.683.008/0001-53' AND a.nome = 'EFD Contribuições'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '10.683.008/0001-53' AND a.nome = 'MIT / DCFTWEB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '10.683.008/0001-53' AND a.nome = 'REINF'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '10.683.008/0001-53' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '05.074.351/0006-75' AND a.nome = 'Apuração CPRB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flá/Glau/Sol'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '05.074.351/0006-75' AND a.nome = 'Apuração IRPJ/CSLL'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '05.074.351/0001-60' AND a.nome = 'Apuração PIS e COFINS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '05.074.351/0001-60' AND a.nome = 'DIRBI'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '05.074.351/0001-60' AND a.nome = 'EFD Contribuições'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '05.074.351/0006-75' AND a.nome = 'REINF'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '05.074.351/0001-60' AND a.nome = 'MIT / DCFTWEB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '05.074.351/0001-60' AND a.nome = 'Apuração Importação'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '05.074.351/0007-56' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '05.074.351/0002-41' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '05.074.351/0006-75' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '05.074.351/0001-60' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '05.074.351/0008-37' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '28.644.310/0001-68' AND a.nome = 'Apuração ICMS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flá/Glau/Sol'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '28.644.310/0001-68' AND a.nome = 'Apuração IRPJ/CSLL'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '28.644.310/0001-68' AND a.nome = 'Apuração PIS e COFINS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '28.644.310/0001-68' AND a.nome = 'EFD Contribuições'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '28.644.310/0001-68' AND a.nome = 'REINF'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '28.644.310/0001-68' AND a.nome = 'SPED ICMS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '28.644.310/0001-68' AND a.nome = 'MIT / DCFTWEB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '28.644.310/0001-68' AND a.nome = 'Apuração Importação'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '28.644.310/0001-68' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flá/Glau/Sol'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '06.888.683/0001-41' AND a.nome = 'Apuração IRPJ/CSLL'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '06.888.683/0001-41' AND a.nome = 'Apuração PIS e COFINS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '06.888.683/0001-41' AND a.nome = 'DIRBI'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '06.888.683/0001-41' AND a.nome = 'EFD Contribuições'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '06.888.683/0001-41' AND a.nome = 'REINF'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '06.888.683/0001-41' AND a.nome = 'MIT / DCFTWEB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '06.888.683/0001-41' AND a.nome = 'Apuração Importação'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '06.888.683/0001-41' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '15.127.839/0001-62' AND a.nome = 'MIT / DCFTWEB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '15.127.839/0001-62' AND a.nome = 'Apuração CPRB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '15.127.839/0001-62' AND a.nome = 'Apuração ICMS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flá/Glau/Sol'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '15.127.839/0001-62' AND a.nome = 'Apuração IRPJ/CSLL'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '15.127.839/0001-62' AND a.nome = 'Apuração PIS e COFINS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '15.127.839/0001-62' AND a.nome = 'DIRBI'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '15.127.839/0001-62' AND a.nome = 'EFD Contribuições'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '15.127.839/0001-62' AND a.nome = 'REINF'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '15.127.839/0001-62' AND a.nome = 'SPED ICMS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '15.127.839/0003-24' AND a.nome = 'SPED ICMS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '15.127.839/0004-05' AND a.nome = 'SPED ICMS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '15.127.839/0001-62' AND a.nome = 'Apuração Importação'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '15.127.839/0001-62' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '15.127.839/0003-24' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '15.127.839/0004-05' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flá/Glau/Sol'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '06.326.025/0001-66' AND a.nome = 'Apuração IRPJ/CSLL'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '06.326.025/0001-66' AND a.nome = 'Apuração PIS e COFINS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '06.326.025/0002-47' AND a.nome = 'Apuração PIS e COFINS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '06.326.025/0001-66' AND a.nome = 'DIRBI'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '06.326.025/0001-66' AND a.nome = 'EFD Contribuições'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '06.326.025/0001-66' AND a.nome = 'REINF'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '06.326.025/0001-66' AND a.nome = 'Apuração Importação'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '06.326.025/0001-66' AND a.nome = 'MIT / DCFTWEB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '06.326.025/0001-66' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '06.326.025/0002-47' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '11.007.847/0001-14' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flá/Glau/Sol'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '11.007.847/0001-14' AND a.nome = 'Apuração IRPJ/CSLL'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '11.007.847/0001-14' AND a.nome = 'Apuração PIS e COFINS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '11.007.847/0001-14' AND a.nome = 'EFD Contribuições'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '11.007.847/0001-14' AND a.nome = 'REINF'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '11.007.847/0001-14' AND a.nome = 'MIT / DCFTWEB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '21.244.758/0001-45' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flá/Glau/Sol'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '21.244.758/0001-45' AND a.nome = 'Apuração IRPJ/CSLL'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '21.244.758/0001-45' AND a.nome = 'Apuração PIS e COFINS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '21.244.758/0001-45' AND a.nome = 'EFD Contribuições'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '21.244.758/0001-45' AND a.nome = 'REINF'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '21.244.758/0001-45' AND a.nome = 'Apuração Importação'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '21.244.758/0001-45' AND a.nome = 'MIT / DCFTWEB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '00.708.590/0001-01' AND a.nome = 'Apuração Importação'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '00.708.590/0001-01' AND a.nome = 'MIT / DCFTWEB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '00.708.590/0001-01' AND a.nome = 'Apuração CPRB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flá/Glau/Sol'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '00.708.590/0001-01' AND a.nome = 'Apuração IRPJ/CSLL'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '00.708.590/0001-01' AND a.nome = 'Apuração PIS e COFINS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '00.708.590/0001-01' AND a.nome = 'DIRBI'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '00.708.590/0001-01' AND a.nome = 'EFD Contribuições'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '00.708.590/0001-01' AND a.nome = 'REINF'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '00.708.590/0001-01' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '20.327.872/0001-76' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '20.327.872/0001-76' AND a.nome = 'Apuração CPRB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flá/Glau/Sol'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '20.327.872/0001-76' AND a.nome = 'Apuração IRPJ/CSLL'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '20.327.872/0001-76' AND a.nome = 'Apuração PIS e COFINS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '20.327.872/0001-76' AND a.nome = 'DIRBI'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '20.327.872/0001-76' AND a.nome = 'EFD Contribuições'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '20.327.872/0001-76' AND a.nome = 'REINF'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '20.327.872/0001-76' AND a.nome = 'Apuração Importação'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '20.327.872/0001-76' AND a.nome = 'MIT / DCFTWEB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '29.044.316/0001-67' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flá/Glau/Sol'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '29.044.316/0001-67' AND a.nome = 'Apuração IRPJ/CSLL'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '29.044.316/0001-67' AND a.nome = 'Apuração PIS e COFINS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '29.044.316/0001-67' AND a.nome = 'DIRBI'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '29.044.316/0001-67' AND a.nome = 'EFD Contribuições'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '29.044.316/0001-67' AND a.nome = 'REINF'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '29.044.316/0001-67' AND a.nome = 'Apuração Importação'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '29.044.316/0001-67' AND a.nome = 'MIT / DCFTWEB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '10.663.651/0001-15' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flá/Glau/Sol'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '10.663.651/0001-15' AND a.nome = 'Apuração IRPJ/CSLL'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '10.663.651/0001-15' AND a.nome = 'Apuração PIS e COFINS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '10.663.651/0001-15' AND a.nome = 'EFD Contribuições'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '10.663.651/0001-15' AND a.nome = 'MIT / DCFTWEB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '11.360.896/0001-36' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '11.360.896/0001-36' AND a.nome = 'Apuração Importação'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flá/Glau/Sol'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '11.360.896/0001-36' AND a.nome = 'Apuração IRPJ/CSLL'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '11.360.896/0001-36' AND a.nome = 'Apuração PIS e COFINS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '11.360.896/0001-36' AND a.nome = 'EFD Contribuições'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '11.360.896/0001-36' AND a.nome = 'REINF'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '11.360.896/0001-36' AND a.nome = 'MIT / DCFTWEB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '07.960.929/0001-01' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '07.960.929/0001-01' AND a.nome = 'Apuração Importação'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '07.960.929/0001-01' AND a.nome = 'MIT / DCFTWEB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '07.960.929/0001-01' AND a.nome = 'Apuração CPRB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flá/Glau/Sol'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '07.960.929/0001-01' AND a.nome = 'Apuração IRPJ/CSLL'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '07.960.929/0001-01' AND a.nome = 'Apuração PIS e COFINS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '07.960.929/0001-01' AND a.nome = 'DIRBI'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '07.960.929/0001-01' AND a.nome = 'EFD Contribuições'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '07.960.929/0001-01' AND a.nome = 'REINF'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '38.127.989/0001-71' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flá/Glau/Sol'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '38.127.989/0001-71' AND a.nome = 'Apuração IRPJ/CSLL'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '38.127.989/0001-71' AND a.nome = 'Apuração PIS e COFINS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '38.127.989/0001-71' AND a.nome = 'EFD Contribuições'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '38.127.989/0001-71' AND a.nome = 'MIT / DCFTWEB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '38.127.989/0001-71' AND a.nome = 'REINF'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '02.355.037/0001-68' AND a.nome = 'Apuração CPRB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flá/Glau/Sol'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '02.355.037/0001-68' AND a.nome = 'Apuração IRPJ/CSLL'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '02.355.037/0001-68' AND a.nome = 'Apuração PIS e COFINS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '02.355.037/0001-68' AND a.nome = 'DIRBI'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '02.355.037/0001-68' AND a.nome = 'EFD Contribuições'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '02.355.037/0001-68' AND a.nome = 'REINF'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '02.355.037/0001-68' AND a.nome = 'SPED ICMS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '02.355.037/0001-68' AND a.nome = 'Apuração Importação'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '02.355.037/0001-68' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '02.355.037/0001-68' AND a.nome = 'MIT / DCFTWEB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '02.355.037/0003-20' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '02.355.037/0005-91' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '02.355.037/0006-72' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '02.355.037/0002-49' AND a.nome = 'Apuração Importação'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '02.355.037/0002-49' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '02.355.037/0004-00' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '15.094.258/0001-71' AND a.nome = 'MIT / DCFTWEB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flá/Glau/Sol'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '15.094.258/0001-71' AND a.nome = 'Apuração IRPJ/CSLL'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '15.094.258/0001-71' AND a.nome = 'Apuração PIS e COFINS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '15.094.258/0001-71' AND a.nome = 'EFD Contribuições'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '15.094.258/0001-71' AND a.nome = 'REINF'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '15.094.258/0001-71' AND a.nome = 'SPED ICMS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '15.094.258/0001-71' AND a.nome = 'Apuração Importação'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '15.094.258/0001-71' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '20.182.450/0001-50' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '20.182.450/0001-50' AND a.nome = 'MIT / DCFTWEB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flá/Glau/Sol'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '20.182.450/0001-50' AND a.nome = 'Apuração IRPJ/CSLL'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '20.182.450/0001-50' AND a.nome = 'Apuração PIS e COFINS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '20.182.450/0001-50' AND a.nome = 'DIRBI'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '20.182.450/0001-50' AND a.nome = 'EFD Contribuições'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '20.182.450/0001-50' AND a.nome = 'REINF'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '05.945.576/0001-45' AND a.nome = 'Apuração Importação'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '05.945.576/0001-45' AND a.nome = 'MIT / DCFTWEB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flá/Glau/Sol'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '05.945.576/0001-45' AND a.nome = 'Apuração IRPJ/CSLL'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '05.945.576/0001-45' AND a.nome = 'Apuração PIS e COFINS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '05.945.576/0001-45' AND a.nome = 'DIRBI'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '05.945.576/0001-45' AND a.nome = 'EFD Contribuições'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '05.945.576/0001-45' AND a.nome = 'REINF'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '05.945.576/0002-26' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '05.945.576/0001-45' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '35.991.709/0001-80' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '35.991.709/0001-80' AND a.nome = 'MIT / DCFTWEB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flá/Glau/Sol'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '35.991.709/0001-80' AND a.nome = 'Apuração IRPJ/CSLL'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '35.991.709/0001-80' AND a.nome = 'Apuração PIS e COFINS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '35.991.709/0001-80' AND a.nome = 'EFD Contribuições'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '35.991.709/0001-80' AND a.nome = 'REINF'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '35.929.201/0001-52' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '35.929.201/0002-33' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '35.929.201/0001-52' AND a.nome = 'MIT / DCFTWEB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '35.929.201/0001-52' AND a.nome = 'Apuração CPRB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '35.929.201/0001-52' AND a.nome = 'Apuração PIS e COFINS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '35.929.201/0001-52' AND a.nome = 'DIRBI'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '35.929.201/0001-52' AND a.nome = 'EFD Contribuições'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '35.929.201/0001-52' AND a.nome = 'REINF'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '35.929.201/0002-33' AND a.nome = 'REINF'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '35.929.201/0001-52' AND a.nome = 'Apuração Importação'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '35.929.201/0002-33' AND a.nome = 'Apuração Importação'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '45.145.603/0001-10' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '45.145.603/0001-10' AND a.nome = 'MIT / DCFTWEB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flá/Glau/Sol'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '45.145.603/0001-10' AND a.nome = 'Apuração IRPJ/CSLL'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '45.145.603/0001-10' AND a.nome = 'Apuração PIS e COFINS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '45.145.603/0001-10' AND a.nome = 'EFD Contribuições'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '45.145.603/0001-10' AND a.nome = 'REINF'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '35.714.295/0001-42' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flá/Glau/Sol'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '35.714.295/0001-42' AND a.nome = 'Apuração IRPJ/CSLL'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '35.714.295/0001-42' AND a.nome = 'Apuração PIS e COFINS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '35.714.295/0001-42' AND a.nome = 'EFD Contribuições'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '35.714.295/0001-42' AND a.nome = 'REINF'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '35.714.295/0001-42' AND a.nome = 'MIT / DCFTWEB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '25.265.917/0001-49' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '25.265.917/0001-49' AND a.nome = 'MIT / DCFTWEB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flá/Glau/Sol'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '25.265.917/0001-49' AND a.nome = 'Apuração IRPJ/CSLL'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '25.265.917/0001-49' AND a.nome = 'Apuração PIS e COFINS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '25.265.917/0001-49' AND a.nome = 'DIRBI'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '25.265.917/0001-49' AND a.nome = 'EFD Contribuições'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '25.265.917/0001-49' AND a.nome = 'REINF'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '04.368.185/0003-04' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '04.368.185/0001-42' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '04.368.185/0001-42' AND a.nome = 'Apuração Importação'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flá/Glau/Sol'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '04.368.185/0001-42' AND a.nome = 'Apuração IRPJ/CSLL'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '04.368.185/0001-42' AND a.nome = 'Apuração PIS e COFINS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '04.368.185/0001-42' AND a.nome = 'DIRBI'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '04.368.185/0001-42' AND a.nome = 'EFD Contribuições'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '04.368.185/0001-42' AND a.nome = 'REINF'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Solange'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '04.368.185/0001-42' AND a.nome = 'MIT / DCFTWEB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '11.509.962/0001-97' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '11.509.962/0001-97' AND a.nome = 'Apuração Importação'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flá/Glau/Sol'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '11.509.962/0001-97' AND a.nome = 'Apuração IRPJ/CSLL'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '11.509.962/0001-97' AND a.nome = 'Apuração PIS e COFINS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '11.509.962/0001-97' AND a.nome = 'DIRBI'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '11.509.962/0001-97' AND a.nome = 'EFD Contribuições'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '11.509.962/0001-97' AND a.nome = 'REINF'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '11.509.962/0001-97' AND a.nome = 'MIT / DCFTWEB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '26.663.987/0001-18' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '26.663.987/0001-18' AND a.nome = 'MIT / DCFTWEB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '26.663.987/0001-18' AND a.nome = 'Apuração Importação'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flá/Glau/Sol'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '26.663.987/0001-18' AND a.nome = 'Apuração IRPJ/CSLL'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '26.663.987/0001-18' AND a.nome = 'Apuração PIS e COFINS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '26.663.987/0001-18' AND a.nome = 'EFD Contribuições'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '26.663.987/0001-18' AND a.nome = 'REINF'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '23.971.135/0001-08' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '23.971.135/0001-08' AND a.nome = 'Apuração Importação'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '23.971.135/0001-08' AND a.nome = 'MIT / DCFTWEB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flá/Glau/Sol'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '23.971.135/0001-08' AND a.nome = 'Apuração IRPJ/CSLL'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '23.971.135/0001-08' AND a.nome = 'Apuração PIS e COFINS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '23.971.135/0001-08' AND a.nome = 'EFD Contribuições'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Viviane'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '23.971.135/0001-08' AND a.nome = 'REINF'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '04.134.548/0001-85' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '04.134.548/0001-85' AND a.nome = 'Apuração Importação'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '04.134.548/0001-85' AND a.nome = 'MIT / DCFTWEB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flá/Glau/Sol'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '04.134.548/0001-85' AND a.nome = 'Apuração IRPJ/CSLL'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '04.134.548/0001-85' AND a.nome = 'Apuração PIS e COFINS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '04.134.548/0001-85' AND a.nome = 'DIRBI'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '04.134.548/0001-85' AND a.nome = 'EFD Contribuições'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '04.134.548/0001-85' AND a.nome = 'REINF'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '13.969.629/0001-96' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '13.969.629/0001-96' AND a.nome = 'Apuração Importação'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flá/Glau/Sol'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '13.969.629/0001-96' AND a.nome = 'Apuração IRPJ/CSLL'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '13.969.629/0001-96' AND a.nome = 'Apuração PIS e COFINS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '13.969.629/0001-96' AND a.nome = 'EFD Contribuições'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '13.969.629/0001-96' AND a.nome = 'REINF'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flávia'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '13.969.629/0001-96' AND a.nome = 'MIT / DCFTWEB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '28.556.723/0001-90' AND a.nome = 'Apuração ISS Prestados'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '28.556.723/0001-90' AND a.nome = 'MIT / DCFTWEB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '28.556.723/0001-90' AND a.nome = 'Apuração Importação'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '28.556.723/0001-90' AND a.nome = 'Apuração CPRB'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Flá/Glau/Sol'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '28.556.723/0001-90' AND a.nome = 'Apuração IRPJ/CSLL'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '28.556.723/0001-90' AND a.nome = 'Apuração PIS e COFINS'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '28.556.723/0001-90' AND a.nome = 'DIRBI'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '28.556.723/0001-90' AND a.nome = 'EFD Contribuições'
+UNION ALL
+SELECT e.id, a.id, (SELECT id FROM public.responsaveis WHERE nome = 'Felipe'), '2026-06-01'::date, '2026-07-20'::date, '2026-07-15'::date, 'PENDENTE'::public.status_obrigacao FROM public.empresas e, public.atividades_modelo a WHERE e.cnpj = '28.556.723/0001-90' AND a.nome = 'REINF'
+ON CONFLICT (empresa_id, atividade_id, competencia) DO NOTHING;
+COMMIT;

@@ -1,0 +1,8 @@
+{
+  "functions": {
+    "app/main.py": {
+      "maxDuration": 60,
+      "excludeFiles": "{scripts/**,.venv/**,.env,.env.*,**/__pycache__/**,**/*.pyc,requirements-dev.txt}"
+    }
+  }
+}
