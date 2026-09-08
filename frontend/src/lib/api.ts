@@ -2,13 +2,19 @@ import { supabase } from './supabase'
 
 const configuredApiUrl = import.meta.env.VITE_API_URL as string | undefined
 
-if (import.meta.env.PROD && !configuredApiUrl) {
-  throw new Error(
-    'VITE_API_URL é obrigatória em produção. Configure a URL da API na Vercel.',
-  )
+function resolveApiUrl(): string {
+  if (import.meta.env.DEV) {
+    return configuredApiUrl ?? 'http://localhost:8002'
+  }
+  // Front e API compartilham o mesmo domínio na Vercel. A URL gravada no build
+  // pode não existir (sufixo da conta), então o painel usa o endereço aberto.
+  if (typeof window !== 'undefined' && window.location.origin) {
+    return window.location.origin
+  }
+  return configuredApiUrl ?? ''
 }
 
-const API_URL = configuredApiUrl ?? 'http://localhost:8002'
+const API_URL = resolveApiUrl()
 
 /** In-memory token — avoids auth.getSession() on every API call. */
 let accessToken: string | null = null
