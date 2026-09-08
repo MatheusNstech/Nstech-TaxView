@@ -49,7 +49,6 @@ function isLateWorkItem(item: WorkItem): boolean {
 export default function MinhasTarefas() {
   const {
     hasResponsavel,
-    responsavelNome,
     responsavelId,
     isViewer,
     profileLoading,
