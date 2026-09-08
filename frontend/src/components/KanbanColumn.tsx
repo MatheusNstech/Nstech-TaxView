@@ -1,12 +1,12 @@
 import { useDroppable } from '@dnd-kit/core'
-import type { Obrigacao, StatusObrigacao } from '../types'
+import type { StatusObrigacao, WorkItem } from '../types'
 import KanbanCard from './KanbanCard'
 
 interface KanbanColumnProps {
   id: StatusObrigacao
   label: string
-  items: Obrigacao[]
-  onCardClick: (item: Obrigacao) => void
+  items: WorkItem[]
+  onCardClick: (item: WorkItem) => void
   disableDrag?: boolean
 }
 
@@ -19,28 +19,37 @@ export default function KanbanColumn({
 }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id, disabled: disableDrag })
 
+  const scrollClass = [
+    'flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain p-3',
+    '[scrollbar-width:thin]',
+    '[scrollbar-color:#cbd5e1_transparent]',
+    '[&::-webkit-scrollbar]:w-1.5',
+    '[&::-webkit-scrollbar-track]:bg-transparent',
+    '[&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300',
+  ].join(' ')
+
   return (
     <div
       ref={setNodeRef}
       className={[
-        'glass-panel flex min-h-[520px] w-80 shrink-0 flex-col',
+        'glass-panel flex h-full min-h-0 w-80 shrink-0 flex-col overflow-hidden',
         isOver ? 'ring-2 ring-brand-500/30' : '',
       ].join(' ')}
     >
-      <div className="flex items-center justify-between border-b border-[color:var(--color-line)] px-4 py-3">
+      <div className="flex shrink-0 items-center justify-between border-b border-[color:var(--color-line)] px-4 py-3">
         <h3 className="text-sm font-semibold text-[color:var(--color-ink)]">{label}</h3>
         <span className="glass-chip text-brand-700">{items.length}</span>
       </div>
-      <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-3">
+      <div className={scrollClass}>
         {items.length === 0 ? (
           <p className="py-8 text-center text-xs text-[color:var(--color-muted)]">
-            Nenhuma obrigação
+            Nenhuma tarefa
           </p>
         ) : (
           items.map((item) => (
             <KanbanCard
-              key={item.id}
-              obrigacao={item}
+              key={item.key}
+              item={item}
               onClick={() => onCardClick(item)}
               disableDrag={disableDrag}
             />

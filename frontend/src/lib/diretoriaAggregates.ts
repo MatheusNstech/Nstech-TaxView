@@ -1,4 +1,5 @@
-import type { Obrigacao, StatusObrigacao } from '../types'
+import type { Obrigacao, StatusObrigacao, WorkItem } from '../types'
+import { tarefaCategoriaLabel } from '../types'
 
 export const SERVICO_STATUS_ORDER: {
   key: StatusObrigacao
@@ -11,9 +12,6 @@ export const SERVICO_STATUS_ORDER: {
   { key: 'ENTREGUE', label: 'Entregue', color: '#00A76F' },
   { key: 'ATRASADO', label: 'Atrasado', color: '#FF5630' },
 ]
-
-/** Cor principal estilo Minimals para barras de volume. */
-export const DIRETORIA_VOLUME_COLOR = '#00A76F'
 
 /** Paleta multi-cor para polar area (Minimals). */
 export const DIRETORIA_POLAR_COLORS = [
@@ -51,12 +49,22 @@ function activityName(o: Obrigacao): string {
   return o.atividade?.nome?.trim() || 'Sem tipo de serviço'
 }
 
+/** Rótulo de serviço para obrigação ou tarefa manual. */
+export function workItemServicoNome(item: WorkItem): string {
+  if (item.origem === 'tarefa') {
+    return `Tarefa · ${tarefaCategoriaLabel(item.categoria)}`
+  }
+  return item.obrigacao
+    ? activityName(item.obrigacao)
+    : item.subtitle || 'Sem tipo de serviço'
+}
+
 /**
- * Agrupa obrigações por tipo de serviço (atividade).
+ * Agrupa obrigações/tarefas por tipo de serviço.
  * Top `limit` por volume; restante consolida em "Outros".
  */
 export function aggregateByServico(
-  obrigacoes: Obrigacao[],
+  items: Obrigacao[] | WorkItem[],
   limit = 10,
 ): {
   volume: ServicoVolumeItem[]
@@ -67,11 +75,15 @@ export function aggregateByServico(
     { total: number; status: Partial<Record<StatusObrigacao, number>> }
   >()
 
-  for (const o of obrigacoes) {
-    const nome = activityName(o)
+  for (const raw of items) {
+    const isWork = 'origem' in raw
+    const nome = isWork
+      ? workItemServicoNome(raw as WorkItem)
+      : activityName(raw as Obrigacao)
+    const status = (raw as Obrigacao | WorkItem).status
     const bucket = byName.get(nome) ?? { total: 0, status: {} }
     bucket.total += 1
-    bucket.status[o.status] = (bucket.status[o.status] ?? 0) + 1
+    bucket.status[status] = (bucket.status[status] ?? 0) + 1
     byName.set(nome, bucket)
   }
 

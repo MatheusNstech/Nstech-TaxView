@@ -5,6 +5,25 @@ export function formatDate(value: string | null | undefined): string {
   return `${d}/${m}/${y}`
 }
 
+/** "09:00:00" or "09:00" → "09:00". Empty if missing. */
+export function formatTime(value: string | null | undefined): string {
+  if (!value) return ''
+  const [h, m] = value.split(':')
+  if (h === undefined || m === undefined) return value
+  return `${h.padStart(2, '0')}:${m.padStart(2, '0')}`
+}
+
+/** Agenda da tarefa, sem efeito no atraso. Ex.: "09:00–12:00". */
+export function formatHorario(
+  inicio: string | null | undefined,
+  fim: string | null | undefined,
+): string | null {
+  const a = formatTime(inicio)
+  const b = formatTime(fim)
+  if (!a || !b) return null
+  return `${a}–${b}`
+}
+
 export function formatCompetencia(value: string | null | undefined): string {
   if (!value) return '—'
   const [y, m] = value.split('-')
@@ -28,10 +47,6 @@ export function formatCompetencia(value: string | null | undefined): string {
 
 export function monthToCompetencia(month: string): string {
   return `${month}-01`
-}
-
-export function competenciaToMonth(competencia: string): string {
-  return competencia.slice(0, 7)
 }
 
 /** Competência padrão do cronograma seedado (operação Ago/2026). */

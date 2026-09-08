@@ -1,5 +1,6 @@
 import { Check, MessageSquare, History, X } from 'lucide-react'
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../lib/api'
 import { formatDate, statusLabel } from '../lib/format'
@@ -222,14 +223,14 @@ export default function ObrigacaoDrawer({
     return v
   }
 
-  return (
+  return createPortal(
     <>
       <div
-        className="fixed inset-0 z-40 bg-slate-900/40"
+        className="fixed inset-0 z-[80] bg-slate-900/45 backdrop-blur-sm"
         onClick={onClose}
         aria-hidden
       />
-      <aside className="fixed inset-y-3 right-3 z-50 flex w-[min(100%-1.5rem,26rem)] flex-col overflow-hidden rounded-2xl bg-white shadow-[0_24px_64px_rgb(15_23_42_/_0.28)] ring-1 ring-slate-200">
+      <aside className="fixed inset-y-3 right-3 z-[90] flex w-[min(100%-1.5rem,26rem)] flex-col overflow-hidden rounded-2xl bg-white shadow-[0_24px_64px_rgb(15_23_42_/_0.28)] ring-1 ring-slate-200">
         <header className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
           <div className="min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
@@ -587,6 +588,7 @@ export default function ObrigacaoDrawer({
           </footer>
         )}
       </aside>
-    </>
+    </>,
+    document.body,
   )
 }

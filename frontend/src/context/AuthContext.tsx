@@ -56,12 +56,8 @@ function mustChangeFromSession(session: Session | null): boolean {
   const app = session?.user?.app_metadata as
     | { must_change_password?: boolean | string }
     | undefined
-  const user = session?.user?.user_metadata as
-    | { must_change_password?: boolean | string }
-    | undefined
-  const flag = (v: boolean | string | undefined) =>
-    v === true || v === 'true'
-  return flag(app?.must_change_password) || flag(user?.must_change_password)
+  const value = app?.must_change_password
+  return value === true || value === 'true'
 }
 
 export function homePathForRole(role: UserRole): string {
@@ -125,11 +121,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const changePassword = useCallback(async (newPassword: string) => {
-    const { error } = await supabase.auth.updateUser({
-      password: newPassword,
+    await apiFetch('/api/me/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ password: newPassword }),
     })
-    if (error) throw error
-    await apiFetch('/api/me/clear-must-change-password', { method: 'POST' })
     await supabase.auth.refreshSession()
   }, [])
 

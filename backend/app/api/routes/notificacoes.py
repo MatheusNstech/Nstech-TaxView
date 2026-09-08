@@ -4,7 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from supabase import Client
 
-from app.core.auth import AuthUser, get_current_user, get_db_client
+from app.core.auth import AuthUser, assert_password_changed, get_current_user, get_db_client
 from app.schemas.models import NotificacaoOut
 
 router = APIRouter(prefix="/notificacoes", tags=["notificacoes"])
@@ -35,6 +35,7 @@ def marcar_lida(
     user: Annotated[AuthUser, Depends(get_current_user)],
     client: Annotated[Client, Depends(get_db_client)],
 ):
+    assert_password_changed(user)
     data = (
         client.table("notificacoes")
         .update({"lida": True})
@@ -53,6 +54,7 @@ def marcar_todas_lidas(
     user: Annotated[AuthUser, Depends(get_current_user)],
     client: Annotated[Client, Depends(get_db_client)],
 ):
+    assert_password_changed(user)
     client.table("notificacoes").update({"lida": True}).eq("user_id", user.id).eq(
         "lida", False
     ).execute()

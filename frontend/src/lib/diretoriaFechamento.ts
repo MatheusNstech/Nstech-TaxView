@@ -41,7 +41,10 @@ export interface FechamentoRow {
 
 export interface FechamentoKpis {
   total: number
-  percentualNoPrazo: number
+  entregues: number
+  percentualEntregue: number
+  /** % das entregues que foram depois do prazo */
+  percentualForaEntreEntregues: number
   atrasadas: number
   venceHoje: number
   foraPrazo: number
@@ -150,25 +153,66 @@ export function computeFechamentoKpis(
   today: Date = new Date(),
 ): FechamentoKpis {
   const total = obrigacoes.length
-  let noPrazo = 0
+  let entregues = 0
   let atrasadas = 0
   let venceHoje = 0
   let foraPrazo = 0
   for (const o of obrigacoes) {
     const st = fechamentoStatus(o, today)
-    if (st === 'no_prazo') noPrazo += 1
+    if (o.status === 'ENTREGUE') entregues += 1
     if (st === 'atrasado') atrasadas += 1
     if (st === 'fora_prazo') foraPrazo += 1
     if (isVencendoHoje(o, today)) venceHoje += 1
   }
   return {
     total,
-    percentualNoPrazo: total ? Math.round((noPrazo / total) * 100) : 0,
+    entregues,
+    percentualEntregue: total
+      ? Math.round((entregues / total) * 1000) / 10
+      : 0,
+    percentualForaEntreEntregues: entregues
+      ? Math.round((foraPrazo / entregues) * 1000) / 10
+      : 0,
     atrasadas,
     venceHoje,
     foraPrazo,
   }
 }
+
+/** Helpers for manual tarefas in fechamento / calendar views. */
+export function tarefaPrazoIso(t: { prazo: string | null }): string | null {
+  return parseIsoDate(t.prazo)
+}
+
+export function tarefaIsAtrasada(
+  t: { status: string; prazo: string | null },
+  today: Date = new Date(),
+): boolean {
+  if (t.status === 'ENTREGUE') return false
+  if (t.status === 'ATRASADO') return true
+  const prazo = tarefaPrazoIso(t)
+  return Boolean(prazo && prazo < todayIso(today))
+}
+
+export function tarefaVenceHoje(
+  t: { status: string; prazo: string | null },
+  today: Date = new Date(),
+): boolean {
+  if (t.status === 'ENTREGUE') return false
+  return tarefaPrazoIso(t) === todayIso(today)
+}
+
+export function matchesTarefaFechamentoChip(
+  t: { status: string; prazo: string | null },
+  chip: FechamentoChip,
+  today: Date = new Date(),
+): boolean {
+  if (chip === 'fora_prazo') return false
+  if (chip === 'atrasadas') return tarefaIsAtrasada(t, today)
+  if (chip === 'vence_hoje') return tarefaVenceHoje(t, today)
+  return tarefaIsAtrasada(t, today) || tarefaVenceHoje(t, today)
+}
+
 
 function toRow(nome: string, counts: FechamentoCounts): FechamentoRow {
   return {
@@ -217,23 +261,3 @@ export function empresasComExcecao(
     .slice(0, limit)
 }
 
-export function aggregateFechamentoByServico(
-  obrigacoes: Obrigacao[],
-  today: Date = new Date(),
-): FechamentoRow[] {
-  const byName = new Map<string, FechamentoCounts>()
-  for (const o of obrigacoes) {
-    const nome = o.atividade?.nome?.trim() || 'Sem tipo de serviço'
-    const bucket = byName.get(nome) ?? emptyCounts()
-    bump(bucket, fechamentoStatus(o, today))
-    byName.set(nome, bucket)
-  }
-  return Array.from(byName.entries())
-    .map(([nome, counts]) => toRow(nome, counts))
-    .sort(
-      (a, b) =>
-        gravity(b) - gravity(a) ||
-        b.total - a.total ||
-        a.nome.localeCompare(b.nome, 'pt-BR'),
-    )
-}

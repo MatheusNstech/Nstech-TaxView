@@ -9,15 +9,15 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core'
 import { useMemo, useState } from 'react'
-import type { Obrigacao, StatusObrigacao } from '../types'
+import type { StatusObrigacao, WorkItem } from '../types'
 import { KANBAN_COLUMNS } from '../types'
 import KanbanCard from './KanbanCard'
 import KanbanColumn from './KanbanColumn'
 
 interface KanbanBoardProps {
-  items: Obrigacao[]
-  onStatusChange: (id: string, status: StatusObrigacao) => Promise<void>
-  onCardClick: (item: Obrigacao) => void
+  items: WorkItem[]
+  onStatusChange: (item: WorkItem, status: StatusObrigacao) => Promise<void>
+  onCardClick: (item: WorkItem) => void
   readOnly?: boolean
 }
 
@@ -32,13 +32,13 @@ export default function KanbanBoard({
   onCardClick,
   readOnly = false,
 }: KanbanBoardProps) {
-  const [activeId, setActiveId] = useState<string | null>(null)
+  const [activeKey, setActiveKey] = useState<string | null>(null)
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   )
 
   const grouped = useMemo(() => {
-    const map: Record<string, Obrigacao[]> = {
+    const map: Record<string, WorkItem[]> = {
       PENDENTE: [],
       EM_ANDAMENTO: [],
       EM_REVISAO: [],
@@ -51,38 +51,39 @@ export default function KanbanBoard({
     return map
   }, [items])
 
-  const activeItem = items.find((i) => i.id === activeId) ?? null
+  const activeItem = items.find((i) => i.key === activeKey) ?? null
 
   const handleDragStart = (event: DragStartEvent) => {
     if (readOnly) return
-    setActiveId(String(event.active.id))
+    setActiveKey(String(event.active.id))
   }
 
   const handleDragEnd = async (event: DragEndEvent) => {
-    setActiveId(null)
+    setActiveKey(null)
     if (readOnly) return
     const { active, over } = event
     if (!over) return
 
-    const obrigacaoId = String(active.id)
+    const itemKey = String(active.id)
     const overId = String(over.id)
+    const current = items.find((i) => i.key === itemKey)
+    if (!current) return
+
     const targetColumn = (
       KANBAN_COLUMNS.some((c) => c.id === overId)
         ? overId
         : columnFor(
-            (items.find((i) => i.id === overId)?.status as StatusObrigacao) ??
+            (items.find((i) => i.key === overId)?.status as StatusObrigacao) ??
               'PENDENTE',
           )
     ) as StatusObrigacao
 
-    const current = items.find((i) => i.id === obrigacaoId)
-    if (!current || columnFor(current.status) === targetColumn) return
-
-    await onStatusChange(obrigacaoId, targetColumn)
+    if (columnFor(current.status) === targetColumn) return
+    await onStatusChange(current, targetColumn)
   }
 
   const board = (
-    <div className="flex gap-4 overflow-x-auto pb-4">
+    <div className="flex h-[calc(100dvh-11.5rem)] min-h-[22rem] gap-4 overflow-x-auto overflow-y-hidden pb-1">
       {KANBAN_COLUMNS.map((col) => (
         <KanbanColumn
           key={col.id}
@@ -111,7 +112,7 @@ export default function KanbanBoard({
       <DragOverlay>
         {activeItem ? (
           <div className="w-80">
-            <KanbanCard obrigacao={activeItem} onClick={() => undefined} />
+            <KanbanCard item={activeItem} onClick={() => undefined} />
           </div>
         ) : null}
       </DragOverlay>

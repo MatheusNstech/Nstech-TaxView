@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-import csv
-import io
 from collections import defaultdict
 from datetime import date, datetime, timezone
 from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response
 from supabase import Client
 
 from app.core.auth import (
@@ -18,6 +16,8 @@ from app.core.auth import (
     require_admin,
     require_not_viewer,
 )
+from app.services.excel_export import build_obrigacoes_xlsx
+from app.services.pptx_export import build_market_call_pptx, market_call_filename
 from app.schemas.models import (
     AuditLogOut,
     CalendarioDia,
@@ -189,11 +189,26 @@ def calendario(
     if detalhe_dia:
         detalhe = by_day.get(detalhe_dia.isoformat(), [])
 
-    return CalendarioResponse(dias=dias, detalhe=detalhe)
+    from app.api.routes.tarefas import list_tarefas
+
+    tarefas: list[Any] = []
+    try:
+        tarefas = list_tarefas(
+            user=user,
+            client=client,
+            prazo_de=de,
+            prazo_ate=ate,
+            bu=bu,
+            responsavel_id=responsavel_id,
+        )
+    except Exception:
+        tarefas = []
+
+    return CalendarioResponse(dias=dias, detalhe=detalhe, tarefas=tarefas)
 
 
-@router.get("/export.csv")
-def export_csv(
+@router.get("/export.xlsx")
+def export_xlsx(
     user: Annotated[AuthUser, Depends(get_current_user)],
     client: Annotated[Client, Depends(get_db_client)],
     competencia: date | None = None,
@@ -213,47 +228,82 @@ def export_csv(
         q=q,
         minhas=minhas,
     )
-    buf = io.StringIO()
-    writer = csv.writer(buf, delimiter=";")
-    writer.writerow(
-        [
-            "empresa",
-            "cnpj",
-            "bu",
-            "atividade",
-            "responsavel",
-            "competencia",
-            "prazo_legal",
-            "prazo_fiscal",
-            "data_entrega",
-            "status",
-            "urgencia",
-        ]
+    from app.api.routes.tarefas import list_tarefas
+
+    tarefas = list_tarefas(
+        user=user,
+        client=client,
+        competencia=competencia,
+        bu=bu,
+        responsavel_id=responsavel_id,
+        status_filter=status_filter,
+        q=q,
     )
-    for r in rows:
-        emp = r.get("empresa") or {}
-        atv = r.get("atividade") or {}
-        resp = r.get("responsavel") or {}
-        writer.writerow(
-            [
-                emp.get("razao_social") or "",
-                emp.get("cnpj") or "",
-                emp.get("bu") or "",
-                atv.get("nome") or "",
-                resp.get("nome") or "",
-                r.get("competencia") or "",
-                r.get("prazo_legal") or "",
-                r.get("prazo_fiscal") or "",
-                r.get("data_entrega") or "",
-                r.get("status") or "",
-                r.get("urgencia") or "",
-            ]
-        )
-    buf.seek(0)
-    return StreamingResponse(
-        iter([buf.getvalue()]),
-        media_type="text/csv; charset=utf-8",
-        headers={"Content-Disposition": "attachment; filename=obrigacoes.csv"},
+    stamp = competencia.isoformat()[:7] if competencia else "todas"
+    try:
+        content = build_obrigacoes_xlsx(rows, competencia=competencia, tarefas=tarefas)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Não foi possível gerar o Excel",
+        ) from exc
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f'attachment; filename="cronograma_{stamp}.xlsx"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@router.get("/export.pptx")
+def export_pptx(
+    user: Annotated[AuthUser, Depends(get_current_user)],
+    client: Annotated[Client, Depends(get_db_client)],
+    competencia: date | None = None,
+    bu: str | None = None,
+    responsavel_id: UUID | None = None,
+    status_filter: str | None = Query(default=None, alias="status"),
+    q: str | None = None,
+    minhas: bool = False,
+):
+    rows = list_obrigacoes(
+        user=user,
+        client=client,
+        competencia=competencia,
+        bu=bu,
+        responsavel_id=responsavel_id,
+        status_filter=status_filter,
+        q=q,
+        minhas=minhas,
+    )
+    from app.api.routes.tarefas import list_tarefas
+
+    tarefas = list_tarefas(
+        user=user,
+        client=client,
+        competencia=competencia,
+        bu=bu,
+        responsavel_id=responsavel_id,
+        status_filter=status_filter,
+        q=q,
+    )
+    filename = market_call_filename(competencia)
+    try:
+        content = build_market_call_pptx(rows, competencia=competencia, tarefas=tarefas)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Não foi possível gerar o Market Call",
+        ) from exc
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+        },
     )
 
 
@@ -336,9 +386,43 @@ def update_obrigacao(
         body.pop("responsavel_id", None)
         body.pop("empresa_id", None)
         body.pop("atividade_id", None)
+        body.pop("prazo_legal", None)
+        body.pop("prazo_fiscal", None)
+        body.pop("competencia", None)
     body["updated_by"] = user.id
     if body.get("data_entrega") and not body.get("status"):
         body["status"] = "ENTREGUE"
+
+    new_status = body.get("status")
+    if new_status == "ENTREGUE":
+        # Atraso usa o prazo já gravado, não o prazo enviado neste PATCH.
+        prazo_fiscal = before.get("prazo_fiscal")
+        prazo_legal = before.get("prazo_legal")
+        ref = prazo_fiscal or prazo_legal
+        today = date.today()
+        late = before.get("status") == "ATRASADO"
+        if not late and ref:
+            try:
+                late = date.fromisoformat(str(ref)[:10]) < today
+            except ValueError:
+                late = False
+        if late:
+            motivo = (body.get("motivo_atraso") or before.get("motivo_atraso") or "")
+            motivo = str(motivo).strip()
+            if len(motivo) < 50:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "Informe o motivo do atraso (mínimo 50 caracteres) "
+                        "para entregar fora do prazo"
+                    ),
+                )
+            body["motivo_atraso"] = motivo
+        elif "motivo_atraso" in body and not str(body.get("motivo_atraso") or "").strip():
+            body.pop("motivo_atraso", None)
+        if not before.get("data_entrega") and not body.get("data_entrega"):
+            body["data_entrega"] = today.isoformat()
+
     data = (
         client.table("obrigacoes").update(body).eq("id", str(obrigacao_id)).execute().data
     )

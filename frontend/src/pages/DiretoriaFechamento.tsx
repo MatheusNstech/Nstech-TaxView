@@ -13,17 +13,21 @@ import {
   fechamentoStatusLabel,
   computeFechamentoKpis,
   matchesFechamentoChip,
+  matchesTarefaFechamentoChip,
   sortFechamentoExcecoes,
+  tarefaIsAtrasada,
+  tarefaVenceHoje,
   type FechamentoChip,
   type FechamentoStatus,
 } from '../lib/diretoriaFechamento'
 import {
   currentCompetenciaMonth,
-  formatCompetencia,
   formatDate,
+  formatHorario,
   monthToCompetencia,
 } from '../lib/format'
-import type { DashboardSummary, FilterValues, Obrigacao } from '../types'
+import type { DashboardSummary, FilterValues, Obrigacao, Tarefa } from '../types'
+import TarefaDrawer from '../components/TarefaDrawer'
 
 const CHIPS: { id: FechamentoChip; label: string }[] = [
   { id: 'excecoes', label: 'Exceções' },
@@ -50,10 +54,12 @@ export default function DiretoriaFechamento() {
   })
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
   const [obrigacoes, setObrigacoes] = useState<Obrigacao[]>([])
+  const [tarefas, setTarefas] = useState<Tarefa[]>([])
   const [loading, setLoading] = useState(true)
   const [chip, setChip] = useState<FechamentoChip>('excecoes')
   const [empresaFocus, setEmpresaFocus] = useState<string | null>(null)
   const [selected, setSelected] = useState<Obrigacao | null>(null)
+  const [selectedTarefa, setSelectedTarefa] = useState<Tarefa | null>(null)
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -62,15 +68,18 @@ export default function DiretoriaFechamento() {
         competencia: monthToCompetencia(filters.competencia),
         bu: filters.bu || undefined,
       })
-      const [summaryData, list] = await Promise.all([
+      const [summaryData, list, tarList] = await Promise.all([
         apiFetch<DashboardSummary>(`/api/dashboard/summary${q}`),
         apiFetch<Obrigacao[]>(`/api/obrigacoes${q}`),
+        apiFetch<Tarefa[]>(`/api/tarefas${q}`),
       ])
       setSummary(summaryData)
       setObrigacoes(list)
+      setTarefas(tarList)
     } catch {
       setSummary(null)
       setObrigacoes([])
+      setTarefas([])
     } finally {
       setLoading(false)
     }
@@ -102,7 +111,28 @@ export default function DiretoriaFechamento() {
     })
   }, [obrigacoes, filters.search])
 
-  const kpis = useMemo(() => computeFechamentoKpis(scoped), [scoped])
+  const scopedTarefas = useMemo(() => {
+    const q = filters.search.trim().toLowerCase()
+    if (!q) return tarefas
+    return tarefas.filter((t) => {
+      const hay = [t.titulo, t.descricao, t.empresa?.razao_social, t.responsavel?.nome]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+      return hay.includes(q)
+    })
+  }, [tarefas, filters.search])
+
+  const kpis = useMemo(() => {
+    const base = computeFechamentoKpis(scoped)
+    const tarAtrasadas = scopedTarefas.filter((t) => tarefaIsAtrasada(t)).length
+    const tarHoje = scopedTarefas.filter((t) => tarefaVenceHoje(t)).length
+    return {
+      ...base,
+      atrasadas: base.atrasadas + tarAtrasadas,
+      venceHoje: base.venceHoje + tarHoje,
+    }
+  }, [scoped, scopedTarefas])
 
   const ranking = useMemo(() => empresasComExcecao(scoped, new Date(), 8), [scoped])
 
@@ -120,15 +150,33 @@ export default function DiretoriaFechamento() {
     return sortFechamentoExcecoes(list)
   }, [scoped, chip, empresaFocus])
 
+  const visibleTarefas = useMemo(() => {
+    return scopedTarefas.filter((t) => {
+      if (!matchesTarefaFechamentoChip(t, chip)) return false
+      if (
+        empresaFocus &&
+        (t.empresa?.razao_social?.trim() || 'Sem empresa') !== empresaFocus
+      ) {
+        return false
+      }
+      return true
+    })
+  }, [scopedTarefas, chip, empresaFocus])
+
   const chipCounts = useMemo(
     () => ({
-      excecoes: scoped.filter((o) => matchesFechamentoChip(o, 'excecoes')).length,
+      excecoes:
+        scoped.filter((o) => matchesFechamentoChip(o, 'excecoes')).length +
+        scopedTarefas.filter((t) => matchesTarefaFechamentoChip(t, 'excecoes'))
+          .length,
       atrasadas: kpis.atrasadas,
       vence_hoje: kpis.venceHoje,
       fora_prazo: kpis.foraPrazo,
     }),
-    [scoped, kpis],
+    [scoped, scopedTarefas, kpis],
   )
+
+  const totalVisible = visible.length + visibleTarefas.length
 
   return (
     <div className="space-y-6">
@@ -137,11 +185,6 @@ export default function DiretoriaFechamento() {
           <h1 className="text-2xl font-bold tracking-tight text-[color:var(--color-ink)]">
             Fechamento da competência
           </h1>
-          <p className="text-sm text-[color:var(--color-muted)]">
-            Competência{' '}
-            {formatCompetencia(monthToCompetencia(filters.competencia))}
-            {' · '}só o que foge do prazo — leitura consolidada
-          </p>
         </div>
         <NotificationBell placement="bottom-right" />
       </div>
@@ -161,32 +204,38 @@ export default function DiretoriaFechamento() {
         <AnalyticsSkeleton variant="full" />
       ) : summary ? (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <KpiCard
-              label="% no prazo"
-              value={kpis.percentualNoPrazo}
-              suffix="%"
-              hint={`${kpis.total} obrigações`}
+              label="% Entregue"
+              value={kpis.percentualEntregue}
+              suffix=" %"
               icon={CheckCircle2}
-              tone="emerald"
+              valueClass="text-emerald-700"
+              iconWrap="bg-emerald-500/15 text-emerald-700"
+              progress
             />
             <KpiCard
               label="Atrasadas"
               value={kpis.atrasadas}
               icon={AlertTriangle}
-              tone="rose"
+              valueClass="text-rose-700"
+              iconWrap="bg-rose-500/15 text-rose-700"
             />
             <KpiCard
               label="Vence hoje"
               value={kpis.venceHoje}
               icon={CalendarClock}
-              tone="amber"
+              valueClass="text-brand-700"
+              iconWrap="bg-brand-500/15 text-brand-700"
             />
             <KpiCard
-              label="Entregue fora do prazo"
-              value={kpis.foraPrazo}
+              label="% fora do prazo"
+              value={kpis.percentualForaEntreEntregues}
+              suffix=" %"
+              hint="das entregues"
               icon={Timer}
-              tone="orange"
+              valueClass="text-brand-700"
+              iconWrap="bg-brand-500/15 text-brand-700"
             />
           </div>
 
@@ -290,7 +339,7 @@ export default function DiretoriaFechamento() {
                   ? `Exceções · ${empresaFocus}`
                   : CHIPS.find((c) => c.id === chip)?.label ?? 'Exceções'
               }
-              subtitle={`${visible.length} obrigação(ões) · clique para detalhes`}
+              subtitle={`${totalVisible} item(ns) · clique para detalhes`}
               action={
                 empresaFocus ? (
                   <button
@@ -303,7 +352,7 @@ export default function DiretoriaFechamento() {
                 ) : null
               }
             >
-              {visible.length === 0 ? (
+              {totalVisible === 0 ? (
                 <p className="py-10 text-center text-sm text-[color:var(--color-muted)]">
                   Nenhuma obrigação neste recorte
                 </p>
@@ -322,19 +371,77 @@ export default function DiretoriaFechamento() {
                       <tr className="border-b border-[color:var(--color-line)] text-left text-[10px] font-semibold uppercase tracking-wide text-[color:var(--color-muted)]">
                         <th className="px-2 py-3">Fechamento</th>
                         <th className="px-2 py-3">Empresa</th>
-                        <th className="px-2 py-3">Tipo de serviço</th>
+                        <th className="px-2 py-3">Tipo / tarefa</th>
                         <th className="px-2 py-3">Responsável</th>
                         <th className="px-2 py-3">Prazo</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[color:var(--color-line)]">
+                      {visibleTarefas.map((t) => (
+                        <tr
+                          key={`tarefa:${t.id}`}
+                          className="cursor-pointer hover:bg-[color:var(--nav-hover)]"
+                          onClick={() => {
+                            setSelected(null)
+                            setSelectedTarefa(t)
+                          }}
+                        >
+                          <td className="px-2 py-3">
+                            <span
+                              className={[
+                                'inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold',
+                                statusTone(
+                                  tarefaIsAtrasada(t) ? 'atrasado' : 'aberto',
+                                ),
+                              ].join(' ')}
+                            >
+                              {tarefaIsAtrasada(t)
+                                ? 'Atrasado'
+                                : tarefaVenceHoje(t)
+                                  ? 'Vence hoje'
+                                  : 'Tarefa'}
+                            </span>
+                          </td>
+                          <td className="max-w-[14rem] truncate px-2 py-3 font-medium">
+                            {t.empresa?.razao_social ?? '—'}
+                          </td>
+                          <td className="max-w-[12rem] truncate px-2 py-3 text-[color:var(--color-muted)]">
+                            <span className="mr-1 rounded bg-brand-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase text-brand-700">
+                              Tarefa
+                            </span>
+                            {t.titulo}
+                          </td>
+                          <td className="whitespace-nowrap px-2 py-3">
+                            {t.responsavel?.nome ? (
+                              <span className="inline-flex items-center gap-2">
+                                <PersonAvatar
+                                  nome={t.responsavel.nome}
+                                  fotoUrl={t.responsavel.foto_url}
+                                />
+                                {t.responsavel.nome}
+                              </span>
+                            ) : (
+                              '—'
+                            )}
+                          </td>
+                          <td className="whitespace-nowrap px-2 py-3 tabular-nums">
+                            {formatDate(t.prazo)}
+                            {formatHorario(t.hora_inicio, t.hora_fim)
+                              ? ` · ${formatHorario(t.hora_inicio, t.hora_fim)}`
+                              : ''}
+                          </td>
+                        </tr>
+                      ))}
                       {visible.map((o) => {
                         const st = fechamentoStatus(o)
                         return (
                           <tr
                             key={o.id}
                             className="cursor-pointer hover:bg-[color:var(--nav-hover)]"
-                            onClick={() => setSelected(o)}
+                            onClick={() => {
+                              setSelectedTarefa(null)
+                              setSelected(o)
+                            }}
                           >
                             <td className="px-2 py-3">
                               <span
@@ -393,6 +500,20 @@ export default function DiretoriaFechamento() {
           void loadData()
         }}
       />
+      <TarefaDrawer
+        tarefa={selectedTarefa}
+        open={selectedTarefa != null}
+        onClose={() => setSelectedTarefa(null)}
+        readOnly
+        onSaved={() => {
+          setSelectedTarefa(null)
+          void loadData()
+        }}
+        onDeleted={() => {
+          setSelectedTarefa(null)
+          void loadData()
+        }}
+      />
     </div>
   )
 }
@@ -403,61 +524,54 @@ function KpiCard({
   suffix,
   hint,
   icon: Icon,
-  tone,
+  valueClass,
+  iconWrap,
+  progress,
 }: {
   label: string
   value: number
   suffix?: string
   hint?: string
   icon: typeof CheckCircle2
-  tone: 'emerald' | 'rose' | 'amber' | 'orange'
+  valueClass: string
+  iconWrap: string
+  progress?: boolean
 }) {
-  const tones = {
-    emerald: {
-      card: 'bg-emerald-500/10 dark:bg-emerald-400/10',
-      icon: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
-      value: 'text-emerald-900 dark:text-emerald-100',
-    },
-    rose: {
-      card: 'bg-rose-500/10 dark:bg-rose-400/10',
-      icon: 'bg-rose-500/15 text-rose-700 dark:text-rose-300',
-      value: 'text-rose-900 dark:text-rose-100',
-    },
-    amber: {
-      card: 'bg-amber-500/10 dark:bg-amber-400/10',
-      icon: 'bg-amber-500/15 text-amber-800 dark:text-amber-200',
-      value: 'text-amber-950 dark:text-amber-100',
-    },
-    orange: {
-      card: 'bg-orange-500/10 dark:bg-orange-400/10',
-      icon: 'bg-orange-500/15 text-orange-800 dark:text-orange-200',
-      value: 'text-orange-950 dark:text-orange-100',
-    },
-  }[tone]
-
   return (
-    <div className={['diretoria-kpi', tones.card].join(' ')}>
-      <div
-        className={[
-          'mb-4 flex h-9 w-9 items-center justify-center rounded-full',
-          tones.icon,
-        ].join(' ')}
-      >
-        <Icon className="h-4 w-4" strokeWidth={1.75} />
+    <div className="kpi-card glass-panel flex h-full min-h-[7.5rem] flex-col p-4">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[color:var(--color-muted)]">
+            {label}
+          </p>
+          <p
+            className={`mt-1.5 text-2xl font-bold tracking-tight tabular-nums ${valueClass}`}
+          >
+            {value}
+            {suffix ?? ''}
+          </p>
+          {hint ? (
+            <p className="mt-0.5 text-[10px] text-[color:var(--color-muted)]">{hint}</p>
+          ) : null}
+        </div>
+        <div
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${iconWrap}`}
+        >
+          <Icon className="h-4 w-4" strokeWidth={1.75} />
+        </div>
       </div>
-      <p
-        className={[
-          'text-[1.5rem] font-bold leading-none tracking-tight tabular-nums',
-          tones.value,
-        ].join(' ')}
-      >
-        {value}
-        {suffix ?? ''}
-      </p>
-      <p className="mt-1.5 text-xs font-medium text-[color:var(--color-muted)]">
-        {label}
-        {hint ? ` · ${hint}` : ''}
-      </p>
+      <div className="mt-auto pt-3">
+        {progress ? (
+          <div className="h-1.5 overflow-hidden rounded-full bg-[color:var(--color-line)]">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-brand-400 to-brand-500 transition-all"
+              style={{ width: `${Math.min(value, 100)}%` }}
+            />
+          </div>
+        ) : (
+          <div className="h-1.5" aria-hidden />
+        )}
+      </div>
     </div>
   )
 }

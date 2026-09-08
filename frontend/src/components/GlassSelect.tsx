@@ -13,7 +13,10 @@ interface GlassSelectProps {
   icon: LucideIcon
   ariaLabel: string
   className?: string
+  listClassName?: string
   placeholder?: string
+  align?: 'left' | 'right'
+  placement?: 'bottom' | 'top'
 }
 
 export default function GlassSelect({
@@ -23,7 +26,10 @@ export default function GlassSelect({
   icon: Icon,
   ariaLabel,
   className = '',
+  listClassName = '',
   placeholder,
+  align = 'left',
+  placement = 'bottom',
 }: GlassSelectProps) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -88,7 +94,14 @@ export default function GlassSelect({
           id={listId}
           role="listbox"
           aria-label={ariaLabel}
-          className="glass-dropdown absolute top-[calc(100%+0.35rem)] left-0 z-50 max-h-64 min-w-full overflow-auto rounded-2xl py-1.5"
+          className={[
+            'absolute z-[70] max-h-48 min-w-full overflow-auto rounded-2xl border border-[color:var(--color-line)] bg-white py-1.5 shadow-xl dark:bg-[color:var(--color-panel)]',
+            placement === 'top'
+              ? 'bottom-[calc(100%+0.35rem)]'
+              : 'top-[calc(100%+0.35rem)]',
+            align === 'right' ? 'right-0' : 'left-0',
+            listClassName,
+          ].join(' ')}
         >
           {options.map((option) => {
             const isActive = option.value === value
@@ -107,7 +120,9 @@ export default function GlassSelect({
                         : 'text-[color:var(--color-ink)] hover:bg-brand-500/10 hover:shadow-sm',
                     ].join(' ')}
                 >
-                  <span className="min-w-0 flex-1 truncate">{option.label}</span>
+                  <span className="min-w-0 flex-1 truncate text-left leading-snug">
+                    {option.label}
+                  </span>
                   {isActive && (
                     <Check className="h-3.5 w-3.5 shrink-0 text-brand-600 dark:text-brand-400" strokeWidth={2} />
                   )}

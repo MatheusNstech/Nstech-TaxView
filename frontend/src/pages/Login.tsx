@@ -2,6 +2,7 @@ import { Lock, Mail } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
 import ThemeToggle from '../components/ThemeToggle'
+import { AuthSkeleton } from '../components/ui/PageSkeletons'
 import { useAuth } from '../context/AuthContext'
 
 export default function Login() {
@@ -12,11 +13,7 @@ export default function Login() {
   const [submitting, setSubmitting] = useState(false)
 
   if (loading) {
-    return (
-      <div className="mesh-bg flex min-h-screen items-center justify-center">
-        <div className="skeleton h-10 w-40" />
-      </div>
-    )
+    return <AuthSkeleton />
   }
 
   if (session) {
@@ -48,11 +45,19 @@ export default function Login() {
       </div>
       <div className="w-full max-w-md">
         <div className="mb-8 flex flex-col items-center text-center">
-          <img
-            src="/nstech-logo.png"
-            alt="nstech"
-            className="mb-4 h-14 w-44 rounded-full object-cover shadow-lg shadow-brand-500/30 ring-1 ring-[color:var(--glass-border)]"
-          />
+          <a
+            href="https://nstech.com.br/?scLang=pt-BR"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mb-5 rounded-full bg-white px-5 py-2.5 transition dark:bg-[color:var(--color-panel)]"
+            aria-label="Site nstech"
+          >
+            <img
+              src="/nstech-logo.png"
+              alt="nstech"
+              className="h-12 w-auto max-w-[15rem] object-contain"
+            />
+          </a>
           <h1 className="text-2xl font-bold text-[color:var(--color-ink)]">
             Nstax - Cronograma
           </h1>

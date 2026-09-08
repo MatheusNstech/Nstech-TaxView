@@ -52,6 +52,23 @@ export interface UsuarioCreate {
   responsavel_id?: string | null
 }
 
+export type TarefaCategoria = 'fechamento' | 'outras'
+
+export const TAREFA_CATEGORIA_OPTIONS: {
+  value: TarefaCategoria
+  label: string
+}[] = [
+  { value: 'fechamento', label: 'Fechamento' },
+  { value: 'outras', label: 'Outras' },
+]
+
+export function tarefaCategoriaLabel(categoria: TarefaCategoria | string): string {
+  return (
+    TAREFA_CATEGORIA_OPTIONS.find((o) => o.value === categoria)?.label ??
+    categoria
+  )
+}
+
 export interface Obrigacao {
   id: string
   empresa_id: string
@@ -65,6 +82,8 @@ export interface Obrigacao {
   recibo_path: string | null
   recibo_numero: string | null
   observacao: string | null
+  motivo_atraso?: string | null
+  categoria?: TarefaCategoria
   empresa: Empresa | null
   atividade: Atividade | null
   responsavel: Responsavel | null
@@ -74,6 +93,80 @@ export interface Obrigacao {
   reprovado_motivo?: string | null
 }
 
+export interface Tarefa {
+  id: string
+  titulo: string
+  descricao: string | null
+  categoria: TarefaCategoria
+  status: StatusObrigacao
+  competencia: string | null
+  prazo: string | null
+  hora_inicio: string | null
+  hora_fim: string | null
+  empresa_id: string | null
+  obrigacao_id: string | null
+  responsavel_id: string
+  solicitante_nome: string
+  motivo_atraso: string | null
+  entregue_em: string | null
+  created_by: string | null
+  created_at?: string | null
+  updated_at?: string | null
+  empresa: Empresa | null
+  responsavel: Responsavel | null
+  urgencia: string | null
+}
+
+export interface TarefaCreate {
+  titulo: string
+  solicitante_nome: string
+  descricao?: string | null
+  categoria?: TarefaCategoria
+  status?: StatusObrigacao
+  competencia?: string | null
+  prazo: string
+  hora_inicio: string
+  hora_fim: string
+  empresa_id?: string | null
+  obrigacao_id?: string | null
+  responsavel_id?: string | null
+}
+
+export interface TarefaUpdate {
+  titulo?: string
+  descricao?: string | null
+  status?: StatusObrigacao
+  competencia?: string | null
+  prazo?: string | null
+  hora_inicio?: string | null
+  hora_fim?: string | null
+  empresa_id?: string | null
+  obrigacao_id?: string | null
+  responsavel_id?: string | null
+  solicitante_nome?: string
+  motivo_atraso?: string | null
+}
+
+export type WorkOrigem = 'obrigacao' | 'tarefa'
+
+export interface WorkItem {
+  key: string
+  origem: WorkOrigem
+  id: string
+  title: string
+  subtitle: string
+  responsavelNome: string | null
+  prazo: string | null
+  horaInicio?: string | null
+  horaFim?: string | null
+  status: StatusObrigacao
+  urgencia: string | null
+  categoria: TarefaCategoria
+  obrigacao?: Obrigacao
+  tarefa?: Tarefa
+}
+
+
 export interface ObrigacaoUpdate {
   status?: StatusObrigacao
   prazo_legal?: string | null
@@ -81,6 +174,7 @@ export interface ObrigacaoUpdate {
   data_entrega?: string | null
   recibo_numero?: string | null
   observacao?: string | null
+  motivo_atraso?: string | null
 }
 
 export interface Comentario {
@@ -124,6 +218,7 @@ export interface CalendarioDia {
 export interface CalendarioResponse {
   dias: CalendarioDia[]
   detalhe: Obrigacao[]
+  tarefas?: Tarefa[]
 }
 
 export interface DashboardSummary {
@@ -152,6 +247,7 @@ export interface ImportResult {
   atividades: number
   responsaveis: number
   obrigacoes: number
+  tarefas?: number
   competencia: string
 }
 

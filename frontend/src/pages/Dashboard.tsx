@@ -1,4 +1,4 @@
-import { CalendarPlus, Download, Inbox, RefreshCw, Upload } from 'lucide-react'
+import { CalendarPlus, Inbox, RefreshCw, Upload } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
@@ -13,10 +13,11 @@ import AnalyticsSkeleton from '../components/analytics/AnalyticsSkeleton'
 import BuRankingPanel from '../components/analytics/BuRankingPanel'
 import ResponsavelCargaCarousel from '../components/analytics/ResponsavelCargaCarousel'
 import WorkflowStrip from '../components/analytics/WorkflowStrip'
+import ExportMenu, { marketCallFilename } from '../components/ExportMenu'
 import FiltersBar from '../components/FiltersBar'
 import NotificationBell from '../components/NotificationBell'
 import { useAuth } from '../context/AuthContext'
-import { apiDownload, apiFetch, buildQuery } from '../lib/api'
+import { apiFetch, buildQuery } from '../lib/api'
 import { resolveAvatarUrl } from '../lib/avatars'
 import {
   currentCompetenciaMonth,
@@ -151,18 +152,13 @@ export default function Dashboard() {
     }
   }
 
-  const handleExport = () => {
-    void apiDownload(
-      `/api/obrigacoes/export.csv${buildQuery({
-        competencia: monthToCompetencia(filters.competencia),
-        bu: filters.bu || undefined,
-        status: filters.status || undefined,
-        responsavel_id: filters.responsavel_id || undefined,
-        q: filters.search || undefined,
-      })}`,
-      'obrigacoes.csv',
-    )
-  }
+  const exportQuery = buildQuery({
+    competencia: monthToCompetencia(filters.competencia),
+    bu: filters.bu || undefined,
+    status: filters.status || undefined,
+    responsavel_id: filters.responsavel_id || undefined,
+    q: filters.search || undefined,
+  })
 
   const bus = summary ? Object.keys(summary.por_bu).sort() : []
 
@@ -283,10 +279,10 @@ export default function Dashboard() {
         </h1>
         <div className="flex flex-wrap items-center gap-2">
           <NotificationBell placement="bottom-right" />
-          <button type="button" onClick={handleExport} className="btn-ghost">
-            <Download className="h-4 w-4" strokeWidth={1.75} />
-            Exportar CSV
-          </button>
+          <ExportMenu
+            query={exportQuery}
+            pptxFilename={marketCallFilename(filters.competencia)}
+          />
           {isAdmin && (
             <>
               <button

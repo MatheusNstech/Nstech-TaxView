@@ -17,7 +17,8 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     api_host: str = "0.0.0.0"
     api_port: int = 8000
-    app_env: str = "development"  # development | production
+    # development | production. No deploy (Vercel) APP_ENV=production é obrigatório.
+    app_env: str = "development"
 
     @property
     def is_production(self) -> bool:

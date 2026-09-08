@@ -1,5 +1,6 @@
 import { Building2, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { TableSkeleton } from '../components/ui/PageSkeletons'
 import { apiFetch } from '../lib/api'
 import type { Empresa } from '../types'
 
@@ -165,11 +166,7 @@ export default function Empresas() {
           </thead>
           <tbody className="divide-y divide-[color:var(--color-line)]">
             {loading ? (
-              <tr>
-                <td colSpan={5} className="px-5 py-8 text-center text-[color:var(--color-muted)]">
-                  Carregando...
-                </td>
-              </tr>
+              <TableSkeleton asRows rows={6} cols={5} />
             ) : items.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-5 py-8 text-center text-[color:var(--color-muted)]">

@@ -1,3 +1,4 @@
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -15,17 +16,20 @@ from app.core.config import Settings, get_settings
 from app.schemas.models import MeOut, UsuarioRole
 from app.services.scope import resolve_responsavel
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(tags=["me"])
 
-
-class ClearMustChangeOut(BaseModel):
-    ok: bool = True
+# Senha inicial conhecida — recusada só no servidor, fora do bundle do front.
+_BLOCKED_PASSWORDS = {"senha@123"}
 
 
 class ChangePasswordBody(BaseModel):
-    """Used only for validation length when clearing flag after client password update."""
+    password: str = Field(min_length=8, max_length=128)
 
-    password: str = Field(min_length=12)
+
+class ChangePasswordOut(BaseModel):
+    ok: bool = True
 
 
 @router.get("/me", response_model=MeOut)
@@ -45,31 +49,58 @@ def get_me(
     )
 
 
-@router.post("/me/clear-must-change-password", response_model=ClearMustChangeOut)
-def clear_must_change_password(
+@router.post("/me/change-password", response_model=ChangePasswordOut)
+def change_password(
+    body: ChangePasswordBody,
     user: Annotated[AuthUser, Depends(get_current_user)],
     settings: Annotated[Settings, Depends(get_settings)],
 ):
-    """Clear must_change_password in app_metadata (server-only). Call after password update."""
+    """Atualiza a senha e só então limpa must_change_password."""
+    password = body.password.strip()
+    if len(password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A senha deve ter ao menos 8 caracteres",
+        )
+    if password.lower() in _BLOCKED_PASSWORDS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Escolha uma senha diferente da padrão",
+        )
+
     key = settings.supabase_service_role_key
     if not key or key.startswith("your-"):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="SUPABASE_SERVICE_ROLE_KEY necessária para limpar must_change_password",
+            detail="Serviço de autenticação indisponível",
         )
+
     admin = get_admin_client(settings)
     try:
+        current = admin.auth.admin.get_user_by_id(user.id)
+        existing = current.user
+        if existing is None:
+            raise HTTPException(status_code=404, detail="Usuário não encontrado")
+        app_meta = dict(getattr(existing, "app_metadata", None) or {})
+        user_meta = dict(getattr(existing, "user_metadata", None) or {})
+        app_meta["must_change_password"] = False
+        user_meta["must_change_password"] = False
         admin.auth.admin.update_user_by_id(
             user.id,
             {
-                "app_metadata": {"must_change_password": False},
-                "user_metadata": {"must_change_password": False},
+                "password": password,
+                "app_metadata": app_meta,
+                "user_metadata": user_meta,
             },
         )
-    except Exception as exc:  # noqa: BLE001
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Falha ao trocar senha user_id=%s", user.id)
         raise HTTPException(
-            status_code=400,
-            detail=f"Falha ao atualizar metadata: {exc}",
-        ) from exc
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Falha ao trocar senha",
+        ) from None
+
     invalidate_auth_cache(user.access_token)
-    return ClearMustChangeOut()
+    return ChangePasswordOut()

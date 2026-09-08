@@ -7,6 +7,7 @@ import {
   X,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
+import { TableSkeleton } from '../components/ui/PageSkeletons'
 import { apiFetch } from '../lib/api'
 import type { Responsavel, Usuario, UsuarioCreate, UsuarioRole } from '../types'
 
@@ -140,9 +141,7 @@ export default function Usuarios() {
 
       <div className="card-surface overflow-hidden">
         {loading ? (
-          <p className="px-5 py-10 text-center text-[color:var(--color-muted)]">
-            Carregando...
-          </p>
+          <TableSkeleton rows={6} cols={4} framed={false} />
         ) : (
           <table className="w-full text-sm">
             <thead>
@@ -300,13 +299,13 @@ export default function Usuarios() {
                   <input
                     type="password"
                     required
-                    minLength={12}
+                    minLength={8}
                     value={form.password}
                     onChange={(e) =>
                       setForm({ ...form, password: e.target.value })
                     }
                     className="glass-input"
-                    placeholder="Mínimo 6 caracteres"
+                    placeholder="Mínimo 8 caracteres"
                   />
                 </div>
                 <div>

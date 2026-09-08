@@ -2,11 +2,12 @@
 
 Cria ou atualiza:
   e-mail: diretor@nstech.com.br
-  senha:  Diretor@Teste2026!
+  senha:  variável de ambiente DIRETOR_PASSWORD
   role:   diretor (org-wide, somente leitura)
 
 Uso:
   cd backend
+  $env:DIRETOR_PASSWORD = "..."
   python -m scripts.ensure_diretor
 
 Requer SUPABASE_SERVICE_ROLE_KEY em backend/.env
@@ -14,6 +15,7 @@ Requer SUPABASE_SERVICE_ROLE_KEY em backend/.env
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -24,7 +26,6 @@ from app.core.auth import get_admin_client  # noqa: E402
 from app.core.config import get_settings  # noqa: E402
 
 DIRETOR_EMAIL = "diretor@nstech.com.br"
-DIRETOR_PASSWORD = "Diretor@Teste2026!"
 DIRETOR_NOME = "Diretor Teste"
 
 
@@ -34,6 +35,11 @@ def main() -> int:
         "your-"
     ):
         print("Configure SUPABASE_SERVICE_ROLE_KEY em backend/.env")
+        return 1
+
+    password = os.environ.get("DIRETOR_PASSWORD", "").strip()
+    if len(password) < 8:
+        print("Defina DIRETOR_PASSWORD (mínimo 8 caracteres)")
         return 1
 
     admin = get_admin_client(settings)
@@ -53,7 +59,7 @@ def main() -> int:
             created = admin.auth.admin.create_user(
                 {
                     "email": email,
-                    "password": DIRETOR_PASSWORD,
+                    "password": password,
                     "email_confirm": True,
                     "user_metadata": {"nome": DIRETOR_NOME},
                     "app_metadata": meta,
@@ -72,7 +78,7 @@ def main() -> int:
             admin.auth.admin.update_user_by_id(
                 target.id,
                 {
-                    "password": DIRETOR_PASSWORD,
+                    "password": password,
                     "app_metadata": meta,
                     "ban_duration": "none",
                 },
@@ -82,7 +88,7 @@ def main() -> int:
             return 1
         print(f"OK: atualizado {email} (id={target.id}) role=diretor")
 
-    print(f"Login: {DIRETOR_EMAIL} / {DIRETOR_PASSWORD}")
+    print(f"Login: {DIRETOR_EMAIL} (senha via DIRETOR_PASSWORD)")
     return 0
 
 

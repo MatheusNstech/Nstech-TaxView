@@ -1,4 +1,5 @@
-import type { DashboardSummary, Obrigacao } from '../types'
+import type { DashboardSummary, Obrigacao, Tarefa } from '../types'
+import { tarefaCategoriaLabel } from '../types'
 
 export type DiretoriaRiscoTipo = 'atrasado' | 'vence_7d' | 'sobrecarga'
 
@@ -8,6 +9,7 @@ export interface DiretoriaRisco {
   titulo: string
   detalhe: string
   obrigacao?: Obrigacao
+  tarefa?: Tarefa
   responsavelNome?: string
   /** Dias de atraso (positivo) ou dias até o prazo (negativo/zero para 7d). */
   diasRef?: number | null
@@ -37,6 +39,7 @@ export function buildDiretoriaRiscos(
   obrigacoes: Obrigacao[],
   summary: DashboardSummary | null,
   today: Date = new Date(),
+  tarefas: Tarefa[] = [],
 ): DiretoriaRisco[] {
   const risks: DiretoriaRisco[] = []
 
@@ -52,6 +55,22 @@ export function buildDiretoriaRiscos(
       titulo: o.atividade?.nome ?? 'Obrigação atrasada',
       detalhe: `${o.empresa?.razao_social ?? 'Empresa'} · ${o.responsavel?.nome ?? 'Sem responsável'} · ${o.empresa?.bu ?? '—'}`,
       obrigacao: o,
+      diasRef: days != null ? Math.abs(Math.min(days, 0)) : null,
+    })
+  }
+
+  const tarAtrasadas = tarefas
+    .filter((t) => t.status === 'ATRASADO')
+    .sort((a, b) => (a.prazo ?? '').localeCompare(b.prazo ?? ''))
+
+  for (const t of tarAtrasadas) {
+    const days = daysUntil(t.prazo, today)
+    risks.push({
+      id: `atr-tar-${t.id}`,
+      tipo: 'atrasado',
+      titulo: t.titulo || `Tarefa · ${tarefaCategoriaLabel(t.categoria)}`,
+      detalhe: `${t.empresa?.razao_social ?? 'Sem empresa'} · ${t.responsavel?.nome ?? 'Sem responsável'} · ${t.empresa?.bu ?? '—'}`,
+      tarefa: t,
       diasRef: days != null ? Math.abs(Math.min(days, 0)) : null,
     })
   }
@@ -77,6 +96,26 @@ export function buildDiretoriaRiscos(
     })
   }
 
+  const tarVence7 = tarefas
+    .filter((t) => {
+      if (t.status === 'ENTREGUE' || t.status === 'ATRASADO') return false
+      const days = daysUntil(t.prazo, today)
+      return days != null && days >= 0 && days <= 7
+    })
+    .sort((a, b) => (a.prazo ?? '').localeCompare(b.prazo ?? ''))
+
+  for (const t of tarVence7) {
+    const days = daysUntil(t.prazo, today)
+    risks.push({
+      id: `7d-tar-${t.id}`,
+      tipo: 'vence_7d',
+      titulo: t.titulo || `Tarefa · ${tarefaCategoriaLabel(t.categoria)}`,
+      detalhe: `${t.empresa?.razao_social ?? 'Sem empresa'} · ${t.responsavel?.nome ?? 'Sem responsável'} · ${t.empresa?.bu ?? '—'}`,
+      tarefa: t,
+      diasRef: days,
+    })
+  }
+
   if (summary) {
     for (const [nome, total] of Object.entries(summary.por_responsavel)) {
       const cap = summary.capacidade_por_responsavel?.[nome]
@@ -85,7 +124,7 @@ export function buildDiretoriaRiscos(
           id: `cap-${nome}`,
           tipo: 'sobrecarga',
           titulo: `${nome} acima da capacidade`,
-          detalhe: `${total} obrigações · capacidade ${cap} · excesso ${total - cap}`,
+          detalhe: `${total} itens · capacidade ${cap} · excesso ${total - cap}`,
           responsavelNome: nome,
           excesso: total - cap,
         })

@@ -116,20 +116,69 @@ export function buildQuery(params: Record<string, string | undefined>): string {
   return qs ? `?${qs}` : ''
 }
 
-export async function apiDownload(path: string, filename: string): Promise<void> {
+export async function apiDownload(
+  path: string,
+  filename: string,
+  onProgress?: (progress: number | null) => void,
+): Promise<void> {
   const token = await resolveToken()
   const headers = new Headers()
   if (token) headers.set('Authorization', `Bearer ${token}`)
 
+  onProgress?.(null)
   const response = await fetch(`${API_URL}${path}`, { headers })
   if (!response.ok) {
-    throw new ApiError(`Erro ${response.status}`, response.status)
+    let message = `Erro ${response.status}`
+    try {
+      const body = (await response.json()) as { detail?: string }
+      if (typeof body.detail === 'string' && body.detail) message = body.detail
+    } catch {
+      // ignore parse errors
+    }
+    if (response.status === 405) {
+      message = 'Não foi possível exportar. Atualize a página e tente de novo.'
+    }
+    throw new ApiError(message, response.status)
   }
-  const blob = await response.blob()
+
+  const blob = await readDownloadBlob(response, onProgress)
+  onProgress?.(100)
+  triggerDownload(blob, filename)
+}
+
+async function readDownloadBlob(
+  response: Response,
+  onProgress?: (progress: number | null) => void,
+): Promise<Blob> {
+  const total = Number(response.headers.get('Content-Length') || 0)
+  const reader = response.body?.getReader()
+  if (!reader) return response.blob()
+
+  const chunks: BlobPart[] = []
+  let received = 0
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    chunks.push(value)
+    received += value.byteLength
+    if (total > 0) {
+      onProgress?.(Math.min(99, Math.round((received / total) * 100)))
+    }
+  }
+  return new Blob(chunks)
+}
+
+function triggerDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
   a.download = filename
+  a.rel = 'noopener'
+  a.style.display = 'none'
+  document.body.appendChild(a)
   a.click()
-  URL.revokeObjectURL(url)
+  window.setTimeout(() => {
+    a.remove()
+    URL.revokeObjectURL(url)
+  }, 1000)
 }

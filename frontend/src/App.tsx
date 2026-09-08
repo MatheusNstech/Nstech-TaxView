@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
+import { AuthSkeleton } from './components/ui/PageSkeletons'
 import { useAuth } from './context/AuthContext'
 import Atividades from './pages/Atividades'
 import Calendario from './pages/Calendario'
@@ -21,11 +22,7 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
   const { session, loading, mustChangePassword } = useAuth()
 
   if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center page-gradient">
-        <p className="text-[color:var(--color-muted)]">Carregando...</p>
-      </div>
-    )
+    return <AuthSkeleton />
   }
 
   if (!session) {
@@ -43,11 +40,7 @@ function AdminRoute({ children }: { children: ReactNode }) {
   const { isAdmin, loading, homePath } = useAuth()
 
   if (loading) {
-    return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-[color:var(--color-muted)]">Carregando...</p>
-      </div>
-    )
+    return <AuthSkeleton fullScreen={false} />
   }
 
   if (!isAdmin) {
@@ -61,11 +54,7 @@ function DiretorRoute({ children }: { children: ReactNode }) {
   const { isDiretor, isAdmin, loading, homePath } = useAuth()
 
   if (loading) {
-    return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-[color:var(--color-muted)]">Carregando...</p>
-      </div>
-    )
+    return <AuthSkeleton fullScreen={false} />
   }
 
   if (!isDiretor && !isAdmin) {

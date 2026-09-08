@@ -5,9 +5,17 @@ import GlassSelect from '../components/GlassSelect'
 import NotificationBell from '../components/NotificationBell'
 import ObrigacaoDrawer from '../components/ObrigacaoDrawer'
 import StatusBadge from '../components/StatusBadge'
+import TarefaDrawer from '../components/TarefaDrawer'
+import { CalendarSkeleton } from '../components/ui/PageSkeletons'
 import { apiFetch, buildQuery } from '../lib/api'
-import { formatDate, statusLabel } from '../lib/format'
-import type { CalendarioResponse, Obrigacao, StatusObrigacao } from '../types'
+import { formatDate, formatHorario, statusLabel } from '../lib/format'
+import { tarefaIsAtrasada } from '../lib/diretoriaFechamento'
+import type {
+  CalendarioResponse,
+  Obrigacao,
+  StatusObrigacao,
+  Tarefa,
+} from '../types'
 
 const STATUS_OPTS: StatusObrigacao[] = [
   'PENDENTE',
@@ -31,15 +39,19 @@ export default function Calendario() {
     `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
   )
   const [data, setData] = useState<CalendarioResponse | null>(null)
+  const [tarefasMes, setTarefasMes] = useState<Tarefa[]>([])
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
   const [selected, setSelected] = useState<Obrigacao | null>(null)
+  const [selectedTarefa, setSelectedTarefa] = useState<Tarefa | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [busca, setBusca] = useState('')
   const [filtroStatus, setFiltroStatus] = useState<StatusObrigacao | ''>('')
   const [filtroBu, setFiltroBu] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
+    setLoadError('')
     const { de, ate } = monthBounds(ym)
     try {
       const qs = buildQuery({
@@ -47,9 +59,18 @@ export default function Calendario() {
         ate,
         detalhe_dia: selectedDay ?? undefined,
       })
-      setData(await apiFetch<CalendarioResponse>(`/api/obrigacoes/calendario${qs}`))
-    } catch {
+      const [cal, tarefas] = await Promise.all([
+        apiFetch<CalendarioResponse>(`/api/obrigacoes/calendario${qs}`),
+        apiFetch<Tarefa[]>(
+          `/api/tarefas${buildQuery({ prazo_de: de, prazo_ate: ate })}`,
+        ),
+      ])
+      setData(cal)
+      setTarefasMes(cal.tarefas?.length ? cal.tarefas : tarefas)
+    } catch (err) {
       setData({ dias: [], detalhe: [] })
+      setTarefasMes([])
+      setLoadError(err instanceof Error ? err.message : 'Erro ao carregar o calendário')
     } finally {
       setLoading(false)
     }
@@ -70,8 +91,16 @@ export default function Calendario() {
     for (const d of data?.dias ?? []) {
       map.set(d.data.slice(0, 10), { total: d.total, atrasadas: d.atrasadas })
     }
+    for (const t of tarefasMes) {
+      const day = t.prazo?.slice(0, 10)
+      if (!day || day < `${ym}-01` || day > `${ym}-31`) continue
+      const cur = map.get(day) ?? { total: 0, atrasadas: 0 }
+      cur.total += 1
+      if (tarefaIsAtrasada(t)) cur.atrasadas += 1
+      map.set(day, cur)
+    }
     return map
-  }, [data])
+  }, [data, tarefasMes, ym])
 
   const { year, month, last } = monthBounds(ym)
   const firstWeekday = new Date(year, month - 1, 1).getDay()
@@ -83,6 +112,10 @@ export default function Calendario() {
   const maxTotal = Math.max(1, ...[...byDate.values()].map((v) => v.total))
 
   const detalhe = data?.detalhe ?? []
+  const tarefasDoDia = useMemo(() => {
+    if (!selectedDay) return []
+    return tarefasMes.filter((t) => t.prazo?.slice(0, 10) === selectedDay)
+  }, [tarefasMes, selectedDay])
 
   const busDoDia = useMemo(() => {
     const set = new Set<string>()
@@ -90,8 +123,12 @@ export default function Calendario() {
       const bu = o.empresa?.bu?.trim()
       if (bu) set.add(bu)
     }
+    for (const t of tarefasDoDia) {
+      const bu = t.empresa?.bu?.trim()
+      if (bu) set.add(bu)
+    }
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'))
-  }, [detalhe])
+  }, [detalhe, tarefasDoDia])
 
   const detalheFiltrado = useMemo(() => {
     const q = busca.trim().toLowerCase()
@@ -107,6 +144,28 @@ export default function Calendario() {
     })
   }, [detalhe, busca, filtroStatus, filtroBu])
 
+  const tarefasFiltradas = useMemo(() => {
+    const q = busca.trim().toLowerCase()
+    return tarefasDoDia
+      .filter((t) => {
+        if (filtroStatus && t.status !== filtroStatus) return false
+        if (filtroBu && (t.empresa?.bu ?? '') !== filtroBu) return false
+        if (!q) return true
+        const hay = [t.titulo, t.empresa?.razao_social, t.responsavel?.nome]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+        return hay.includes(q)
+      })
+      .sort((a, b) => {
+        const ha = a.hora_inicio ?? '99:99'
+        const hb = b.hora_inicio ?? '99:99'
+        return ha.localeCompare(hb) || a.titulo.localeCompare(b.titulo)
+      })
+  }, [tarefasDoDia, busca, filtroStatus, filtroBu])
+
+  const totalDia = detalhe.length + tarefasDoDia.length
+  const totalFiltrado = detalheFiltrado.length + tarefasFiltradas.length
   const hasFiltro = Boolean(busca.trim() || filtroStatus || filtroBu)
 
   return (
@@ -137,7 +196,15 @@ export default function Calendario() {
           />
         </div>
       </div>
+      {loadError && (
+        <p className="rounded-xl bg-rose-50/90 px-3 py-2 text-sm text-rose-700">
+          {loadError}
+        </p>
+      )}
 
+      {loading ? (
+        <CalendarSkeleton />
+      ) : (
       <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
         <div className="glass-panel h-fit p-4">
           <div className="mb-2 grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase text-[color:var(--color-muted)]">
@@ -181,9 +248,6 @@ export default function Calendario() {
               )
             })}
           </div>
-          {loading && (
-            <p className="mt-3 text-xs text-[color:var(--color-muted)]">Carregando...</p>
-          )}
         </div>
 
         <div className="glass-panel flex min-h-[18rem] flex-col overflow-visible p-4 lg:h-0 lg:min-h-full">
@@ -232,8 +296,8 @@ export default function Calendario() {
                 </div>
                 <p className="text-[11px] text-[color:var(--color-muted)]">
                   {hasFiltro
-                    ? `${detalheFiltrado.length} de ${detalhe.length}`
-                    : `${detalhe.length} obrigação(ões)`}
+                    ? `${totalFiltrado} de ${totalDia}`
+                    : `${totalDia} item(ns)`}
                   {hasFiltro && (
                     <>
                       {' · '}
@@ -269,18 +333,48 @@ export default function Calendario() {
                 Clique em um dia do calendário para ver as obrigações.
               </p>
             )}
-            {selectedDay && detalheFiltrado.length === 0 && (
+            {selectedDay && totalFiltrado === 0 && (
               <p className="text-sm text-[color:var(--color-muted)]">
-                {detalhe.length === 0
+                {totalDia === 0
                   ? 'Nenhum vencimento neste dia.'
                   : 'Nenhum resultado com esses filtros.'}
               </p>
             )}
+            {tarefasFiltradas.map((t) => (
+              <button
+                key={`tarefa:${t.id}`}
+                type="button"
+                onClick={() => {
+                  setSelected(null)
+                  setSelectedTarefa(t)
+                }}
+                className="flex w-full items-center justify-between gap-2 rounded-xl border border-[color:var(--color-line)] bg-[color:var(--control-bg)] px-3 py-2 text-left text-sm transition hover:bg-[color:var(--nav-hover)]"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-medium">
+                    <span className="mr-1 rounded bg-brand-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase text-brand-700">
+                      Tarefa
+                    </span>
+                    {t.titulo}
+                  </p>
+                  <p className="truncate text-xs text-[color:var(--color-muted)]">
+                    {formatHorario(t.hora_inicio, t.hora_fim)
+                      ? `${formatHorario(t.hora_inicio, t.hora_fim)} · `
+                      : ''}
+                    {t.empresa?.razao_social ?? 'Fechamento'}
+                  </p>
+                </div>
+                <StatusBadge status={t.status} urgencia={t.urgencia} />
+              </button>
+            ))}
             {detalheFiltrado.map((o) => (
               <button
                 key={o.id}
                 type="button"
-                onClick={() => setSelected(o)}
+                onClick={() => {
+                  setSelectedTarefa(null)
+                  setSelected(o)
+                }}
                 className="flex w-full items-center justify-between gap-2 rounded-xl border border-[color:var(--color-line)] bg-[color:var(--control-bg)] px-3 py-2 text-left text-sm transition hover:bg-[color:var(--nav-hover)]"
               >
                 <div className="min-w-0">
@@ -295,6 +389,7 @@ export default function Calendario() {
           </div>
         </div>
       </div>
+      )}
 
       <ObrigacaoDrawer
         obrigacao={selected}
@@ -303,6 +398,19 @@ export default function Calendario() {
         onSaved={(u) => {
           setSelected(u)
           void load()
+        }}
+      />
+      <TarefaDrawer
+        tarefa={selectedTarefa}
+        open={Boolean(selectedTarefa)}
+        onClose={() => setSelectedTarefa(null)}
+        onSaved={(u) => {
+          setTarefasMes((prev) => prev.map((t) => (t.id === u.id ? u : t)))
+          setSelectedTarefa(u)
+        }}
+        onDeleted={(id) => {
+          setTarefasMes((prev) => prev.filter((t) => t.id !== id))
+          setSelectedTarefa(null)
         }}
       />
     </div>

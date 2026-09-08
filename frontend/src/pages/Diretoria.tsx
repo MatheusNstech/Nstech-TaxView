@@ -1,28 +1,25 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import AnalyticsSkeleton from '../components/analytics/AnalyticsSkeleton'
 import BuStatusMatrix, {
   type BuStatusCounts,
 } from '../components/diretoria/BuStatusMatrix'
 import DiretoriaChartCard from '../components/diretoria/DiretoriaChartCard'
 import DiretoriaDrillModal from '../components/diretoria/DiretoriaDrillModal'
-import DiretoriaKpiStrip from '../components/diretoria/DiretoriaKpiStrip'
+import AnalyticsHeroKpis from '../components/analytics/AnalyticsHeroKpis'
 import ServicoVolumeChart from '../components/diretoria/ServicoVolumeChart'
 import FiltersBar from '../components/FiltersBar'
 import NotificationBell from '../components/NotificationBell'
 import ObrigacaoDrawer from '../components/ObrigacaoDrawer'
+import TarefaDrawer from '../components/TarefaDrawer'
 import { apiFetch, buildQuery } from '../lib/api'
 import {
   aggregateByServico,
   isOutrosServico,
+  workItemServicoNome,
 } from '../lib/diretoriaAggregates'
-import {
-  buildDiretoriaRiscos,
-  countRiscosByTipo,
-} from '../lib/diretoriaRiscos'
+import { mergeWorkItems } from '../lib/workItems'
 import {
   currentCompetenciaMonth,
-  formatCompetencia,
   monthToCompetencia,
 } from '../lib/format'
 import type {
@@ -30,6 +27,8 @@ import type {
   FilterValues,
   Obrigacao,
   StatusObrigacao,
+  Tarefa,
+  WorkItem,
 } from '../types'
 
 type DrillMode = {
@@ -41,6 +40,13 @@ type DrillMode = {
   label: string
 } | null
 
+function itemBu(item: WorkItem): string {
+  if (item.origem === 'obrigacao') {
+    return item.obrigacao?.empresa?.bu?.trim() || 'Sem BU'
+  }
+  return item.tarefa?.empresa?.bu?.trim() || 'Sem BU'
+}
+
 export default function Diretoria() {
   const [filters, setFilters] = useState<FilterValues>({
     competencia: currentCompetenciaMonth(),
@@ -51,8 +57,10 @@ export default function Diretoria() {
   })
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
   const [obrigacoes, setObrigacoes] = useState<Obrigacao[]>([])
+  const [tarefas, setTarefas] = useState<Tarefa[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Obrigacao | null>(null)
+  const [selectedTarefa, setSelectedTarefa] = useState<Tarefa | null>(null)
   const [drill, setDrill] = useState<DrillMode>(null)
 
   const loadData = useCallback(async () => {
@@ -62,15 +70,18 @@ export default function Diretoria() {
         competencia: monthToCompetencia(filters.competencia),
         bu: filters.bu || undefined,
       })
-      const [summaryData, list] = await Promise.all([
+      const [summaryData, list, tarList] = await Promise.all([
         apiFetch<DashboardSummary>(`/api/dashboard/summary${q}`),
         apiFetch<Obrigacao[]>(`/api/obrigacoes${q}`),
+        apiFetch<Tarefa[]>(`/api/tarefas${q}`),
       ])
       setSummary(summaryData)
       setObrigacoes(list)
+      setTarefas(tarList)
     } catch {
       setSummary(null)
       setObrigacoes([])
+      setTarefas([])
     } finally {
       setLoading(false)
     }
@@ -80,6 +91,11 @@ export default function Diretoria() {
     void loadData()
   }, [loadData])
 
+  const workItems = useMemo(
+    () => mergeWorkItems(obrigacoes, tarefas),
+    [obrigacoes, tarefas],
+  )
+
   const bus = useMemo(
     () => (summary ? Object.keys(summary.por_bu).sort() : []),
     [summary],
@@ -87,10 +103,10 @@ export default function Diretoria() {
 
   const matrixCounts = useMemo(() => {
     const counts: BuStatusCounts = {}
-    for (const o of obrigacoes) {
-      const bu = o.empresa?.bu?.trim() || 'Sem BU'
+    for (const item of workItems) {
+      const bu = itemBu(item)
       if (!counts[bu]) counts[bu] = {}
-      counts[bu][o.status] = (counts[bu][o.status] ?? 0) + 1
+      counts[bu][item.status] = (counts[bu][item.status] ?? 0) + 1
     }
     if (summary) {
       for (const bu of Object.keys(summary.por_bu)) {
@@ -98,11 +114,11 @@ export default function Diretoria() {
       }
     }
     return counts
-  }, [obrigacoes, summary])
+  }, [workItems, summary])
 
   const servicoAgg = useMemo(
-    () => aggregateByServico(obrigacoes, 10),
-    [obrigacoes],
+    () => aggregateByServico(workItems, 10),
+    [workItems],
   )
 
   const topServicoNomes = useMemo(
@@ -113,21 +129,16 @@ export default function Diretoria() {
     [servicoAgg.volume],
   )
 
-  const riscosCount = useMemo(
-    () => countRiscosByTipo(buildDiretoriaRiscos(obrigacoes, summary)),
-    [obrigacoes, summary],
-  )
-
   const drillList = useMemo(() => {
     if (!drill) return []
-    return obrigacoes.filter((o) => {
-      const bu = o.empresa?.bu?.trim() || 'Sem BU'
-      const atividade = o.atividade?.nome?.trim() || 'Sem tipo de serviço'
+    return workItems.filter((item) => {
+      const bu = itemBu(item)
+      const atividade = workItemServicoNome(item)
       if (drill.bu && bu !== drill.bu) return false
-      if (drill.status && o.status !== drill.status) return false
+      if (drill.status && item.status !== drill.status) return false
       if (
         drill.responsavelNome &&
-        (o.responsavel?.nome ?? '') !== drill.responsavelNome
+        (item.responsavelNome ?? '') !== drill.responsavelNome
       ) {
         return false
       }
@@ -137,7 +148,7 @@ export default function Diretoria() {
       }
       return true
     })
-  }, [drill, obrigacoes])
+  }, [drill, workItems])
 
   const openDrillBu = (bu: string, status: StatusObrigacao | null) => {
     setDrill({
@@ -161,6 +172,14 @@ export default function Diretoria() {
     })
   }
 
+  const openItem = (item: WorkItem) => {
+    if (item.origem === 'tarefa' && item.tarefa) {
+      setSelectedTarefa(item.tarefa)
+      return
+    }
+    if (item.obrigacao) setSelected(item.obrigacao)
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -168,32 +187,8 @@ export default function Diretoria() {
           <h1 className="text-2xl font-bold tracking-tight text-[color:var(--color-ink)]">
             Visão - Tax
           </h1>
-          <p className="text-sm text-[color:var(--color-muted)]">
-            Competência{' '}
-            {formatCompetencia(monthToCompetencia(filters.competencia))}
-            {' · '}indicadores da competência · leitura consolidada
-          </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link
-            to="/diretoria/fechamento"
-            className="btn-ghost !py-2 text-xs font-semibold"
-          >
-            Fechamento da competência
-          </Link>
-          <Link
-            to="/diretoria/pendencias"
-            className="btn-ghost !py-2 text-xs font-semibold"
-          >
-            Pendências críticas
-            {riscosCount.total > 0 && (
-              <span className="rounded-full bg-[#FF5630]/15 px-1.5 py-0.5 text-[10px] font-bold text-[#B71D18] tabular-nums">
-                {riscosCount.total}
-              </span>
-            )}
-          </Link>
-          <NotificationBell placement="bottom-right" />
-        </div>
+        <NotificationBell placement="bottom-right" />
       </div>
 
       <FiltersBar
@@ -211,11 +206,11 @@ export default function Diretoria() {
         <AnalyticsSkeleton variant="full" />
       ) : summary ? (
         <>
-          <DiretoriaKpiStrip summary={summary} />
+          <AnalyticsHeroKpis summary={summary} />
 
           <DiretoriaChartCard
             title="Volume por tipo de serviço"
-            subtitle="Distribuição polar das obrigações por atividade"
+            subtitle="Distribuição polar das obrigações e tarefas por atividade"
           >
             <ServicoVolumeChart
               data={servicoAgg.volume}
@@ -225,11 +220,10 @@ export default function Diretoria() {
 
           <DiretoriaChartCard
             title="Distribuição por BU e status"
-            subtitle="Contagem de obrigações por unidade de negócio"
+            subtitle="Contagem de obrigações e tarefas por unidade de negócio"
           >
             <BuStatusMatrix counts={matrixCounts} onCellClick={openDrillBu} />
           </DiretoriaChartCard>
-
         </>
       ) : (
         <p className="text-sm text-[color:var(--color-muted)]">
@@ -241,9 +235,9 @@ export default function Diretoria() {
         open={drill != null}
         title={drill?.label ?? ''}
         items={drillList}
-        closeOnEscape={selected == null}
+        closeOnEscape={selected == null && selectedTarefa == null}
         onClose={() => setDrill(null)}
-        onSelect={setSelected}
+        onSelect={openItem}
       />
 
       <ObrigacaoDrawer
@@ -254,6 +248,21 @@ export default function Diretoria() {
           setSelected(null)
           void loadData()
         }}
+      />
+
+      <TarefaDrawer
+        tarefa={selectedTarefa}
+        open={selectedTarefa != null}
+        onClose={() => setSelectedTarefa(null)}
+        onSaved={() => {
+          setSelectedTarefa(null)
+          void loadData()
+        }}
+        onDeleted={() => {
+          setSelectedTarefa(null)
+          void loadData()
+        }}
+        readOnly
       />
     </div>
   )

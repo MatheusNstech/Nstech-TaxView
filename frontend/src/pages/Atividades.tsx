@@ -6,6 +6,7 @@ import {
   X,
 } from 'lucide-react'
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { TableSkeleton } from '../components/ui/PageSkeletons'
 import { apiFetch } from '../lib/api'
 import type { Atividade } from '../types'
 
@@ -135,9 +136,7 @@ export default function Atividades() {
 
       <div className="card-surface overflow-hidden">
         {loading ? (
-          <p className="px-5 py-10 text-center text-[color:var(--color-muted)]">
-            Carregando...
-          </p>
+          <TableSkeleton rows={6} cols={5} framed={false} />
         ) : (
           <table className="w-full text-sm">
             <thead>

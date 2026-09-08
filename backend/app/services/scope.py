@@ -30,22 +30,6 @@ def effective_responsavel_id(user: AuthUser, client: Client) -> UUID | None:
     return UUID(str(resp["id"]))
 
 
-def require_scoped_responsavel_id(user: AuthUser, client: Client) -> UUID:
-    """Para não-org-wide: exige vínculo/view_as. Admin/diretor não devem chamar isto para listar tudo."""
-    rid = effective_responsavel_id(user, client)
-    if user.org_wide:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Escopo não se aplica a admin/diretor",
-        )
-    if rid is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Usuário sem responsável vinculado",
-        )
-    return rid
-
-
 def assert_obrigacao_in_scope(
     user: AuthUser,
     client: Client,
@@ -70,5 +54,33 @@ def assert_obrigacao_in_scope(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Obrigação fora do seu escopo",
+        )
+    return row
+
+
+def assert_tarefa_in_scope(
+    user: AuthUser,
+    client: Client,
+    tarefa_id: str,
+) -> dict[str, Any]:
+    rows = (
+        client.table("tarefas")
+        .select("id,responsavel_id,created_by,status,prazo,motivo_atraso,entregue_em")
+        .eq("id", tarefa_id)
+        .limit(1)
+        .execute()
+        .data
+        or []
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="Tarefa não encontrada")
+    row = rows[0]
+    if user.org_wide:
+        return row
+    scope = effective_responsavel_id(user, client)
+    if scope is None or str(row.get("responsavel_id") or "") != str(scope):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tarefa fora do seu escopo",
         )
     return row

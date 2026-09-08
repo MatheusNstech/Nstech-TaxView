@@ -1,7 +1,7 @@
-import { Columns3, FileSpreadsheet, Upload } from 'lucide-react'
+import { Columns3, Download, FileSpreadsheet, Upload } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { apiUpload } from '../lib/api'
+import { apiDownload, apiUpload } from '../lib/api'
 import {
   currentCompetenciaMonth,
   formatCompetencia,
@@ -16,10 +16,19 @@ export default function Importacao() {
   const [error, setError] = useState('')
   const [result, setResult] = useState<ImportResult | null>(null)
 
+  const handleDownload = async () => {
+    setError('')
+    try {
+      await apiDownload('/api/importacao/modelo.xlsx', 'modelo_importacao.xlsx')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Não foi possível baixar o modelo')
+    }
+  }
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     if (!file) {
-      setError('Selecione um arquivo CSV')
+      setError('Selecione um arquivo Excel (.xlsx)')
       return
     }
 
@@ -32,7 +41,7 @@ export default function Importacao() {
       formData.append('file', file)
       const competenciaDate = monthToCompetencia(competencia)
       const data = await apiUpload<ImportResult>(
-        `/api/importacao/csv?competencia=${competenciaDate}`,
+        `/api/importacao/xlsx?competencia=${competenciaDate}`,
         formData,
       )
       setResult(data)
@@ -55,12 +64,32 @@ export default function Importacao() {
             Importação
           </h1>
           <p className="text-sm text-[color:var(--color-muted)]">
-            Importe o cronograma fiscal a partir de um arquivo CSV
+            Baixe o modelo, preencha o legado ou o mês futuro e importe o Excel
           </p>
         </div>
       </div>
 
-      <form onSubmit={(e) => void handleSubmit(e)} className="glass-panel max-w-xl p-6">
+      <div className="grid items-stretch gap-6 lg:grid-cols-2">
+      <div className="glass-panel flex flex-col p-6">
+        <h2 className="text-sm font-semibold text-[color:var(--color-ink)]">
+          Modelo de importação
+        </h2>
+        <p className="mt-1 text-sm text-[color:var(--color-muted)]">
+          Excel (.xlsx) com obrigações e tarefas. Obrigação: CNPJ e
+          Atividade. Tarefa: título, solicitante, responsável, prazo e
+          horário. Apague as linhas de exemplo antes de importar.
+        </p>
+        <button
+          type="button"
+          className="btn-ghost mt-auto pt-4"
+          onClick={() => void handleDownload()}
+        >
+          <Download className="h-4 w-4" strokeWidth={1.75} />
+          Baixar modelo
+        </button>
+      </div>
+
+      <form onSubmit={(e) => void handleSubmit(e)} className="glass-panel p-6">
         <div className="space-y-4">
           <div>
             <label className="mb-1.5 block text-xs font-medium text-[color:var(--color-muted)]">
@@ -77,11 +106,11 @@ export default function Importacao() {
           <div>
             <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-[color:var(--color-muted)]">
               <FileSpreadsheet className="h-3.5 w-3.5" strokeWidth={1.75} />
-              Arquivo CSV
+              Arquivo Excel
             </label>
             <input
               type="file"
-              accept=".csv"
+              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               className="w-full text-sm text-[color:var(--color-muted)] file:mr-4 file:rounded-xl file:border-0 file:bg-brand-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-brand-700 hover:file:bg-brand-100"
             />
@@ -100,9 +129,10 @@ export default function Importacao() {
           className="btn-primary mt-6 w-full"
         >
           <Upload className="h-4 w-4" strokeWidth={1.75} />
-          {uploading ? 'Importando...' : 'Importar CSV'}
+          {uploading ? 'Importando...' : 'Importar Excel'}
         </button>
       </form>
+      </div>
 
       {result && (
         <div className="glass-panel max-w-xl p-6">
@@ -125,6 +155,10 @@ export default function Importacao() {
             <div>
               <dt className="text-brand-600">Obrigações</dt>
               <dd className="text-lg font-bold text-brand-800">{result.obrigacoes}</dd>
+            </div>
+            <div>
+              <dt className="text-brand-600">Tarefas</dt>
+              <dd className="text-lg font-bold text-brand-800">{result.tarefas ?? 0}</dd>
             </div>
           </dl>
           <Link to="/minhas-tarefas" className="btn-ghost mt-4 text-brand-700">

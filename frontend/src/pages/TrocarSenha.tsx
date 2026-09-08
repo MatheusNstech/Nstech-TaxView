@@ -1,7 +1,8 @@
-import { Lock } from 'lucide-react'
+import { Eye, EyeOff, Lock } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
 import ThemeToggle from '../components/ThemeToggle'
+import { AuthSkeleton } from '../components/ui/PageSkeletons'
 import { useAuth } from '../context/AuthContext'
 
 export default function TrocarSenha() {
@@ -9,15 +10,13 @@ export default function TrocarSenha() {
     useAuth()
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
   if (loading) {
-    return (
-      <div className="mesh-bg flex min-h-screen items-center justify-center">
-        <div className="skeleton h-10 w-40" />
-      </div>
-    )
+    return <AuthSkeleton />
   }
 
   if (!session) {
@@ -30,16 +29,12 @@ export default function TrocarSenha() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    if (password.length < 12) {
-      setError('A senha deve ter ao menos 12 caracteres')
+    if (password.length < 8) {
+      setError('A senha deve ter ao menos 8 caracteres')
       return
     }
     if (password !== confirm) {
       setError('As senhas não coincidem')
-      return
-    }
-    if (password === 'Senha@123') {
-      setError('Escolha uma senha diferente da padrão')
       return
     }
     setSubmitting(true)
@@ -82,25 +77,55 @@ export default function TrocarSenha() {
             <label className="mb-1.5 block text-xs font-medium text-[color:var(--color-muted)]">
               Nova senha
             </label>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="glass-input py-2.5"
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="glass-input py-2.5 pr-11"
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                className="absolute top-1/2 right-3 -translate-y-1/2 text-[color:var(--color-muted)] hover:text-[color:var(--color-ink)]"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+              >
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" strokeWidth={1.75} />
+                ) : (
+                  <Eye className="h-4 w-4" strokeWidth={1.75} />
+                )}
+              </button>
+            </div>
           </div>
           <div>
             <label className="mb-1.5 block text-xs font-medium text-[color:var(--color-muted)]">
               Confirmar senha
             </label>
-            <input
-              type="password"
-              required
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              className="glass-input py-2.5"
-            />
+            <div className="relative">
+              <input
+                type={showConfirm ? 'text' : 'password'}
+                required
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                className="glass-input py-2.5 pr-11"
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                className="absolute top-1/2 right-3 -translate-y-1/2 text-[color:var(--color-muted)] hover:text-[color:var(--color-ink)]"
+                onClick={() => setShowConfirm((v) => !v)}
+                aria-label={showConfirm ? 'Ocultar senha' : 'Mostrar senha'}
+              >
+                {showConfirm ? (
+                  <EyeOff className="h-4 w-4" strokeWidth={1.75} />
+                ) : (
+                  <Eye className="h-4 w-4" strokeWidth={1.75} />
+                )}
+              </button>
+            </div>
           </div>
         </div>
 

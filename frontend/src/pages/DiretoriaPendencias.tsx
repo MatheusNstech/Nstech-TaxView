@@ -4,8 +4,10 @@ import DiretoriaChartCard from '../components/diretoria/DiretoriaChartCard'
 import FiltersBar from '../components/FiltersBar'
 import NotificationBell from '../components/NotificationBell'
 import ObrigacaoDrawer from '../components/ObrigacaoDrawer'
+import TarefaDrawer from '../components/TarefaDrawer'
 import PersonAvatar from '../components/PersonAvatar'
 import StatusBadge from '../components/StatusBadge'
+import { TableSkeleton } from '../components/ui/PageSkeletons'
 import { apiFetch, buildQuery } from '../lib/api'
 import {
   buildDiretoriaRiscos,
@@ -17,9 +19,10 @@ import {
   currentCompetenciaMonth,
   formatCompetencia,
   formatDate,
+  formatHorario,
   monthToCompetencia,
 } from '../lib/format'
-import type { DashboardSummary, FilterValues, Obrigacao } from '../types'
+import type { DashboardSummary, FilterValues, Obrigacao, Tarefa } from '../types'
 
 type TabFilter = 'todas' | DiretoriaRiscoTipo
 
@@ -58,9 +61,11 @@ export default function DiretoriaPendencias() {
   })
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
   const [obrigacoes, setObrigacoes] = useState<Obrigacao[]>([])
+  const [tarefas, setTarefas] = useState<Tarefa[]>([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<TabFilter>('todas')
   const [selected, setSelected] = useState<Obrigacao | null>(null)
+  const [selectedTarefa, setSelectedTarefa] = useState<Tarefa | null>(null)
   const [expandedResp, setExpandedResp] = useState<string | null>(null)
 
   const loadData = useCallback(async () => {
@@ -70,15 +75,18 @@ export default function DiretoriaPendencias() {
         competencia: monthToCompetencia(filters.competencia),
         bu: filters.bu || undefined,
       })
-      const [summaryData, list] = await Promise.all([
+      const [summaryData, list, tarList] = await Promise.all([
         apiFetch<DashboardSummary>(`/api/dashboard/summary${q}`),
         apiFetch<Obrigacao[]>(`/api/obrigacoes${q}`),
+        apiFetch<Tarefa[]>(`/api/tarefas${q}`),
       ])
       setSummary(summaryData)
       setObrigacoes(list)
+      setTarefas(tarList)
     } catch {
       setSummary(null)
       setObrigacoes([])
+      setTarefas([])
     } finally {
       setLoading(false)
     }
@@ -94,8 +102,8 @@ export default function DiretoriaPendencias() {
   )
 
   const riscos = useMemo(
-    () => buildDiretoriaRiscos(obrigacoes, summary),
-    [obrigacoes, summary],
+    () => buildDiretoriaRiscos(obrigacoes, summary, new Date(), tarefas),
+    [obrigacoes, summary, tarefas],
   )
 
   const counts = useMemo(() => countRiscosByTipo(riscos), [riscos])
@@ -181,15 +189,11 @@ export default function DiretoriaPendencias() {
             : TABS.find((t) => t.id === tab)?.label ?? 'Pendências'
         }
         subtitle={
-          loading
-            ? 'Carregando...'
-            : `${filtered.length} registro(s) no recorte`
+          loading ? undefined : `${filtered.length} registro(s) no recorte`
         }
       >
         {loading ? (
-          <p className="py-10 text-center text-sm text-[color:var(--color-muted)]">
-            Carregando...
-          </p>
+          <TableSkeleton rows={8} cols={7} framed={false} />
         ) : filtered.length === 0 ? (
           <p className="py-10 text-center text-sm text-[color:var(--color-muted)]">
             Nenhuma pendência neste filtro
@@ -225,6 +229,7 @@ export default function DiretoriaPendencias() {
                         : []
                     }
                     onSelectObrigacao={setSelected}
+                    onSelectTarefa={setSelectedTarefa}
                   />
                 ))}
               </tbody>
@@ -242,6 +247,21 @@ export default function DiretoriaPendencias() {
           void loadData()
         }}
       />
+
+      <TarefaDrawer
+        tarefa={selectedTarefa}
+        open={selectedTarefa != null}
+        onClose={() => setSelectedTarefa(null)}
+        onSaved={() => {
+          setSelectedTarefa(null)
+          void loadData()
+        }}
+        onDeleted={() => {
+          setSelectedTarefa(null)
+          void loadData()
+        }}
+        readOnly
+      />
     </div>
   )
 }
@@ -252,25 +272,31 @@ function RiscoRows({
   onToggleExpand,
   filhos,
   onSelectObrigacao,
+  onSelectTarefa,
 }: {
   risco: DiretoriaRisco
   expanded: boolean
   onToggleExpand: () => void
   filhos: Obrigacao[]
   onSelectObrigacao: (o: Obrigacao) => void
+  onSelectTarefa: (t: Tarefa) => void
 }) {
   const o = risco.obrigacao
+  const t = risco.tarefa
   const isSobrecarga = risco.tipo === 'sobrecarga'
+  const respNome =
+    o?.responsavel?.nome ?? t?.responsavel?.nome ?? risco.responsavelNome
 
   return (
     <>
       <tr
         className={[
           'transition hover:bg-[color:var(--nav-hover)]',
-          o || isSobrecarga ? 'cursor-pointer' : '',
+          o || t || isSobrecarga ? 'cursor-pointer' : '',
         ].join(' ')}
         onClick={() => {
           if (o) onSelectObrigacao(o)
+          else if (t) onSelectTarefa(t)
           else if (isSobrecarga) onToggleExpand()
         }}
       >
@@ -287,10 +313,10 @@ function RiscoRows({
         </td>
         <td className="px-2 py-3">
           <div className="flex items-start gap-2.5">
-            {(o?.responsavel?.nome || risco.responsavelNome) && (
+            {respNome && (
               <PersonAvatar
-                nome={o?.responsavel?.nome ?? risco.responsavelNome}
-                fotoUrl={o?.responsavel?.foto_url}
+                nome={respNome}
+                fotoUrl={o?.responsavel?.foto_url ?? t?.responsavel?.foto_url}
                 className="mt-0.5"
               />
             )}
@@ -301,17 +327,27 @@ function RiscoRows({
               <p className="text-xs text-[color:var(--color-muted)]">
                 {isSobrecarga
                   ? `${filhos.length} obrigação(ões) · clique para expandir`
-                  : (o?.responsavel?.nome ?? '—')}
+                  : (respNome ?? '—')}
               </p>
             </div>
           </div>
         </td>
         <td className="px-2 py-3 text-[color:var(--color-muted)]">
-          {o?.empresa?.razao_social ?? '—'}
+          {o?.empresa?.razao_social ?? t?.empresa?.razao_social ?? '—'}
         </td>
-        <td className="px-2 py-3">{o?.empresa?.bu ?? '—'}</td>
+        <td className="px-2 py-3">
+          {o?.empresa?.bu ?? t?.empresa?.bu ?? '—'}
+        </td>
         <td className="px-2 py-3 tabular-nums">
-          {o ? formatDate(o.prazo_fiscal ?? o.prazo_legal) : '—'}
+          {o
+            ? formatDate(o.prazo_fiscal ?? o.prazo_legal)
+            : t
+              ? `${formatDate(t.prazo)}${
+                  formatHorario(t.hora_inicio, t.hora_fim)
+                    ? ` · ${formatHorario(t.hora_inicio, t.hora_fim)}`
+                    : ''
+                }`
+              : '—'}
         </td>
         <td className="px-2 py-3 text-xs font-semibold tabular-nums">
           {risco.tipo === 'atrasado' && risco.diasRef != null
@@ -325,6 +361,8 @@ function RiscoRows({
         <td className="px-2 py-3">
           {o ? (
             <StatusBadge status={o.status} urgencia={o.urgencia} />
+          ) : t ? (
+            <StatusBadge status={t.status} urgencia={t.urgencia} />
           ) : (
             <span className="text-xs text-[color:var(--color-muted)]">—</span>
           )}

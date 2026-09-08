@@ -1,6 +1,6 @@
 from collections import Counter
 from datetime import date, timedelta
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
@@ -14,6 +14,32 @@ from app.services.status_engine import normalize_status
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 
+def _empty_summary() -> DashboardSummary:
+    return DashboardSummary(
+        total=0,
+        pendente=0,
+        em_andamento=0,
+        em_revisao=0,
+        entregue=0,
+        atrasado=0,
+        vence_em_7_dias=0,
+        percentual_entregue=0.0,
+        por_bu={},
+        por_responsavel={},
+        capacidade_por_responsavel={},
+    )
+
+
+def _normalize_tarefa_status(row: dict[str, Any], today: date) -> str:
+    st = row.get("status") or "PENDENTE"
+    if st == "ENTREGUE":
+        return st
+    prazo = date.fromisoformat(row["prazo"]) if row.get("prazo") else None
+    if prazo and prazo < today:
+        return "ATRASADO"
+    return st
+
+
 @router.get("/summary", response_model=DashboardSummary)
 def summary(
     user: Annotated[AuthUser, Depends(get_current_user)],
@@ -22,37 +48,42 @@ def summary(
     bu: str | None = None,
     responsavel_id: UUID | None = None,
 ):
-    query = client.table("obrigacoes").select(
-        "id,status,prazo_legal,prazo_fiscal,data_entrega,responsavel_id,"
-        "empresas(bu,razao_social),responsaveis(nome,capacidade_max)"
-    )
-    if competencia:
-        query = query.eq("competencia", competencia.isoformat())
-
+    scope_rid: str | None = None
     if user.org_wide:
         if user.role == "admin" and responsavel_id:
-            query = query.eq("responsavel_id", str(responsavel_id))
+            scope_rid = str(responsavel_id)
     else:
         scope = effective_responsavel_id(user, client)
         if scope is None:
-            return DashboardSummary(
-                total=0,
-                pendente=0,
-                em_andamento=0,
-                em_revisao=0,
-                entregue=0,
-                atrasado=0,
-                vence_em_7_dias=0,
-                percentual_entregue=0.0,
-                por_bu={},
-                por_responsavel={},
-                capacidade_por_responsavel={},
-            )
-        query = query.eq("responsavel_id", str(scope))
+            return _empty_summary()
+        scope_rid = str(scope)
 
-    rows = query.execute().data or []
+    obr_query = client.table("obrigacoes").select(
+        "id,status,prazo_legal,prazo_fiscal,data_entrega,responsavel_id,"
+        "empresas(bu,razao_social),responsaveis(nome,capacidade_max)"
+    )
+    tar_query = client.table("tarefas").select(
+        "id,status,prazo,responsavel_id,"
+        "empresas(bu,razao_social),responsaveis(nome,capacidade_max)"
+    )
+    if competencia:
+        iso = competencia.isoformat()
+        obr_query = obr_query.eq("competencia", iso)
+        tar_query = tar_query.eq("competencia", iso)
+    if scope_rid:
+        obr_query = obr_query.eq("responsavel_id", scope_rid)
+        tar_query = tar_query.eq("responsavel_id", scope_rid)
+
+    obr_rows = obr_query.execute().data or []
+    tar_rows = tar_query.execute().data or []
+
     if bu:
-        rows = [r for r in rows if (r.get("empresas") or {}).get("bu") == bu]
+        obr_rows = [
+            r for r in obr_rows if (r.get("empresas") or {}).get("bu") == bu
+        ]
+        tar_rows = [
+            r for r in tar_rows if (r.get("empresas") or {}).get("bu") == bu
+        ]
 
     today = date.today()
     limit = today + timedelta(days=7)
@@ -62,7 +93,7 @@ def summary(
     capacidade: dict[str, int | None] = {}
     vence_7 = 0
 
-    for row in rows:
+    for row in obr_rows:
         st = normalize_status(
             row.get("status") or "PENDENTE",
             date.fromisoformat(row["prazo_legal"]) if row.get("prazo_legal") else None,
@@ -82,7 +113,20 @@ def summary(
             if today <= ref_date <= limit:
                 vence_7 += 1
 
-    total = len(rows)
+    for row in tar_rows:
+        st = _normalize_tarefa_status(row, today)
+        status_counter[st] += 1
+        bu_counter[(row.get("empresas") or {}).get("bu") or "N/A"] += 1
+        nome = (row.get("responsaveis") or {}).get("nome") or "Sem responsável"
+        resp_counter[nome] += 1
+        if nome not in capacidade:
+            capacidade[nome] = (row.get("responsaveis") or {}).get("capacidade_max")
+        if st != "ENTREGUE" and row.get("prazo"):
+            ref_date = date.fromisoformat(row["prazo"])
+            if today <= ref_date <= limit:
+                vence_7 += 1
+
+    total = len(obr_rows) + len(tar_rows)
     entregue = status_counter.get("ENTREGUE", 0)
     return DashboardSummary(
         total=total,

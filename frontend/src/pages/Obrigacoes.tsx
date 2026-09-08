@@ -1,10 +1,12 @@
-import { Download, ListChecks, Pencil } from 'lucide-react'
+import { ListChecks, Pencil } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
+import ExportMenu, { marketCallFilename } from '../components/ExportMenu'
 import FiltersBar from '../components/FiltersBar'
 import NotificationBell from '../components/NotificationBell'
 import ObrigacaoDrawer from '../components/ObrigacaoDrawer'
 import StatusBadge from '../components/StatusBadge'
-import { apiDownload, apiFetch, buildQuery } from '../lib/api'
+import { TableSkeleton } from '../components/ui/PageSkeletons'
+import { apiFetch, buildQuery } from '../lib/api'
 import {
   currentCompetenciaMonth,
   formatDate,
@@ -76,24 +78,15 @@ export default function Obrigacoes() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <NotificationBell />
-          <button
-            type="button"
-            className="btn-ghost"
-            onClick={() =>
-              void apiDownload(
-                `/api/obrigacoes/export.csv${buildQuery({
-                  competencia: monthToCompetencia(filters.competencia),
-                  bu: filters.bu || undefined,
-                  status: filters.status || undefined,
-                  q: filters.search || undefined,
-                })}`,
-                'obrigacoes.csv',
-              )
-            }
-          >
-            <Download className="h-4 w-4" strokeWidth={1.75} />
-            Exportar CSV
-          </button>
+          <ExportMenu
+            query={buildQuery({
+              competencia: monthToCompetencia(filters.competencia),
+              bu: filters.bu || undefined,
+              status: filters.status || undefined,
+              q: filters.search || undefined,
+            })}
+            pptxFilename={marketCallFilename(filters.competencia)}
+          />
         </div>
       </div>
 
@@ -116,11 +109,7 @@ export default function Obrigacoes() {
             </thead>
             <tbody className="divide-y divide-[color:var(--color-line)]">
               {loading ? (
-                <tr>
-                  <td colSpan={8} className="px-5 py-8 text-center text-[color:var(--color-muted)]">
-                    Carregando...
-                  </td>
-                </tr>
+                <TableSkeleton asRows rows={8} cols={8} />
               ) : items.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-5 py-8 text-center text-[color:var(--color-muted)]">

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
@@ -12,8 +13,11 @@ from app.core.auth import (
     get_current_user,
     get_db_client,
     get_user_client,
+    invalidate_auth_cache,
     require_admin,
 )
+
+logger = logging.getLogger(__name__)
 from app.core.config import Settings, get_settings
 from app.schemas.models import UsuarioCreate, UsuarioOut, UsuarioRole, UsuarioUpdate
 
@@ -72,11 +76,12 @@ def _row_to_out(row: dict[str, Any]) -> UsuarioOut:
 def _rpc_error(exc: Exception, default: str) -> HTTPException:
     detail = str(exc)
     lower = detail.lower()
+    logger.warning("%s: %s", default, detail)
     if "já existe" in lower or "already" in lower:
         return HTTPException(status_code=409, detail="Já existe um usuário com este e-mail")
     if "restrito" in lower or "42501" in lower or "permission" in lower:
         return HTTPException(status_code=403, detail="Acesso restrito a administradores")
-    return HTTPException(status_code=400, detail=f"{default}: {detail}")
+    return HTTPException(status_code=400, detail=default)
 
 
 @router.get("/me", response_model=UsuarioOut)
@@ -100,9 +105,10 @@ def list_usuarios(
         try:
             response = admin.auth.admin.list_users()
         except Exception as exc:  # noqa: BLE001
+            logger.exception("Falha ao listar usuários")
             raise HTTPException(
                 status_code=400,
-                detail=f"Falha ao listar usuários: {exc}",
+                detail="Falha ao listar usuários",
             ) from exc
 
         users = getattr(response, "users", None)
@@ -158,9 +164,10 @@ def create_usuario(
                     status_code=409,
                     detail="Já existe um usuário com este e-mail",
                 ) from exc
+            logger.exception("Falha ao criar usuário")
             raise HTTPException(
                 status_code=400,
-                detail=f"Falha ao criar usuário: {detail}",
+                detail="Falha ao criar usuário",
             ) from exc
 
         user = response.user
@@ -241,7 +248,13 @@ def update_usuario(
         admin = get_admin_client(settings)
         attributes: dict = {}
         if payload.role is not None:
-            attributes["app_metadata"] = {"role": payload.role.value}
+            existing = admin.auth.admin.get_user_by_id(str(user_id))
+            current_user = existing.user
+            if current_user is None:
+                raise HTTPException(status_code=404, detail="Usuário não encontrado")
+            app_meta = dict(getattr(current_user, "app_metadata", None) or {})
+            app_meta["role"] = payload.role.value
+            attributes["app_metadata"] = app_meta
         if payload.ativo is False:
             attributes["ban_duration"] = "876000h"
         if payload.ativo is True:
@@ -253,11 +266,13 @@ def update_usuario(
         try:
             response = admin.auth.admin.update_user_by_id(str(user_id), attributes)
         except Exception as exc:  # noqa: BLE001
+            logger.exception("Falha ao atualizar usuário")
             raise HTTPException(
                 status_code=400,
-                detail=f"Falha ao atualizar usuário: {exc}",
+                detail="Falha ao atualizar usuário",
             ) from exc
 
+        invalidate_auth_cache()
         user = response.user
         if user is None:
             raise HTTPException(status_code=404, detail="Usuário não encontrado")
@@ -316,7 +331,8 @@ def bootstrap_admin(
     try:
         response = admin.auth.admin.list_users()
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        logger.exception("Falha no bootstrap-admin")
+        raise HTTPException(status_code=400, detail="Falha ao consultar usuários") from exc
 
     users = getattr(response, "users", None) or []
     has_admin = any(_role_from_user(u) == "admin" for u in users)
@@ -327,14 +343,19 @@ def bootstrap_admin(
         )
 
     try:
+        existing = admin.auth.admin.get_user_by_id(current.id)
+        app_meta = dict(getattr(existing.user, "app_metadata", None) or {})
+        app_meta["role"] = "admin"
         updated = admin.auth.admin.update_user_by_id(
             current.id,
-            {"app_metadata": {"role": "admin"}},
+            {"app_metadata": app_meta},
         )
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        logger.exception("Falha ao promover admin")
+        raise HTTPException(status_code=400, detail="Falha ao promover admin") from exc
 
     user = updated.user
     if user is None:
         raise HTTPException(status_code=400, detail="Falha ao promover admin")
+    invalidate_auth_cache()
     return _to_out(user)

@@ -1,17 +1,18 @@
 import { Search, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import type { Obrigacao, StatusObrigacao } from '../../types'
+import type { StatusObrigacao, WorkItem } from '../../types'
 import { formatDate, statusLabel } from '../../lib/format'
+import { workItemServicoNome } from '../../lib/diretoriaAggregates'
 import PersonAvatar from '../PersonAvatar'
 import StatusBadge from '../StatusBadge'
 
 interface DiretoriaDrillModalProps {
   open: boolean
   title: string
-  items: Obrigacao[]
+  items: WorkItem[]
   closeOnEscape?: boolean
   onClose: () => void
-  onSelect: (obrigacao: Obrigacao) => void
+  onSelect: (item: WorkItem) => void
 }
 
 const STATUS_OPTS: StatusObrigacao[] = [
@@ -24,6 +25,27 @@ const STATUS_OPTS: StatusObrigacao[] = [
 
 const selectClass =
   'h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs text-slate-700 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20'
+
+function itemEmpresa(item: WorkItem): string {
+  if (item.origem === 'obrigacao') {
+    return item.obrigacao?.empresa?.razao_social ?? '—'
+  }
+  return item.tarefa?.empresa?.razao_social ?? item.title
+}
+
+function itemBu(item: WorkItem): string {
+  if (item.origem === 'obrigacao') {
+    return item.obrigacao?.empresa?.bu ?? '—'
+  }
+  return item.tarefa?.empresa?.bu ?? '—'
+}
+
+function itemFoto(item: WorkItem): string | null {
+  if (item.origem === 'obrigacao') {
+    return item.obrigacao?.responsavel?.foto_url ?? null
+  }
+  return item.tarefa?.responsavel?.foto_url ?? null
+}
 
 export default function DiretoriaDrillModal({
   open,
@@ -66,17 +88,17 @@ export default function DiretoriaDrillModal({
 
   const bus = useMemo(() => {
     const set = new Set<string>()
-    for (const o of items) {
-      const v = o.empresa?.bu?.trim()
-      if (v) set.add(v)
+    for (const item of items) {
+      const v = itemBu(item)
+      if (v && v !== '—') set.add(v)
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'))
   }, [items])
 
   const responsaveis = useMemo(() => {
     const set = new Set<string>()
-    for (const o of items) {
-      const v = o.responsavel?.nome?.trim()
+    for (const item of items) {
+      const v = item.responsavelNome?.trim()
       if (v) set.add(v)
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'))
@@ -84,16 +106,18 @@ export default function DiretoriaDrillModal({
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    return items.filter((o) => {
-      if (bu && (o.empresa?.bu ?? '') !== bu) return false
-      if (responsavel && (o.responsavel?.nome ?? '') !== responsavel) return false
-      if (status && o.status !== status) return false
+    return items.filter((item) => {
+      if (bu && itemBu(item) !== bu) return false
+      if (responsavel && (item.responsavelNome ?? '') !== responsavel) return false
+      if (status && item.status !== status) return false
       if (!q) return true
       const hay = [
-        o.empresa?.razao_social,
-        o.atividade?.nome,
-        o.responsavel?.nome,
-        o.empresa?.bu,
+        item.title,
+        item.subtitle,
+        workItemServicoNome(item),
+        item.responsavelNome,
+        itemEmpresa(item),
+        itemBu(item),
       ]
         .filter(Boolean)
         .join(' ')
@@ -109,7 +133,7 @@ export default function DiretoriaDrillModal({
   const sameServico =
     items.length > 0 &&
     items.every(
-      (o) => (o.atividade?.nome ?? '') === (items[0]?.atividade?.nome ?? ''),
+      (item) => workItemServicoNome(item) === workItemServicoNome(items[0]),
     )
 
   const colSpan = sameServico ? 5 : 6
@@ -138,8 +162,8 @@ export default function DiretoriaDrillModal({
             </h2>
             <p className="mt-1 text-xs text-slate-500">
               {hasFilters
-                ? `${filtered.length} de ${items.length} obrigação(ões)`
-                : `${items.length} obrigação(ões)`}
+                ? `${filtered.length} de ${items.length} item(ns)`
+                : `${items.length} item(ns)`}
               {' · '}
               clique para ver detalhes
             </p>
@@ -161,7 +185,7 @@ export default function DiretoriaDrillModal({
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar empresa, serviço..."
+              placeholder="Buscar empresa, serviço, tarefa..."
               className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-8 pr-3 text-xs text-slate-700 outline-none placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
             />
           </div>
@@ -237,7 +261,7 @@ export default function DiretoriaDrillModal({
                 {!sameServico && (
                   <th className="whitespace-nowrap px-5 py-3">Tipo de serviço</th>
                 )}
-                <th className="whitespace-nowrap px-5 py-3">Empresa</th>
+                <th className="whitespace-nowrap px-5 py-3">Empresa / título</th>
                 <th className="whitespace-nowrap px-5 py-3">BU</th>
                 <th className="whitespace-nowrap px-5 py-3">Responsável</th>
                 <th className="whitespace-nowrap px-5 py-3">Prazo</th>
@@ -252,46 +276,46 @@ export default function DiretoriaDrillModal({
                     className="px-5 py-14 text-center text-slate-500"
                   >
                     {items.length === 0
-                      ? 'Nenhuma obrigação neste recorte'
+                      ? 'Nenhum item neste recorte'
                       : 'Nenhum resultado com esses filtros'}
                   </td>
                 </tr>
               ) : (
-                filtered.map((o) => (
+                filtered.map((item) => (
                   <tr
-                    key={o.id}
+                    key={item.key}
                     className="cursor-pointer border-t border-slate-100 transition hover:bg-slate-50"
-                    onClick={() => onSelect(o)}
+                    onClick={() => onSelect(item)}
                   >
                     {!sameServico && (
                       <td className="max-w-[12rem] truncate px-5 py-3.5 font-medium text-slate-800">
-                        {o.atividade?.nome ?? '—'}
+                        {workItemServicoNome(item)}
                       </td>
                     )}
                     <td className="max-w-[16rem] truncate px-5 py-3.5 text-slate-700">
-                      {o.empresa?.razao_social ?? '—'}
+                      {item.origem === 'tarefa' ? item.title : itemEmpresa(item)}
                     </td>
                     <td className="whitespace-nowrap px-5 py-3.5 text-slate-600">
-                      {o.empresa?.bu ?? '—'}
+                      {itemBu(item)}
                     </td>
                     <td className="whitespace-nowrap px-5 py-3.5 text-slate-700">
-                      {o.responsavel?.nome ? (
+                      {item.responsavelNome ? (
                         <span className="inline-flex items-center gap-2">
                           <PersonAvatar
-                            nome={o.responsavel.nome}
-                            fotoUrl={o.responsavel.foto_url}
+                            nome={item.responsavelNome}
+                            fotoUrl={itemFoto(item)}
                           />
-                          <span>{o.responsavel.nome}</span>
+                          <span>{item.responsavelNome}</span>
                         </span>
                       ) : (
                         '—'
                       )}
                     </td>
                     <td className="whitespace-nowrap px-5 py-3.5 tabular-nums text-slate-600">
-                      {formatDate(o.prazo_fiscal ?? o.prazo_legal)}
+                      {formatDate(item.prazo)}
                     </td>
                     <td className="whitespace-nowrap px-5 py-3.5">
-                      <StatusBadge status={o.status} urgencia={o.urgencia} />
+                      <StatusBadge status={item.status} urgencia={item.urgencia} />
                     </td>
                   </tr>
                 ))

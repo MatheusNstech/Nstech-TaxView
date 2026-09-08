@@ -162,17 +162,13 @@ async def get_current_user(
             detail="Usuário não encontrado",
         )
     app_meta = getattr(user, "app_metadata", None) or {}
-    user_meta = getattr(user, "user_metadata", None) or {}
     view_as = None
     if isinstance(app_meta, dict):
         view_as = _sanitize_uuid(app_meta.get("view_as_responsavel_id"))
 
-    # Prefer app_metadata (server-only); fall back to legacy user_metadata once.
+    # Só app_metadata (server-only). user_metadata é editável pelo próprio usuário.
     must_change = _extract_bool_meta(
         app_meta if isinstance(app_meta, dict) else None,
-        "must_change_password",
-    ) or _extract_bool_meta(
-        user_meta if isinstance(user_meta, dict) else None,
         "must_change_password",
     )
 
@@ -192,6 +188,14 @@ async def get_current_user(
     return auth_user
 
 
+def assert_password_changed(user: AuthUser) -> None:
+    if user.must_change_password:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Troque a senha antes de alterar dados",
+        )
+
+
 async def require_admin(
     user: Annotated[AuthUser, Depends(get_current_user)],
 ) -> AuthUser:
@@ -200,6 +204,7 @@ async def require_admin(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Acesso restrito a administradores",
         )
+    assert_password_changed(user)
     return user
 
 
@@ -217,13 +222,8 @@ async def require_not_viewer(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=detail,
         )
+    assert_password_changed(user)
     return user
-
-
-async def require_can_write(
-    user: Annotated[AuthUser, Depends(get_current_user)],
-) -> AuthUser:
-    return await require_not_viewer(user)
 
 
 def get_db_client(

@@ -1,8 +1,8 @@
-from datetime import date, datetime
+from datetime import date, datetime, time
 from enum import Enum
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class StatusObrigacao(str, Enum):
@@ -97,7 +97,7 @@ class UsuarioRole(str, Enum):
 
 class UsuarioCreate(BaseModel):
     email: str
-    password: str = Field(min_length=12)
+    password: str = Field(min_length=8)
     nome: str | None = None
     role: UsuarioRole = UsuarioRole.USER
     responsavel_id: UUID | None = None
@@ -138,6 +138,7 @@ class ObrigacaoBase(BaseModel):
     recibo_path: str | None = None
     recibo_numero: str | None = None
     observacao: str | None = None
+    motivo_atraso: str | None = None
 
 
 class ObrigacaoCreate(ObrigacaoBase):
@@ -156,6 +157,7 @@ class ObrigacaoUpdate(BaseModel):
     recibo_path: str | None = None
     recibo_numero: str | None = None
     observacao: str | None = None
+    motivo_atraso: str | None = Field(default=None, max_length=2000)
 
 
 class ObrigacaoOut(ObrigacaoBase):
@@ -168,6 +170,7 @@ class ObrigacaoOut(ObrigacaoBase):
     aprovado_por: UUID | None = None
     aprovado_em: datetime | None = None
     reprovado_motivo: str | None = None
+    motivo_atraso: str | None = None
 
 
 class ReprovarRequest(BaseModel):
@@ -219,6 +222,7 @@ class CalendarioDia(BaseModel):
 class CalendarioResponse(BaseModel):
     dias: list[CalendarioDia]
     detalhe: list[ObrigacaoOut] = []
+    tarefas: list["TarefaOut"] = []
 
 
 class GerarCompetenciaRequest(BaseModel):
@@ -238,6 +242,7 @@ class ImportResult(BaseModel):
     atividades: int
     responsaveis: int
     obrigacoes: int
+    tarefas: int = 0
     competencia: date
 
 
@@ -253,3 +258,113 @@ class DashboardSummary(BaseModel):
     por_bu: dict[str, int]
     por_responsavel: dict[str, int]
     capacidade_por_responsavel: dict[str, int | None] = {}
+
+
+class TarefaCategoria(str, Enum):
+    FECHAMENTO = "fechamento"
+    OUTRAS = "outras"
+
+
+def _validate_horario(
+    hora_inicio: time | None,
+    hora_fim: time | None,
+    prazo: date | None,
+    *,
+    prazo_known: bool,
+    required: bool,
+) -> None:
+    if required and (hora_inicio is None or hora_fim is None):
+        raise ValueError("Informe início e fim do horário")
+    if (hora_inicio is None) != (hora_fim is None):
+        raise ValueError("Informe início e fim do horário")
+    if hora_inicio is not None and hora_fim is not None and hora_fim <= hora_inicio:
+        raise ValueError("O horário final deve ser depois do início")
+    if hora_inicio is not None and prazo_known and prazo is None:
+        raise ValueError("Informe o prazo do dia para definir o horário")
+
+
+class TarefaCreate(BaseModel):
+    titulo: str = Field(min_length=1, max_length=200)
+    solicitante_nome: str = Field(min_length=2, max_length=120)
+    descricao: str | None = None
+    categoria: TarefaCategoria = TarefaCategoria.FECHAMENTO
+    status: StatusObrigacao = StatusObrigacao.PENDENTE
+    competencia: date | None = None
+    prazo: date
+    hora_inicio: time
+    hora_fim: time
+    empresa_id: UUID | None = None
+    obrigacao_id: UUID | None = None
+    responsavel_id: UUID | None = None
+    motivo_atraso: str | None = Field(default=None, max_length=2000)
+
+    @model_validator(mode="after")
+    def horario_consistente(self) -> "TarefaCreate":
+        _validate_horario(
+            self.hora_inicio,
+            self.hora_fim,
+            self.prazo,
+            prazo_known=True,
+            required=True,
+        )
+        return self
+
+
+class TarefaUpdate(BaseModel):
+    titulo: str | None = Field(default=None, min_length=1, max_length=200)
+    descricao: str | None = None
+    categoria: TarefaCategoria | None = None
+    status: StatusObrigacao | None = None
+    competencia: date | None = None
+    prazo: date | None = None
+    hora_inicio: time | None = None
+    hora_fim: time | None = None
+    empresa_id: UUID | None = None
+    obrigacao_id: UUID | None = None
+    responsavel_id: UUID | None = None
+    motivo_atraso: str | None = Field(default=None, max_length=2000)
+    solicitante_nome: str | None = Field(default=None, min_length=2, max_length=120)
+
+    @model_validator(mode="after")
+    def horario_consistente(self) -> "TarefaUpdate":
+        fields = self.model_fields_set
+        if "hora_inicio" in fields or "hora_fim" in fields:
+            _validate_horario(
+                self.hora_inicio,
+                self.hora_fim,
+                self.prazo,
+                prazo_known="prazo" in fields,
+                required=True,
+            )
+        return self
+
+
+class TarefaOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    titulo: str
+    descricao: str | None = None
+    categoria: TarefaCategoria
+    status: StatusObrigacao
+    competencia: date | None = None
+    prazo: date | None = None
+    hora_inicio: time | None = None
+    hora_fim: time | None = None
+    empresa_id: UUID | None = None
+    obrigacao_id: UUID | None = None
+    responsavel_id: UUID
+    solicitante_nome: str
+    motivo_atraso: str | None = None
+    entregue_em: datetime | None = None
+    created_by: UUID | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    empresa: EmpresaOut | None = None
+    responsavel: ResponsavelOut | None = None
+    urgencia: str | None = None
+
+
+CalendarioResponse.model_rebuild()
+
+
+CalendarioResponse.model_rebuild()
