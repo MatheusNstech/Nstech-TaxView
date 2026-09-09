@@ -1,7 +1,6 @@
 import { Lock, Mail } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Link, Navigate } from 'react-router-dom'
-import ThemeToggle from '../components/ThemeToggle'
 import { AuthSkeleton } from '../components/ui/PageSkeletons'
 import { useAuth } from '../context/AuthContext'
 
@@ -42,44 +41,22 @@ export default function Login() {
   }
 
   return (
-    <div className="mesh-bg relative flex min-h-screen items-center justify-center px-4">
-      <div className="absolute top-4 right-4">
-        <ThemeToggle />
-      </div>
-      <div className="w-full max-w-md">
-        <div className="mb-8 flex flex-col items-center text-center">
-          <a
-            href="https://nstech.com.br/?scLang=pt-BR"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mb-5 rounded-full bg-white px-5 py-2.5 transition dark:bg-[color:var(--color-panel)]"
-            aria-label="Site nstech"
-          >
-            <img
-              src="/nstech-logo.png"
-              alt="nstech"
-              className="h-12 w-auto max-w-[15rem] object-contain"
-            />
-          </a>
-          <h1 className="text-2xl font-bold text-[color:var(--color-ink)]">
-            TaxView
+    <div className="relative min-h-screen">
+      <img
+        src="/wallpaper-tns.jpg"
+        alt=""
+        className="absolute inset-0 h-full w-full object-cover object-[right_center]"
+      />
+      <div className="relative flex min-h-screen items-center px-6 py-10 sm:px-12 lg:w-[42%] lg:px-16">
+        <div className="mx-auto w-full max-w-md">
+          <h1 className="text-3xl font-semibold tracking-tight text-white">
+            Faça seu login.
           </h1>
-          <p className="mt-1 text-sm text-[color:var(--color-muted)]">
-            Cronograma Fiscal Inteligente
-          </p>
-        </div>
+          <p className="mt-2 text-sm text-white/55">TaxView</p>
 
-        <form
-          onSubmit={(e) => void handleSubmit(e)}
-          className="glass-panel p-8"
-        >
-          <h2 className="mb-6 text-lg font-semibold text-[color:var(--color-ink)]">
-            Entrar
-          </h2>
-
-          <div className="space-y-4">
+          <form onSubmit={(e) => void handleSubmit(e)} className="mt-10 space-y-5">
             <div>
-              <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-[color:var(--color-muted)]">
+              <label className="mb-2 flex items-center gap-1.5 text-sm text-white/70">
                 <Mail className="h-3.5 w-3.5" strokeWidth={1.75} />
                 E-mail
               </label>
@@ -88,13 +65,14 @@ export default function Login() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="glass-input py-2.5"
+                className="w-full rounded-full border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30"
                 placeholder="seu@email.com"
+                autoComplete="email"
               />
             </div>
 
             <div>
-              <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-[color:var(--color-muted)]">
+              <label className="mb-2 flex items-center gap-1.5 text-sm text-white/70">
                 <Lock className="h-3.5 w-3.5" strokeWidth={1.75} />
                 Senha
               </label>
@@ -103,30 +81,35 @@ export default function Login() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="glass-input py-2.5"
+                className="w-full rounded-full border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30"
                 placeholder="••••••••"
+                autoComplete="current-password"
               />
-              <div className="mt-2 text-right">
+              <div className="mt-3 text-right">
                 <Link
                   to="/esqueci-senha"
-                  className="text-xs font-medium text-brand-600 hover:underline dark:text-brand-400"
+                  className="text-xs text-white/55 transition hover:text-white"
                 >
                   Esqueci minha senha
                 </Link>
               </div>
             </div>
-          </div>
 
-          {error && (
-            <p className="mt-4 rounded-xl bg-rose-50/90 px-3 py-2 text-sm text-rose-700">
-              {error}
-            </p>
-          )}
+            {error && (
+              <p className="rounded-2xl bg-rose-500/15 px-3 py-2 text-sm text-rose-200">
+                {error}
+              </p>
+            )}
 
-          <button type="submit" disabled={submitting} className="btn-primary mt-6 w-full">
-            {submitting ? 'Entrando...' : 'Acessar'}
-          </button>
-        </form>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="btn-primary mt-2 w-full rounded-full py-3"
+            >
+              {submitting ? 'Entrando...' : 'Entrar'}
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   )
