@@ -49,10 +49,10 @@ export default function Login() {
       />
       <div className="relative flex min-h-screen items-center px-6 py-10 sm:px-12 lg:w-[42%] lg:px-16">
         <div className="mx-auto w-full max-w-md">
-          <h1 className="text-3xl font-semibold tracking-tight text-white">
+          <p className="text-4xl font-semibold tracking-tight text-white">TaxView</p>
+          <h1 className="mt-3 text-xl font-medium text-white/80">
             Faça seu login.
           </h1>
-          <p className="mt-2 text-sm text-white/55">TaxView</p>
 
           <form onSubmit={(e) => void handleSubmit(e)} className="mt-10 space-y-5">
             <div>
