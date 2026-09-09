@@ -21,6 +21,7 @@ interface MeProfile {
   responsavel_nome: string | null
   must_change_password: boolean
   is_viewer: boolean
+  painel_fiscal_editor?: boolean
 }
 
 const RECOVERY_KEY = 'mstax.password_recovery'
@@ -39,6 +40,8 @@ interface AuthContextValue {
   mustChangePassword: boolean
   recoveryPending: boolean
   isViewer: boolean
+  painelFiscalEditor: boolean
+  canReadPainelFiscal: boolean
   homePath: string
   signIn: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
@@ -65,9 +68,13 @@ function mustChangeFromSession(session: Session | null): boolean {
   return value === true || value === 'true'
 }
 
-export function homePathForRole(role: UserRole): string {
+export function homePathForRole(
+  role: UserRole,
+  opts?: { painelFiscalEditor?: boolean },
+): string {
   if (role === 'admin') return '/diretoria'
   if (role === 'diretor') return '/diretoria'
+  if (opts?.painelFiscalEditor) return '/diretoria/pendencias-rfb'
   return '/minhas-tarefas'
 }
 
@@ -201,6 +208,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAdmin = role === 'admin'
   const isDiretor = role === 'diretor'
   const canWrite = !isViewer && !isDiretor
+  const painelFiscalEditor = Boolean(me?.painel_fiscal_editor) || isAdmin
+  const canReadPainelFiscal = isAdmin || isDiretor || Boolean(me?.painel_fiscal_editor)
 
   const value = useMemo(
     () => ({
@@ -217,7 +226,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       mustChangePassword,
       recoveryPending,
       isViewer,
-      homePath: homePathForRole(role),
+      painelFiscalEditor,
+      canReadPainelFiscal,
+      homePath: homePathForRole(role, {
+        painelFiscalEditor: Boolean(me?.painel_fiscal_editor),
+      }),
       signIn,
       signOut,
       refreshMe,
@@ -237,6 +250,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       mustChangePassword,
       recoveryPending,
       isViewer,
+      painelFiscalEditor,
+      canReadPainelFiscal,
       signIn,
       signOut,
       refreshMe,

@@ -6,6 +6,7 @@ import {
   CalendarDays,
   ChevronDown,
   ClipboardList,
+  FileWarning,
   LayoutDashboard,
   ListChecks,
   ListTodo,
@@ -29,12 +30,19 @@ type NavItem = {
   adminOnly?: boolean
   diretorOnly?: boolean
   hideForDiretor?: boolean
+  painelFiscal?: boolean
 }
 
 const adminMainNav: NavItem[] = [
   { to: '/diretoria', label: 'Visão Tax', end: true, icon: BriefcaseBusiness },
   { to: '/', label: 'Analytics', end: true, icon: LayoutDashboard },
   { to: '/diretoria/pendencias', label: 'Pendências', end: false, icon: AlertTriangle },
+  {
+    to: '/diretoria/pendencias-rfb',
+    label: 'RFB / PGFN',
+    end: false,
+    icon: FileWarning,
+  },
   { to: '/diretoria/fechamento', label: 'Fechamento', end: false, icon: CalendarCheck },
   { to: '/minhas-tarefas', label: 'Minhas tarefas', end: false, icon: ListTodo },
   { to: '/calendario', label: 'Calendário', end: false, icon: CalendarDays },
@@ -52,6 +60,13 @@ const adminConfigNav: NavItem[] = [
 const otherNav: NavItem[] = [
   { to: '/diretoria', label: 'Visão Tax', end: true, icon: BriefcaseBusiness, diretorOnly: true },
   { to: '/diretoria/pendencias', label: 'Pendências', end: false, icon: AlertTriangle, diretorOnly: true },
+  {
+    to: '/diretoria/pendencias-rfb',
+    label: 'RFB / PGFN',
+    end: false,
+    icon: FileWarning,
+    painelFiscal: true,
+  },
   { to: '/diretoria/fechamento', label: 'Fechamento', end: false, icon: CalendarCheck, diretorOnly: true },
   { to: '/', label: 'Analytics', end: true, icon: LayoutDashboard, hideForDiretor: true },
   { to: '/minhas-tarefas', label: 'Minhas tarefas', end: false, icon: ListTodo, hideForDiretor: true },
@@ -112,7 +127,7 @@ function NavItemLink({
 }
 
 export default function Layout() {
-  const { signOut, session, isAdmin, isDiretor } = useAuth()
+  const { signOut, session, isAdmin, isDiretor, canReadPainelFiscal } = useAuth()
   const location = useLocation()
   const configActive = adminConfigNav.some((item) =>
     location.pathname.startsWith(item.to),
@@ -139,6 +154,7 @@ export default function Layout() {
   const visibleNav = isAdmin
     ? adminMainNav
     : otherNav.filter((item) => {
+        if (item.painelFiscal) return canReadPainelFiscal
         if (item.diretorOnly && !isDiretor) return false
         if (item.hideForDiretor && isDiretor) return false
         return true
@@ -184,7 +200,7 @@ export default function Layout() {
             {isNarrow && !expanded ? (
               <button
                 type="button"
-                className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-white dark:bg-[color:var(--color-panel)]"
+                className="flex h-10 w-10 items-center justify-center overflow-hidden"
                 aria-label="Abrir menu"
                 aria-expanded={expanded}
                 onClick={() => setPinned(true)}
@@ -201,8 +217,8 @@ export default function Layout() {
                 target="_blank"
                 rel="noopener noreferrer"
                 className={[
-                  'overflow-hidden bg-white transition dark:bg-[color:var(--color-panel)]',
-                  expanded ? 'rounded-full px-4 py-2' : 'flex h-10 w-10 items-center justify-center rounded-xl',
+                  'overflow-hidden transition',
+                  expanded ? 'px-1 py-1' : 'flex h-10 w-10 items-center justify-center',
                 ].join(' ')}
                 aria-label="Site nstech"
               >
@@ -222,11 +238,6 @@ export default function Layout() {
                 <p className="text-sm font-semibold leading-tight text-[color:var(--color-ink)]">
                   TaxView
                 </p>
-                {isDiretor && (
-                  <p className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-amber-700">
-                    Visão - Tax
-                  </p>
-                )}
               </div>
             )}
           </div>

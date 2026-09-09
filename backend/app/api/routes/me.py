@@ -46,6 +46,7 @@ def get_me(
         responsavel_nome=resp["nome"] if resp else None,
         must_change_password=user.must_change_password,
         is_viewer=user.is_viewer,
+        painel_fiscal_editor=user.painel_fiscal_editor,
     )
 
 

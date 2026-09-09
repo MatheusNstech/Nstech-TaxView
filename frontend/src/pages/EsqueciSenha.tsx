@@ -100,7 +100,7 @@ export default function EsqueciSenha() {
             href="https://nstech.com.br/?scLang=pt-BR"
             target="_blank"
             rel="noopener noreferrer"
-            className="mb-5 rounded-full bg-white px-5 py-2.5 transition dark:bg-[color:var(--color-panel)]"
+            className="mb-5 transition"
             aria-label="Site nstech"
           >
             <img

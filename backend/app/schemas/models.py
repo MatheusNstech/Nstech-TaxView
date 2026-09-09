@@ -124,6 +124,7 @@ class MeOut(BaseModel):
     responsavel_nome: str | None = None
     must_change_password: bool = False
     is_viewer: bool = False
+    painel_fiscal_editor: bool = False
 
 
 class ObrigacaoBase(BaseModel):

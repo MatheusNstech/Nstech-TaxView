@@ -10,6 +10,7 @@ import Diretoria from './pages/Diretoria'
 import EsqueciSenha from './pages/EsqueciSenha'
 import DiretoriaFechamento from './pages/DiretoriaFechamento'
 import DiretoriaPendencias from './pages/DiretoriaPendencias'
+import DiretoriaPendenciasRfb from './pages/DiretoriaPendenciasRfb'
 import Empresas from './pages/Empresas'
 import Importacao from './pages/Importacao'
 import Login from './pages/Login'
@@ -69,6 +70,20 @@ function DiretorRoute({ children }: { children: ReactNode }) {
   return <>{children}</>
 }
 
+function PainelFiscalRoute({ children }: { children: ReactNode }) {
+  const { canReadPainelFiscal, loading, homePath } = useAuth()
+
+  if (loading) {
+    return <AuthSkeleton fullScreen={false} />
+  }
+
+  if (!canReadPainelFiscal) {
+    return <Navigate to={homePath} replace />
+  }
+
+  return <>{children}</>
+}
+
 function IndexRedirect() {
   const { isDiretor } = useAuth()
   if (isDiretor) {
@@ -105,6 +120,14 @@ export default function App() {
             <DiretorRoute>
               <DiretoriaPendencias />
             </DiretorRoute>
+          }
+        />
+        <Route
+          path="diretoria/pendencias-rfb"
+          element={
+            <PainelFiscalRoute>
+              <DiretoriaPendenciasRfb />
+            </PainelFiscalRoute>
           }
         />
         <Route

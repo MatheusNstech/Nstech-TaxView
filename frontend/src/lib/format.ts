@@ -1,3 +1,11 @@
+export function formatMoneyBRL(value: number | null | undefined): string {
+  if (value == null || Number.isNaN(value)) return '—'
+  return value.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  })
+}
+
 export function formatDate(value: string | null | undefined): string {
   if (!value) return '—'
   const [y, m, d] = value.split('-')

@@ -26,6 +26,7 @@ class AuthUser:
     must_change_password: bool = False
     is_viewer: bool = False
     view_as_responsavel_id: str | None = None
+    painel_fiscal_editor: bool = False
 
     @property
     def can_write(self) -> bool:
@@ -35,6 +36,14 @@ class AuthUser:
     def org_wide(self) -> bool:
         """Admin e diretor veem todas as obrigações (diretor só leitura)."""
         return self.role in ("admin", "diretor")
+
+    @property
+    def can_read_painel_fiscal(self) -> bool:
+        return self.org_wide or self.painel_fiscal_editor or self.role == "admin"
+
+    @property
+    def can_edit_painel_fiscal(self) -> bool:
+        return self.painel_fiscal_editor or self.role == "admin"
 
 
 # Short TTL — revoked/demoted roles should not linger long (Free Auth tradeoff).
@@ -183,6 +192,10 @@ async def get_current_user(
             "is_viewer",
         ),
         view_as_responsavel_id=view_as,
+        painel_fiscal_editor=_extract_bool_meta(
+            app_meta if isinstance(app_meta, dict) else None,
+            "painel_fiscal_editor",
+        ),
     )
     _cache_set(token, auth_user)
     return auth_user
@@ -221,6 +234,29 @@ async def require_not_viewer(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=detail,
+        )
+    assert_password_changed(user)
+    return user
+
+
+async def require_painel_fiscal_reader(
+    user: Annotated[AuthUser, Depends(get_current_user)],
+) -> AuthUser:
+    if not user.can_read_painel_fiscal:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acesso restrito ao painel de pendências RFB / PGFN",
+        )
+    return user
+
+
+async def require_painel_fiscal_editor(
+    user: Annotated[AuthUser, Depends(get_current_user)],
+) -> AuthUser:
+    if not user.can_edit_painel_fiscal:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Sem permissão para editar pendências RFB / PGFN",
         )
     assert_password_changed(user)
     return user

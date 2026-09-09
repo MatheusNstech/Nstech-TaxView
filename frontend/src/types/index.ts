@@ -265,3 +265,51 @@ export const KANBAN_COLUMNS: { id: StatusObrigacao; label: string }[] = [
   { id: 'EM_REVISAO', label: 'Em revisão' },
   { id: 'ENTREGUE', label: 'Entregue' },
 ]
+
+export interface PainelFiscalPendencia {
+  id: string
+  empresa: string
+  razao_social: string
+  situacao_cnpj: string
+  cnpj: string
+  cidade_iss: string
+  uf: string
+  orgao: string
+  sucedida: string
+  data_inscricao: string | null
+  cnpj_sucedida: string
+  empresa_sucedida: string
+  natureza: string
+  fase: string
+  tipo: string
+  situacao: string
+  codigo: string
+  mes: number | null
+  ano: number | null
+  periodo_apuracao: string
+  vencimento: string | null
+  principal: number | null
+  multa: number | null
+  juros: number | null
+  total: number | null
+  motivo: string
+  numero_processo: string
+  cnd: string
+  validade_cnd: string | null
+  status_cnd: string
+  nota_01: string
+  nota_02: string
+}
+
+export interface PainelFiscalSummary {
+  total_empresas: number
+  ativas: number
+  baixadas: number
+  cnd_valida: number
+  cnd_pendente: number
+  por_orgao_count: Record<string, number>
+  por_orgao_valor: Record<string, number>
+  total_valor: number
+  anos: number[]
+  meses: number[]
+}
