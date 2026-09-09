@@ -123,20 +123,20 @@ def create_notification(
     dedupe_same_day: bool = False,
 ) -> bool:
     """Returns True if a notification was created."""
-    if dedupe_same_day and obrigacao_id:
+    if dedupe_same_day:
         start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-        existing = (
+        query = (
             client.table("notificacoes")
             .select("id")
             .eq("user_id", user_id)
-            .eq("obrigacao_id", obrigacao_id)
             .eq("tipo", tipo)
             .gte("created_at", start.isoformat())
-            .limit(1)
-            .execute()
-            .data
-            or []
         )
+        if obrigacao_id:
+            query = query.eq("obrigacao_id", obrigacao_id)
+        else:
+            query = query.eq("titulo", titulo).eq("corpo", corpo)
+        existing = query.limit(1).execute().data or []
         if existing:
             return False
 

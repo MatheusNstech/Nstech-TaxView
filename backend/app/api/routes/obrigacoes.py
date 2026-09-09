@@ -31,11 +31,11 @@ from app.schemas.models import (
     ObrigacaoUpdate,
     ReprovarRequest,
 )
-from app.services.competencia import gerar_competencia, mark_overdue
+from app.services.atrasos_job import run_atrasos_job
+from app.services.competencia import gerar_competencia
 from app.services.notifications import (
     audit_diff,
     notify_responsavel_of_obrigacao,
-    scan_prazo_7d,
     write_audit,
 )
 from app.services.scope import assert_obrigacao_in_scope, effective_responsavel_id
@@ -325,12 +325,7 @@ def atualizar_atrasos(
     _: Annotated[AuthUser, Depends(require_admin)],
     client: Annotated[Client, Depends(get_db_client)],
 ):
-    result = mark_overdue(client)
-    prazo_notifs = scan_prazo_7d(client)
-    return {
-        "atualizadas": result["atualizadas"],
-        "notificacoes_criadas": result["notificacoes_criadas"] + prazo_notifs,
-    }
+    return run_atrasos_job(client)
 
 
 @router.post("", response_model=ObrigacaoOut, status_code=status.HTTP_201_CREATED)
