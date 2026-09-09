@@ -1,12 +1,12 @@
 import { Lock, Mail } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import ThemeToggle from '../components/ThemeToggle'
 import { AuthSkeleton } from '../components/ui/PageSkeletons'
 import { useAuth } from '../context/AuthContext'
 
 export default function Login() {
-  const { session, loading, signIn, mustChangePassword, homePath } = useAuth()
+  const { session, loading, signIn, mustChangePassword, recoveryPending, homePath } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -17,6 +17,9 @@ export default function Login() {
   }
 
   if (session) {
+    if (recoveryPending) {
+      return <Navigate to="/esqueci-senha" replace />
+    }
     return (
       <Navigate
         to={mustChangePassword ? '/trocar-senha' : homePath}
@@ -59,7 +62,7 @@ export default function Login() {
             />
           </a>
           <h1 className="text-2xl font-bold text-[color:var(--color-ink)]">
-            Nstax - Cronograma
+            TaxView
           </h1>
           <p className="mt-1 text-sm text-[color:var(--color-muted)]">
             Cronograma Fiscal Inteligente
@@ -103,6 +106,14 @@ export default function Login() {
                 className="glass-input py-2.5"
                 placeholder="••••••••"
               />
+              <div className="mt-2 text-right">
+                <Link
+                  to="/esqueci-senha"
+                  className="text-xs font-medium text-brand-600 hover:underline dark:text-brand-400"
+                >
+                  Esqueci minha senha
+                </Link>
+              </div>
             </div>
           </div>
 

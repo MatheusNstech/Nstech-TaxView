@@ -153,6 +153,34 @@ def create_notification(
     return True
 
 
+def _fmt_prazo(prazo: str | None) -> str | None:
+    if not prazo:
+        return None
+    try:
+        return date.fromisoformat(prazo[:10]).strftime("%d/%m/%Y")
+    except ValueError:
+        return prazo
+
+
+def format_alerta_obrigacao(
+    *,
+    nome: str | None,
+    empresa: str | None,
+    tipo: str,
+    prazo: str | None = None,
+) -> tuple[str, str]:
+    titulo = (nome or "").strip() or "Obrigação"
+    razao = (empresa or "").strip()
+    vencimento = _fmt_prazo(prazo)
+    if tipo == "PRAZO_7D":
+        corpo = f"Vence em {vencimento}" if vencimento else "Vence em até 7 dias"
+    else:
+        corpo = "Atrasada"
+    if razao:
+        corpo = f"{corpo} · {razao}"
+    return titulo, corpo
+
+
 def notify_responsavel_of_obrigacao(
     client: Client,
     *,
@@ -195,7 +223,10 @@ def scan_prazo_7d(client: Client, today: date | None = None) -> int:
     end = date.fromordinal(today.toordinal() + 7)
     rows = (
         client.table("obrigacoes")
-        .select("id,prazo_legal,prazo_fiscal,status,responsaveis(auth_user_id)")
+        .select(
+            "id,prazo_legal,prazo_fiscal,status,"
+            "responsaveis(auth_user_id),atividades_modelo(nome),empresas(razao_social)"
+        )
         .neq("status", "ENTREGUE")
         .execute()
         .data
@@ -212,12 +243,20 @@ def scan_prazo_7d(client: Client, today: date | None = None) -> int:
         auth_id = (row.get("responsaveis") or {}).get("auth_user_id")
         if not auth_id:
             continue
+        atividade = row.get("atividades_modelo") or {}
+        empresa = row.get("empresas") or {}
+        titulo, corpo = format_alerta_obrigacao(
+            nome=atividade.get("nome"),
+            empresa=empresa.get("razao_social"),
+            tipo="PRAZO_7D",
+            prazo=prazo,
+        )
         if create_notification(
             client,
             user_id=auth_id,
             tipo="PRAZO_7D",
-            titulo="Prazo em até 7 dias",
-            corpo=f"Obrigação vence em {prazo}",
+            titulo=titulo,
+            corpo=corpo,
             obrigacao_id=row["id"],
             dedupe_same_day=True,
         ):

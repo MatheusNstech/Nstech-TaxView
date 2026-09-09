@@ -16,7 +16,7 @@ sys.path.insert(0, str(ROOT))
 from app.core.config import get_settings  # noqa: E402
 
 API = "http://127.0.0.1:8000"
-ADMIN_EMAIL = "matheus.oliveira@nstech.com.br"
+ADMIN_EMAIL = "matheus.silva-oliveira@nstech.com.br"
 ADMIN_PASSWORD = "Senha@123"
 SMOKE_EMAIL = f"smoke.user.{int(time.time())}@nstech.com.br"
 SMOKE_PASSWORD = "Senha@123"

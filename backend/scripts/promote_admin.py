@@ -1,7 +1,7 @@
 """Promove um usuário a admin via service role.
 
 Uso:
-  python -m scripts.promote_admin matheus.oliveira@nstech.com.br
+  python -m scripts.promote_admin matheus.silva-oliveira@nstech.com.br
 """
 
 from __future__ import annotations

@@ -6,7 +6,7 @@ import { AuthSkeleton } from '../components/ui/PageSkeletons'
 import { useAuth } from '../context/AuthContext'
 
 export default function TrocarSenha() {
-  const { session, loading, mustChangePassword, changePassword, refreshMe, signOut, homePath } =
+  const { session, loading, mustChangePassword, recoveryPending, changePassword, refreshMe, signOut, homePath } =
     useAuth()
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -21,6 +21,10 @@ export default function TrocarSenha() {
 
   if (!session) {
     return <Navigate to="/login" replace />
+  }
+
+  if (recoveryPending) {
+    return <Navigate to="/esqueci-senha" replace />
   }
 
   if (!mustChangePassword) {

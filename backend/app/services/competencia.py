@@ -6,7 +6,7 @@ from typing import Any
 from dateutil.relativedelta import relativedelta
 from supabase import Client
 
-from app.services.notifications import notify_responsavel_of_obrigacao
+from app.services.notifications import format_alerta_obrigacao, notify_responsavel_of_obrigacao
 from app.services.status_engine import compute_prazo, normalize_status
 
 
@@ -14,7 +14,10 @@ def mark_overdue(client: Client, today: date | None = None) -> dict[str, int]:
     today = today or date.today()
     rows = (
         client.table("obrigacoes")
-        .select("id,status,prazo_legal,prazo_fiscal,data_entrega")
+        .select(
+            "id,status,prazo_legal,prazo_fiscal,data_entrega,"
+            "atividades_modelo(nome),empresas(razao_social)"
+        )
         .neq("status", "ENTREGUE")
         .execute()
         .data
@@ -34,12 +37,19 @@ def mark_overdue(client: Client, today: date | None = None) -> dict[str, int]:
             client.table("obrigacoes").update({"status": new_status}).eq("id", row["id"]).execute()
             updates += 1
             if new_status == "ATRASADO" and row["status"] != "ATRASADO":
+                atividade = row.get("atividades_modelo") or {}
+                empresa = row.get("empresas") or {}
+                titulo, corpo = format_alerta_obrigacao(
+                    nome=atividade.get("nome"),
+                    empresa=empresa.get("razao_social"),
+                    tipo="ATRASADO",
+                )
                 notificacoes += notify_responsavel_of_obrigacao(
                     client,
                     obrigacao_id=row["id"],
                     tipo="ATRASADO",
-                    titulo="Obrigação atrasada",
-                    corpo="O prazo legal/fiscal foi ultrapassado.",
+                    titulo=titulo,
+                    corpo=corpo,
                     dedupe_same_day=True,
                 )
     return {"atualizadas": updates, "notificacoes_criadas": notificacoes}

@@ -7,6 +7,7 @@ import Atividades from './pages/Atividades'
 import Calendario from './pages/Calendario'
 import Dashboard from './pages/Dashboard'
 import Diretoria from './pages/Diretoria'
+import EsqueciSenha from './pages/EsqueciSenha'
 import DiretoriaFechamento from './pages/DiretoriaFechamento'
 import DiretoriaPendencias from './pages/DiretoriaPendencias'
 import Empresas from './pages/Empresas'
@@ -19,7 +20,7 @@ import TrocarSenha from './pages/TrocarSenha'
 import Usuarios from './pages/Usuarios'
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { session, loading, mustChangePassword } = useAuth()
+  const { session, loading, mustChangePassword, recoveryPending } = useAuth()
 
   if (loading) {
     return <AuthSkeleton />
@@ -27,6 +28,10 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
 
   if (!session) {
     return <Navigate to="/login" replace />
+  }
+
+  if (recoveryPending) {
+    return <Navigate to="/esqueci-senha" replace />
   }
 
   if (mustChangePassword) {
@@ -76,6 +81,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/esqueci-senha" element={<EsqueciSenha />} />
       <Route path="/trocar-senha" element={<TrocarSenha />} />
       <Route
         element={

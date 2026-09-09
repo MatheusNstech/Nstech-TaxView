@@ -98,7 +98,7 @@ export default function NotificationBell({
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} aria-hidden />
           <div
             className={[
-              'glass-panel absolute z-50 w-80 overflow-hidden !rounded-2xl shadow-xl',
+              'card-surface absolute z-50 w-80 overflow-hidden !rounded-2xl bg-[color:var(--color-panel)] shadow-xl',
               panelPos,
             ].join(' ')}
           >

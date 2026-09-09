@@ -31,7 +31,6 @@ from app.schemas.models import (
     ObrigacaoUpdate,
     ReprovarRequest,
 )
-from app.services.atrasos_job import run_atrasos_job
 from app.services.competencia import gerar_competencia
 from app.services.notifications import (
     audit_diff,
@@ -102,7 +101,7 @@ def list_obrigacoes(
     q: str | None = None,
     minhas: bool = False,  # legado; escopo real vem do papel
 ):
-    # mark_overdue / scan_prazo_7d só via POST /atualizar-atrasos (evita N writes no Free)
+    # Atraso e aviso saem do job diário run_atrasos_diarios, não desta listagem.
 
     resolved = _scoped_responsavel_id(user, client, responsavel_id)
     if not user.org_wide and resolved is None:
@@ -318,14 +317,6 @@ def gerar(
         competencia_destino=payload.competencia_destino,
         competencia_origem=payload.competencia_origem,
     )
-
-
-@router.post("/atualizar-atrasos")
-def atualizar_atrasos(
-    _: Annotated[AuthUser, Depends(require_admin)],
-    client: Annotated[Client, Depends(get_db_client)],
-):
-    return run_atrasos_job(client)
 
 
 @router.post("", response_model=ObrigacaoOut, status_code=status.HTTP_201_CREATED)

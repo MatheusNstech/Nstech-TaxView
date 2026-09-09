@@ -1,4 +1,4 @@
-import { CalendarPlus, Inbox, RefreshCw, Upload } from 'lucide-react'
+import { CalendarPlus, Inbox, Upload } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
@@ -136,22 +136,6 @@ export default function Dashboard() {
     }
   }
 
-  const handleAtualizarAtrasos = async () => {
-    setMessage('')
-    try {
-      const result = await apiFetch<{
-        atualizadas: number
-        notificacoes_criadas: number
-      }>('/api/obrigacoes/atualizar-atrasos', { method: 'POST' })
-      setMessage(
-        `Atrasos: ${result.atualizadas} atualizadas · ${result.notificacoes_criadas} notificações.`,
-      )
-      void loadData()
-    } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Erro ao atualizar atrasos')
-    }
-  }
-
   const exportQuery = buildQuery({
     competencia: monthToCompetencia(filters.competencia),
     bu: filters.bu || undefined,
@@ -285,14 +269,6 @@ export default function Dashboard() {
           />
           {isAdmin && (
             <>
-              <button
-                type="button"
-                onClick={() => void handleAtualizarAtrasos()}
-                className="btn-ghost"
-              >
-                <RefreshCw className="h-4 w-4" strokeWidth={1.75} />
-                Atualizar atrasos
-              </button>
               <button
                 type="button"
                 onClick={() => void handleGerar()}
