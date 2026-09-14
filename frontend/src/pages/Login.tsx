@@ -5,13 +5,21 @@ import { AuthSkeleton } from '../components/ui/PageSkeletons'
 import { useAuth } from '../context/AuthContext'
 
 export default function Login() {
-  const { session, loading, signIn, mustChangePassword, recoveryPending, homePath } = useAuth()
+  const {
+    session,
+    loading,
+    profileLoading,
+    signIn,
+    mustChangePassword,
+    recoveryPending,
+    homePath,
+  } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  if (loading) {
+  if (loading || (session && profileLoading)) {
     return <AuthSkeleton />
   }
 

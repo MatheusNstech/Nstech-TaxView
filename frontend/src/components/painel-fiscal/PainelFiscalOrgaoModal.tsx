@@ -11,6 +11,15 @@ export type OrgaoModalRow = {
   rfb: number
   total: number
   orgaoValor: number
+  hasObservacao?: boolean
+}
+
+function ObsBadge() {
+  return (
+    <span className="ml-1.5 inline-flex shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
+      obs.
+    </span>
+  )
 }
 
 export default function PainelFiscalOrgaoModal({
@@ -96,7 +105,10 @@ export default function PainelFiscalOrgaoModal({
                       onClick={() => onSelectEmpresa(item.empresa)}
                     >
                       <td className="px-3 py-2.5 font-medium text-[color:var(--color-ink)]">
-                        {item.empresa}
+                        <span className="inline-flex items-center">
+                          {item.empresa}
+                          {item.hasObservacao ? <ObsBadge /> : null}
+                        </span>
                       </td>
                       <td className="px-3 py-2.5 tabular-nums">
                         {formatMoneyBRL(item.cadin)}
@@ -124,8 +136,9 @@ export default function PainelFiscalOrgaoModal({
                     className="flex w-full cursor-pointer items-center justify-between gap-3 rounded-2xl border border-[color:var(--color-line)] bg-[color:var(--color-surface)] px-4 py-3 text-left transition hover:bg-brand-50"
                     onClick={() => onSelectEmpresa(item.empresa)}
                   >
-                    <span className="min-w-0 truncate font-medium text-[color:var(--color-ink)]">
-                      {item.empresa}
+                    <span className="inline-flex min-w-0 items-center truncate font-medium text-[color:var(--color-ink)]">
+                      <span className="truncate">{item.empresa}</span>
+                      {item.hasObservacao ? <ObsBadge /> : null}
                     </span>
                     <span className="shrink-0 text-sm font-semibold tabular-nums text-[color:var(--color-ink)]">
                       {formatMoneyBRL(item.orgaoValor)}

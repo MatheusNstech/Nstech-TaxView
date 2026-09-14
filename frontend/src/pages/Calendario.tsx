@@ -405,8 +405,14 @@ export default function Calendario() {
         open={Boolean(selectedTarefa)}
         onClose={() => setSelectedTarefa(null)}
         onSaved={(u) => {
-          setTarefasMes((prev) => prev.map((t) => (t.id === u.id ? u : t)))
-          setSelectedTarefa(u)
+          setTarefasMes((prev) => {
+            const idx = prev.findIndex((t) => t.id === u.id)
+            if (idx < 0) return [u, ...prev]
+            const next = prev.slice()
+            next[idx] = { ...prev[idx], ...u }
+            return next
+          })
+          setSelectedTarefa(null)
         }}
         onDeleted={(id) => {
           setTarefasMes((prev) => prev.filter((t) => t.id !== id))

@@ -141,7 +141,24 @@ export default function TarefaDrawer({
         method: 'PATCH',
         body: JSON.stringify(payload),
       })
-      onSaved(updated)
+      const savedPrazo = (updated.prazo || '').slice(0, 10)
+      const savedInicio = formatTime(updated.hora_inicio)
+      const savedFim = formatTime(updated.hora_fim)
+      if (savedPrazo !== prazo || savedInicio !== inicio || savedFim !== fim) {
+        setError('Não foi possível salvar o prazo. Tente de novo.')
+        return
+      }
+      onSaved({
+        ...tarefa,
+        ...updated,
+        titulo: trimmed,
+        status,
+        prazo: savedPrazo,
+        hora_inicio: savedInicio,
+        hora_fim: savedFim,
+        descricao: descricao.trim() || null,
+        motivo_atraso: needsMotivo ? motivo : updated.motivo_atraso,
+      })
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao salvar')

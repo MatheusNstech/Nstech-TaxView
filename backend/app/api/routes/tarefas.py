@@ -24,9 +24,8 @@ router = APIRouter(prefix="/tarefas", tags=["tarefas"])
 def _enrich(row: dict[str, Any]) -> dict[str, Any]:
     status_value = row.get("status") or "PENDENTE"
     prazo = date.fromisoformat(row["prazo"]) if row.get("prazo") else None
-    if status_value != "ENTREGUE" and prazo and prazo < date.today():
-        status_value = "ATRASADO"
-        row = {**row, "status": status_value}
+    # Não sobrescreve o status do workflow (ex.: EM_REVISAO → ATRASADO),
+    # senão o Kanban devolve o card para Pendente. Atraso fica só na urgência.
     row["urgencia"] = urgencia_label(status_value, prazo, prazo)
     if "empresas" in row:
         row["empresa"] = row.pop("empresas")
@@ -327,8 +326,8 @@ def update_tarefa(
     if "solicitante_nome" in patch and patch["solicitante_nome"] is not None:
         patch["solicitante_nome"] = str(patch["solicitante_nome"]).strip()
 
+    # Competência só admin altera; prazo o responsável pode editar na própria tarefa.
     if user.role != "admin":
-        patch.pop("prazo", None)
         patch.pop("competencia", None)
 
     if patch.get("obrigacao_id"):
@@ -344,7 +343,8 @@ def update_tarefa(
 
     new_status = patch.get("status")
     if new_status == "ENTREGUE":
-        prazo_raw = current.get("prazo")
+        # Usa o prazo enviado no body quando houver; senão o já gravado.
+        prazo_raw = patch.get("prazo", current.get("prazo"))
         prazo = date.fromisoformat(str(prazo_raw)[:10]) if prazo_raw else None
         late = _is_late_entrega(
             current_status=str(current.get("status") or "PENDENTE"),
@@ -370,7 +370,18 @@ def update_tarefa(
     if not patch:
         return _fetch_full(client, str(tarefa_id))
 
-    client.table("tarefas").update(patch).eq("id", str(tarefa_id)).execute()
+    result = (
+        client.table("tarefas")
+        .update(patch)
+        .eq("id", str(tarefa_id))
+        .execute()
+    )
+    updated_rows = getattr(result, "data", None) or []
+    if not updated_rows:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Não foi possível salvar a tarefa. Tente de novo.",
+        )
     if "responsavel_id" in patch:
         _notify_assignee(
             client,

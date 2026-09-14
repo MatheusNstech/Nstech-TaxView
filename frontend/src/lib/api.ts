@@ -3,15 +3,31 @@ import { supabase } from './supabase'
 const configuredApiUrl = import.meta.env.VITE_API_URL as string | undefined
 
 function resolveApiUrl(): string {
+  const configured = (configuredApiUrl ?? '').trim()
   if (import.meta.env.DEV) {
-    return configuredApiUrl ?? 'http://localhost:8002'
+    const fallback = configured || 'http://127.0.0.1:8003'
+    if (typeof window === 'undefined') return fallback
+    try {
+      const api = new URL(fallback)
+      // Evita misturar localhost e 127.0.0.1 (alguns browsers tratam como origens diferentes).
+      if (
+        (api.hostname === 'localhost' || api.hostname === '127.0.0.1') &&
+        (window.location.hostname === 'localhost' ||
+          window.location.hostname === '127.0.0.1')
+      ) {
+        api.hostname = window.location.hostname
+      }
+      return api.toString().replace(/\/$/, '')
+    } catch {
+      return fallback
+    }
   }
   // Front e API compartilham o mesmo domínio na Vercel. A URL gravada no build
   // pode não existir (sufixo da conta), então o painel usa o endereço aberto.
   if (typeof window !== 'undefined' && window.location.origin) {
     return window.location.origin
   }
-  return configuredApiUrl ?? ''
+  return configured
 }
 
 const API_URL = resolveApiUrl()
@@ -59,16 +75,29 @@ export async function apiFetch<T>(
     headers.set('Content-Type', 'application/json')
   }
 
-  const response = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers,
-  })
+  let response: Response
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers,
+    })
+  } catch {
+    throw new ApiError(
+      'Não foi possível conectar à API. Confira se o backend está no ar e atualize a página.',
+      0,
+    )
+  }
 
   if (!response.ok) {
     let message = `Erro ${response.status}`
     try {
-      const body = (await response.json()) as { detail?: string }
-      if (body.detail) message = body.detail
+      const body = (await response.json()) as { detail?: string | { msg?: string }[] }
+      if (typeof body.detail === 'string' && body.detail) message = body.detail
+      else if (Array.isArray(body.detail) && body.detail[0]) {
+        const first = body.detail[0]
+        if (typeof first === 'string') message = first
+        else if (first?.msg) message = first.msg
+      }
     } catch {
       // ignore parse errors
     }
@@ -79,7 +108,11 @@ export async function apiFetch<T>(
     return undefined as T
   }
 
-  return response.json() as Promise<T>
+  try {
+    return (await response.json()) as T
+  } catch {
+    throw new ApiError('Resposta inválida da API', response.status)
+  }
 }
 
 export async function apiUpload<T>(

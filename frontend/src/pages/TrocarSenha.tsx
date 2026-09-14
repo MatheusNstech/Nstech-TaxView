@@ -6,8 +6,17 @@ import { AuthSkeleton } from '../components/ui/PageSkeletons'
 import { useAuth } from '../context/AuthContext'
 
 export default function TrocarSenha() {
-  const { session, loading, mustChangePassword, recoveryPending, changePassword, refreshMe, signOut, homePath } =
-    useAuth()
+  const {
+    session,
+    loading,
+    profileLoading,
+    mustChangePassword,
+    recoveryPending,
+    changePassword,
+    refreshMe,
+    signOut,
+    homePath,
+  } = useAuth()
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -15,7 +24,7 @@ export default function TrocarSenha() {
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  if (loading) {
+  if (loading || (session && profileLoading)) {
     return <AuthSkeleton />
   }
 

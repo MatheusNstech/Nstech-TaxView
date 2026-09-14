@@ -65,7 +65,10 @@ def assert_tarefa_in_scope(
 ) -> dict[str, Any]:
     rows = (
         client.table("tarefas")
-        .select("id,responsavel_id,created_by,status,prazo,motivo_atraso,entregue_em")
+        .select(
+            "id,responsavel_id,created_by,status,prazo,hora_inicio,hora_fim,"
+            "motivo_atraso,entregue_em"
+        )
         .eq("id", tarefa_id)
         .limit(1)
         .execute()

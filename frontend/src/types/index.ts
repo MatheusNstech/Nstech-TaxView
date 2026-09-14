@@ -156,6 +156,7 @@ export interface WorkItem {
   title: string
   subtitle: string
   responsavelNome: string | null
+  solicitanteNome?: string | null
   prazo: string | null
   horaInicio?: string | null
   horaFim?: string | null
@@ -307,6 +308,7 @@ export interface PainelFiscalSummary {
   baixadas: number
   cnd_valida: number
   cnd_pendente: number
+  com_observacao: number
   por_orgao_count: Record<string, number>
   por_orgao_valor: Record<string, number>
   total_valor: number

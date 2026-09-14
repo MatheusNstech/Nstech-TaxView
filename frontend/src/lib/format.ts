@@ -1,6 +1,10 @@
-export function formatMoneyBRL(value: number | null | undefined): string {
-  if (value == null || Number.isNaN(value)) return '—'
-  return value.toLocaleString('pt-BR', {
+export function formatMoneyBRL(
+  value: number | string | null | undefined,
+): string {
+  if (value == null || value === '') return '—'
+  const n = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(n)) return '—'
+  return n.toLocaleString('pt-BR', {
     style: 'currency',
     currency: 'BRL',
   })

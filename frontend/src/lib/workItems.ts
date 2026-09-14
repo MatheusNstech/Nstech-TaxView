@@ -10,6 +10,7 @@ export function workItemFromObrigacao(o: Obrigacao): WorkItem {
     title: o.empresa?.razao_social ?? 'Empresa',
     subtitle: o.atividade?.nome ?? '—',
     responsavelNome: o.responsavel?.nome ?? null,
+    solicitanteNome: null,
     prazo: o.prazo_fiscal || o.prazo_legal,
     status: o.status,
     urgencia: o.urgencia,
@@ -29,6 +30,7 @@ export function workItemFromTarefa(t: Tarefa): WorkItem {
       ? `${t.empresa.razao_social} · ${catLabel}`
       : `Tarefa · ${catLabel}`,
     responsavelNome: t.responsavel?.nome ?? null,
+    solicitanteNome: t.solicitante_nome || null,
     prazo: t.prazo,
     horaInicio: t.hora_inicio,
     horaFim: t.hora_fim,

@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import {
-  CalendarDays,
-  Plus,
-} from 'lucide-react'
+import { CalendarDays, Plus } from 'lucide-react'
 import GlassSelect from '../components/GlassSelect'
 import NotificationBell from '../components/NotificationBell'
+import PainelFiscalCndModal, {
+  type CndFilter,
+  type CndModalRow,
+} from '../components/painel-fiscal/PainelFiscalCndModal'
+import PainelFiscalEmpresaSheet from '../components/painel-fiscal/PainelFiscalEmpresaSheet'
+import PainelFiscalObservacoesPanel, {
+  buildObservacoesFromPivot,
+} from '../components/painel-fiscal/PainelFiscalObservacoesPanel'
 import PainelFiscalOrgaoModal, {
   type OrgaoModalKey,
 } from '../components/painel-fiscal/PainelFiscalOrgaoModal'
@@ -13,7 +18,7 @@ import PainelFiscalValorComposite from '../components/painel-fiscal/PainelFiscal
 import { AuthSkeleton } from '../components/ui/PageSkeletons'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch, buildQuery } from '../lib/api'
-import { formatDate, formatMoneyBRL } from '../lib/format'
+import { formatMoneyBRL } from '../lib/format'
 import type { PainelFiscalPendencia, PainelFiscalSummary } from '../types'
 
 type EmpresaPivot = {
@@ -25,60 +30,6 @@ type EmpresaPivot = {
   rows: PainelFiscalPendencia[]
 }
 
-type FormState = {
-  empresa: string
-  razao_social: string
-  cnpj: string
-  uf: string
-  orgao: string
-  situacao_cnpj: string
-  status_cnd: string
-  cnd: string
-  validade_cnd: string
-  mes: string
-  ano: string
-  total: string
-  principal: string
-  multa: string
-  juros: string
-  codigo: string
-  natureza: string
-  fase: string
-  tipo: string
-  situacao: string
-  numero_processo: string
-  motivo: string
-  nota_01: string
-  nota_02: string
-}
-
-const emptyForm = (): FormState => ({
-  empresa: '',
-  razao_social: '',
-  cnpj: '',
-  uf: '',
-  orgao: 'RFB',
-  situacao_cnpj: '',
-  status_cnd: '',
-  cnd: '',
-  validade_cnd: '',
-  mes: '',
-  ano: '',
-  total: '',
-  principal: '',
-  multa: '',
-  juros: '',
-  codigo: '',
-  natureza: '',
-  fase: '',
-  tipo: '',
-  situacao: '',
-  numero_processo: '',
-  motivo: '',
-  nota_01: '',
-  nota_02: '',
-})
-
 function orgaoBucket(orgao: string): 'CADIN' | 'PGFN' | 'RFB' | 'OUTROS' {
   const key = orgao.trim().toUpperCase()
   if (key.includes('CADIN')) return 'CADIN'
@@ -87,72 +38,38 @@ function orgaoBucket(orgao: string): 'CADIN' | 'PGFN' | 'RFB' | 'OUTROS' {
   return 'OUTROS'
 }
 
-function toNumber(raw: string): number | null {
-  const text = raw.trim()
+/** Só Válida / Pendente com texto explícito; vazio não entra na lista. */
+function normalizeStatusCnd(raw: string): CndFilter | null {
+  const text = raw.trim().toLowerCase()
   if (!text) return null
-  const normalized = text.includes(',')
-    ? text.replace(/\./g, '').replace(',', '.')
-    : text
-  const n = Number(normalized)
-  return Number.isFinite(n) ? n : null
+  if (text.includes('válid') || text.includes('valid')) return 'Válida'
+  if (text.includes('pend')) return 'Pendente'
+  return null
 }
 
-function formFromRow(row: PainelFiscalPendencia): FormState {
-  return {
-    empresa: row.empresa,
-    razao_social: row.razao_social,
-    cnpj: row.cnpj,
-    uf: row.uf,
-    orgao: row.orgao,
-    situacao_cnpj: row.situacao_cnpj,
-    status_cnd: row.status_cnd,
-    cnd: row.cnd,
-    validade_cnd: row.validade_cnd ?? '',
-    mes: row.mes != null ? String(row.mes) : '',
-    ano: row.ano != null ? String(row.ano) : '',
-    total: row.total != null ? String(row.total) : '',
-    principal: row.principal != null ? String(row.principal) : '',
-    multa: row.multa != null ? String(row.multa) : '',
-    juros: row.juros != null ? String(row.juros) : '',
-    codigo: row.codigo,
-    natureza: row.natureza,
-    fase: row.fase,
-    tipo: row.tipo,
-    situacao: row.situacao,
-    numero_processo: row.numero_processo,
-    motivo: row.motivo,
-    nota_01: row.nota_01,
-    nota_02: row.nota_02,
+/** Status agregado da empresa: Pendente > Válida; vazio ignora. */
+function companyCndStatus(rows: PainelFiscalPendencia[]): CndFilter | null {
+  let best: CndFilter | null = null
+  for (const row of rows) {
+    const status = normalizeStatusCnd(row.status_cnd)
+    if (status === 'Pendente') return 'Pendente'
+    if (status === 'Válida') best = 'Válida'
   }
+  return best
 }
 
-function formToPayload(form: FormState) {
-  return {
-    empresa: form.empresa.trim(),
-    razao_social: form.razao_social.trim(),
-    cnpj: form.cnpj.replace(/\D/g, ''),
-    uf: form.uf.trim(),
-    orgao: form.orgao.trim(),
-    situacao_cnpj: form.situacao_cnpj.trim(),
-    status_cnd: form.status_cnd.trim(),
-    cnd: form.cnd.trim(),
-    validade_cnd: form.validade_cnd || null,
-    mes: form.mes ? Number(form.mes) : null,
-    ano: form.ano ? Number(form.ano) : null,
-    total: toNumber(form.total),
-    principal: toNumber(form.principal),
-    multa: toNumber(form.multa),
-    juros: toNumber(form.juros),
-    codigo: form.codigo.trim(),
-    natureza: form.natureza.trim(),
-    fase: form.fase.trim(),
-    tipo: form.tipo.trim(),
-    situacao: form.situacao.trim(),
-    numero_processo: form.numero_processo.trim(),
-    motivo: form.motivo.trim(),
-    nota_01: form.nota_01.trim(),
-    nota_02: form.nota_02.trim(),
-  }
+function pickCndRow(
+  rows: PainelFiscalPendencia[],
+  prefer: CndFilter,
+): PainelFiscalPendencia | null {
+  const sorted = [...rows].sort((a, b) => {
+    const va = a.validade_cnd ?? ''
+    const vb = b.validade_cnd ?? ''
+    return vb.localeCompare(va)
+  })
+  return (
+    sorted.find((r) => normalizeStatusCnd(r.status_cnd) === prefer) ?? null
+  )
 }
 
 export default function DiretoriaPendenciasRfb() {
@@ -162,16 +79,17 @@ export default function DiretoriaPendenciasRfb() {
   const [summary, setSummary] = useState<PainelFiscalSummary | null>(null)
   const [rows, setRows] = useState<PainelFiscalPendencia[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedEmpresa, setSelectedEmpresa] = useState<EmpresaPivot | null>(null)
-  const [editing, setEditing] = useState<PainelFiscalPendencia | null>(null)
-  const [creating, setCreating] = useState(false)
-  const [form, setForm] = useState<FormState>(emptyForm)
-  const [saving, setSaving] = useState(false)
+  const [selectedEmpresa, setSelectedEmpresa] = useState<string | null>(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [pickerEmpresa, setPickerEmpresa] = useState('')
   const [error, setError] = useState('')
   const [selectedOrgao, setSelectedOrgao] = useState<OrgaoModalKey | null>(null)
+  const [selectedCndFilter, setSelectedCndFilter] = useState<CndFilter | null>(
+    null,
+  )
 
-  const loadData = useCallback(async () => {
-    setLoading(true)
+  const loadData = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true)
     setError('')
     try {
       const q = buildQuery({
@@ -189,7 +107,7 @@ export default function DiretoriaPendenciasRfb() {
       setRows([])
       setError(err instanceof Error ? err.message : 'Falha ao carregar pendências')
     } finally {
-      setLoading(false)
+      if (!opts?.silent) setLoading(false)
     }
   }, [ano, mes])
 
@@ -221,6 +139,30 @@ export default function DiretoriaPendenciasRfb() {
     return [...map.values()].sort((a, b) => b.total - a.total)
   }, [rows])
 
+  const selectedPivot = useMemo(() => {
+    if (!selectedEmpresa) return null
+    return (
+      pivot.find((item) => item.empresa === selectedEmpresa) ?? {
+        empresa: selectedEmpresa,
+        cadin: 0,
+        pgfn: 0,
+        rfb: 0,
+        total: 0,
+        rows: [] as PainelFiscalPendencia[],
+      }
+    )
+  }, [pivot, selectedEmpresa])
+
+  const observacoesRows = useMemo(
+    () => buildObservacoesFromPivot(pivot),
+    [pivot],
+  )
+
+  const empresasComObs = useMemo(() => {
+    const set = new Set(observacoesRows.map((r) => r.empresa))
+    return set
+  }, [observacoesRows])
+
   const orgaoModalRows = useMemo(() => {
     if (!selectedOrgao) return []
     const mapped = pivot.map((item) => ({
@@ -229,6 +171,7 @@ export default function DiretoriaPendenciasRfb() {
       pgfn: item.pgfn,
       rfb: item.rfb,
       total: item.total,
+      hasObservacao: empresasComObs.has(item.empresa),
       orgaoValor:
         selectedOrgao === 'CADIN'
           ? item.cadin
@@ -240,7 +183,26 @@ export default function DiretoriaPendenciasRfb() {
     }))
     if (selectedOrgao === 'TOTAL') return mapped.filter((item) => item.total > 0)
     return mapped.filter((item) => item.orgaoValor > 0)
-  }, [pivot, selectedOrgao])
+  }, [pivot, selectedOrgao, empresasComObs])
+
+  const cndModalRows = useMemo((): CndModalRow[] => {
+    if (!selectedCndFilter) return []
+    const out: CndModalRow[] = []
+    for (const item of pivot) {
+      if (companyCndStatus(item.rows) !== selectedCndFilter) continue
+      const row = pickCndRow(item.rows, selectedCndFilter)
+      if (!row) continue
+      out.push({
+        empresa: item.empresa,
+        status_cnd: row.status_cnd || selectedCndFilter,
+        cnd: row.cnd,
+        validade_cnd: row.validade_cnd,
+        nota_01: row.nota_01,
+        nota_02: row.nota_02,
+      })
+    }
+    return out
+  }, [pivot, selectedCndFilter])
 
   const anoOptions = useMemo(() => {
     const years = summary?.anos?.length
@@ -278,61 +240,42 @@ export default function DiretoriaPendenciasRfb() {
     [],
   )
 
-  const openCreate = () => {
-    setCreating(true)
-    setEditing(null)
-    setForm(emptyForm())
-    setError('')
-  }
-
-  const openEdit = (row: PainelFiscalPendencia) => {
-    setEditing(row)
-    setCreating(false)
-    setForm(formFromRow(row))
-    setError('')
-  }
-
-  const closeForm = () => {
-    setCreating(false)
-    setEditing(null)
-    setForm(emptyForm())
-    setError('')
-  }
+  const empresaOptions = useMemo(
+    () =>
+      pivot.map((item) => ({
+        value: item.empresa,
+        label: item.empresa,
+      })),
+    [pivot],
+  )
 
   const openEmpresa = (empresa: string) => {
-    const found = pivot.find((item) => item.empresa === empresa)
-    if (found) setSelectedEmpresa(found)
+    setSelectedEmpresa(empresa)
   }
 
-  const saveForm = async () => {
-    if (!form.empresa.trim()) {
-      setError('Informe a empresa')
-      return
-    }
-    setSaving(true)
-    setError('')
-    try {
-      const payload = formToPayload(form)
-      if (editing) {
-        await apiFetch(`/api/painel-fiscal/${editing.id}`, {
-          method: 'PATCH',
-          body: JSON.stringify(payload),
-        })
-      } else {
-        await apiFetch('/api/painel-fiscal', {
-          method: 'POST',
-          body: JSON.stringify(payload),
-        })
-      }
-      closeForm()
-      setSelectedEmpresa(null)
-      await loadData()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha ao salvar')
-    } finally {
-      setSaving(false)
-    }
+  const closeEmpresa = () => {
+    setSelectedEmpresa(null)
   }
+
+  const confirmPicker = () => {
+    const name = pickerEmpresa.trim()
+    if (!name) return
+    setPickerOpen(false)
+    setPickerEmpresa('')
+    openEmpresa(name)
+  }
+
+  const sheetDefaults = useMemo(() => {
+    const first = selectedPivot?.rows[0]
+    return {
+      empresa: selectedPivot?.empresa ?? '',
+      razao_social: first?.razao_social ?? '',
+      cnpj: first?.cnpj ?? '',
+      uf: first?.uf ?? '',
+      ano: ano ? Number(ano) : (first?.ano ?? null),
+      mes: mes ? Number(mes) : (first?.mes ?? null),
+    }
+  }, [selectedPivot, ano, mes])
 
   if (loading && !summary) {
     return <AuthSkeleton fullScreen={false} />
@@ -349,7 +292,14 @@ export default function DiretoriaPendenciasRfb() {
         <div className="flex items-center gap-2">
           <NotificationBell placement="bottom-right" />
           {painelFiscalEditor && (
-            <button type="button" className="btn-primary" onClick={openCreate}>
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => {
+                setPickerEmpresa('')
+                setPickerOpen(true)
+              }}
+            >
               <Plus className="h-4 w-4" strokeWidth={1.75} />
               Nova linha
             </button>
@@ -376,7 +326,7 @@ export default function DiretoriaPendenciasRfb() {
         />
       </div>
 
-      {error && !creating && !editing && (
+      {error && (
         <p className="rounded-xl bg-rose-50/90 px-3 py-2 text-sm text-rose-700">
           {error}
         </p>
@@ -384,18 +334,37 @@ export default function DiretoriaPendenciasRfb() {
 
       {summary && (
         <>
-          <PainelFiscalValorComposite
-            totalValor={summary.total_valor}
-            porOrgao={summary.por_orgao_valor}
-            onSelect={setSelectedOrgao}
-          />
           <PainelFiscalStatusComposite
             totalEmpresas={summary.total_empresas}
             baixadas={summary.baixadas}
             cndValida={summary.cnd_valida}
             cndPendente={summary.cnd_pendente}
+            onCndClick={(key) =>
+              setSelectedCndFilter(key === 'valida' ? 'Válida' : 'Pendente')
+            }
+          />
+          <PainelFiscalValorComposite
+            totalValor={summary.total_valor}
+            porOrgao={summary.por_orgao_valor}
+            onSelect={setSelectedOrgao}
+          />
+          <PainelFiscalObservacoesPanel
+            rows={observacoesRows}
+            onSelectEmpresa={(empresa) => openEmpresa(empresa)}
           />
         </>
+      )}
+
+      {selectedCndFilter && (
+        <PainelFiscalCndModal
+          filter={selectedCndFilter}
+          rows={cndModalRows}
+          onClose={() => setSelectedCndFilter(null)}
+          onSelectEmpresa={(empresa) => {
+            setSelectedCndFilter(null)
+            openEmpresa(empresa)
+          }}
+        />
       )}
 
       {selectedOrgao && summary && (
@@ -415,164 +384,85 @@ export default function DiretoriaPendenciasRfb() {
         />
       )}
 
-      {selectedEmpresa && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
-          <div className="max-h-[85vh] w-full max-w-4xl overflow-hidden rounded-3xl border border-[color:var(--color-line)] bg-white shadow-2xl dark:bg-[color:var(--color-panel)]">
-            <div className="flex items-center justify-between border-b border-[color:var(--color-line)] px-5 py-4">
-              <div>
-                <h2 className="text-lg font-semibold text-[color:var(--color-ink)]">
-                  {selectedEmpresa.empresa}
-                </h2>
-                <p className="text-xs text-[color:var(--color-muted)]">
-                  {selectedEmpresa.rows.length} linha(s) ·{' '}
-                  {formatMoneyBRL(selectedEmpresa.total)}
-                </p>
-              </div>
+      {pickerOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-3xl border border-[color:var(--color-line)] bg-white p-6 shadow-2xl dark:bg-[color:var(--color-panel)]">
+            <h2 className="text-lg font-semibold text-[color:var(--color-ink)]">
+              Nova linha
+            </h2>
+            <p className="mt-1 text-sm text-[color:var(--color-muted)]">
+              Escolha uma empresa existente ou digite um nome novo. A planilha
+              abre com uma linha em branco.
+            </p>
+            <label className="mt-4 block text-xs text-[color:var(--color-muted)]">
+              Empresa
+              <input
+                className="glass-input mt-1 py-2"
+                list="painel-fiscal-empresas"
+                value={pickerEmpresa}
+                onChange={(e) => setPickerEmpresa(e.target.value)}
+                placeholder="Ex.: OPEN"
+                autoFocus
+              />
+              <datalist id="painel-fiscal-empresas">
+                {empresaOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value} />
+                ))}
+              </datalist>
+            </label>
+            <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
                 className="btn-ghost"
-                onClick={() => setSelectedEmpresa(null)}
+                onClick={() => setPickerOpen(false)}
               >
-                Fechar
-              </button>
-            </div>
-            <div className="max-h-[65vh] overflow-y-auto p-4">
-              <div className="space-y-3">
-                {selectedEmpresa.rows.map((row) => (
-                  <div
-                    key={row.id}
-                    className="rounded-2xl border border-[color:var(--color-line)] bg-[color:var(--color-surface)] p-4"
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-semibold text-[color:var(--color-ink)]">
-                          {row.orgao || '—'} · {formatMoneyBRL(row.total)}
-                        </p>
-                        <p className="mt-1 text-xs text-[color:var(--color-muted)]">
-                          {row.razao_social || row.empresa} · CND{' '}
-                          {row.status_cnd || '—'}
-                          {row.validade_cnd
-                            ? ` · ${formatDate(row.validade_cnd)}`
-                            : ''}
-                        </p>
-                      </div>
-                      {painelFiscalEditor && (
-                        <button
-                          type="button"
-                          className="btn-ghost"
-                          onClick={() => openEdit(row)}
-                        >
-                          Editar
-                        </button>
-                      )}
-                    </div>
-                    {(row.nota_01 || row.nota_02 || row.motivo) && (
-                      <p className="mt-2 text-xs text-[color:var(--color-muted)]">
-                        {[row.motivo, row.nota_01, row.nota_02]
-                          .filter(Boolean)
-                          .join(' · ')}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {(creating || editing) && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-[color:var(--color-line)] bg-white p-6 shadow-2xl dark:bg-[color:var(--color-panel)]">
-            <h2 className="text-lg font-semibold text-[color:var(--color-ink)]">
-              {editing ? 'Editar linha' : 'Nova linha'}
-            </h2>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              {(
-                [
-                  ['empresa', 'Empresa'],
-                  ['razao_social', 'Razão social'],
-                  ['cnpj', 'CNPJ'],
-                  ['uf', 'UF'],
-                  ['orgao', 'Órgão'],
-                  ['situacao_cnpj', 'Situação CNPJ'],
-                  ['status_cnd', 'Status CND'],
-                  ['cnd', 'CND'],
-                  ['validade_cnd', 'Validade CND (AAAA-MM-DD)'],
-                  ['ano', 'Ano'],
-                  ['mes', 'Mês'],
-                  ['total', 'Total'],
-                  ['principal', 'Principal'],
-                  ['multa', 'Multa'],
-                  ['juros', 'Juros'],
-                  ['codigo', 'Código'],
-                  ['natureza', 'Natureza'],
-                  ['fase', 'Fase'],
-                  ['tipo', 'Tipo'],
-                  ['situacao', 'Situação'],
-                  ['numero_processo', 'Nº processo'],
-                ] as const
-              ).map(([key, label]) => (
-                <label key={key} className="block text-xs text-[color:var(--color-muted)]">
-                  {label}
-                  <input
-                    className="glass-input mt-1 py-2"
-                    value={form[key]}
-                    onChange={(e) =>
-                      setForm((prev) => ({ ...prev, [key]: e.target.value }))
-                    }
-                  />
-                </label>
-              ))}
-              <label className="block text-xs text-[color:var(--color-muted)] sm:col-span-2">
-                Motivo
-                <textarea
-                  className="glass-input mt-1 min-h-20 py-2"
-                  value={form.motivo}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, motivo: e.target.value }))
-                  }
-                />
-              </label>
-              <label className="block text-xs text-[color:var(--color-muted)] sm:col-span-2">
-                Nota 01
-                <textarea
-                  className="glass-input mt-1 min-h-16 py-2"
-                  value={form.nota_01}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, nota_01: e.target.value }))
-                  }
-                />
-              </label>
-              <label className="block text-xs text-[color:var(--color-muted)] sm:col-span-2">
-                Nota 02
-                <textarea
-                  className="glass-input mt-1 min-h-16 py-2"
-                  value={form.nota_02}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, nota_02: e.target.value }))
-                  }
-                />
-              </label>
-            </div>
-            {error && (
-              <p className="mt-3 rounded-xl bg-rose-50/90 px-3 py-2 text-sm text-rose-700">
-                {error}
-              </p>
-            )}
-            <div className="mt-5 flex justify-end gap-2">
-              <button type="button" className="btn-ghost" onClick={closeForm}>
                 Cancelar
               </button>
               <button
                 type="button"
                 className="btn-primary"
-                disabled={saving}
-                onClick={() => void saveForm()}
+                disabled={!pickerEmpresa.trim()}
+                onClick={confirmPicker}
               >
-                {saving ? 'Salvando...' : 'Salvar'}
+                Abrir planilha
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {selectedPivot && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-2 sm:p-3 backdrop-blur-sm">
+          <div className="flex max-h-[94vh] w-full max-w-[min(96rem,calc(100vw-1rem))] flex-col overflow-hidden rounded-3xl border border-[color:var(--color-line)] bg-white shadow-2xl dark:bg-[color:var(--color-panel)]">
+            <div className="flex shrink-0 flex-wrap items-start justify-between gap-3 border-b border-[color:var(--color-line)] px-5 py-4">
+              <div>
+                <h2 className="text-lg font-semibold text-[color:var(--color-ink)]">
+                  {selectedPivot.empresa}
+                </h2>
+                <p className="text-xs text-[color:var(--color-muted)]">
+                  {sheetDefaults.razao_social
+                    ? `${sheetDefaults.razao_social} · `
+                    : ''}
+                  {selectedPivot.rows.length} linha(s) ·{' '}
+                  {formatMoneyBRL(selectedPivot.total)}
+                  {painelFiscalEditor
+                    ? ' · edição estilo planilha'
+                    : ''}
+                </p>
+              </div>
+              <button type="button" className="btn-ghost" onClick={closeEmpresa}>
+                Fechar
+              </button>
+            </div>
+            <PainelFiscalEmpresaSheet
+              key={selectedPivot.empresa}
+              rows={selectedPivot.rows}
+              defaults={sheetDefaults}
+              editable={painelFiscalEditor}
+              onChanged={async () => {
+                await loadData({ silent: true })
+              }}
+            />
           </div>
         </div>
       )}

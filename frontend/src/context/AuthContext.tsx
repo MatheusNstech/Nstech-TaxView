@@ -68,6 +68,14 @@ function mustChangeFromSession(session: Session | null): boolean {
   return value === true || value === 'true'
 }
 
+function painelEditorFromSession(session: Session | null): boolean {
+  const app = session?.user?.app_metadata as
+    | { painel_fiscal_editor?: boolean | string }
+    | undefined
+  const value = app?.painel_fiscal_editor
+  return value === true || value === 'true'
+}
+
 export function homePathForRole(
   role: UserRole,
   opts?: { painelFiscalEditor?: boolean },
@@ -208,8 +216,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAdmin = role === 'admin'
   const isDiretor = role === 'diretor'
   const canWrite = !isViewer && !isDiretor
-  const painelFiscalEditor = Boolean(me?.painel_fiscal_editor) || isAdmin
-  const canReadPainelFiscal = isAdmin || isDiretor || Boolean(me?.painel_fiscal_editor)
+  const painelFiscalEditor =
+    Boolean(me?.painel_fiscal_editor) ||
+    painelEditorFromSession(session) ||
+    isAdmin
+  const canReadPainelFiscal =
+    isAdmin || isDiretor || painelFiscalEditor
 
   const value = useMemo(
     () => ({
@@ -229,7 +241,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       painelFiscalEditor,
       canReadPainelFiscal,
       homePath: homePathForRole(role, {
-        painelFiscalEditor: Boolean(me?.painel_fiscal_editor),
+        painelFiscalEditor:
+          Boolean(me?.painel_fiscal_editor) || painelEditorFromSession(session),
       }),
       signIn,
       signOut,

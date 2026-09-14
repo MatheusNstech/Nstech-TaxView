@@ -1,4 +1,4 @@
-import { Columns3, ListTodo, Plus, Table2 } from 'lucide-react'
+import { Columns3, Download, ListTodo, Plus, Table2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import FiltersBar from '../components/FiltersBar'
 import KanbanBoard from '../components/KanbanBoard'
@@ -11,6 +11,11 @@ import TarefaDrawer from '../components/TarefaDrawer'
 import { KanbanSkeleton, TableSkeleton } from '../components/ui/PageSkeletons'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch, buildQuery } from '../lib/api'
+import {
+  buildCheckpointHtml,
+  checkpointFilename,
+  downloadCheckpointHtml,
+} from '../lib/checkpointHtml'
 import {
   currentCompetenciaMonth,
   formatDate,
@@ -50,10 +55,12 @@ export default function MinhasTarefas() {
   const {
     hasResponsavel,
     responsavelId,
+    responsavelNome,
     isViewer,
     profileLoading,
     isAdmin,
     canWrite,
+    session,
   } = useAuth()
   const [view, setView] = useState<ViewMode>('kanban')
   const [filters, setFilters] = useState<FilterValues>({
@@ -63,6 +70,7 @@ export default function MinhasTarefas() {
     search: '',
     responsavel_id: '',
   })
+  const [defaultedOwnResponsavel, setDefaultedOwnResponsavel] = useState(false)
   const [obrigacoes, setObrigacoes] = useState<Obrigacao[]>([])
   const [tarefas, setTarefas] = useState<Tarefa[]>([])
   const [responsaveis, setResponsaveis] = useState<Responsavel[]>([])
@@ -78,29 +86,56 @@ export default function MinhasTarefas() {
   const [lateSubmitting, setLateSubmitting] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [error, setError] = useState('')
+  const [exporting, setExporting] = useState(false)
 
   const competenciaIso = monthToCompetencia(filters.competencia)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError('')
+  useEffect(() => {
+    if (defaultedOwnResponsavel || profileLoading) return
+    if (!isAdmin || !responsavelId) {
+      if (!profileLoading && !responsavelId) setDefaultedOwnResponsavel(true)
+      return
+    }
+    setFilters((prev) =>
+      prev.responsavel_id === responsavelId
+        ? prev
+        : { ...prev, responsavel_id: responsavelId },
+    )
+    setDefaultedOwnResponsavel(true)
+  }, [
+    defaultedOwnResponsavel,
+    profileLoading,
+    isAdmin,
+    responsavelId,
+  ])
+
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) {
+      setLoading(true)
+      setError('')
+    }
     try {
+      const scopedResponsavel =
+        (isAdmin ? filters.responsavel_id : responsavelId) || undefined
       const q = buildQuery({
         competencia: competenciaIso,
         bu: filters.bu || undefined,
         status: filters.status || undefined,
-        responsavel_id:
-          isAdmin && filters.responsavel_id
-            ? filters.responsavel_id
-            : undefined,
+        responsavel_id: scopedResponsavel,
         q: filters.search || undefined,
       })
       const [obrData, tarData] = await Promise.all([
         apiFetch<Obrigacao[]>(`/api/obrigacoes${q}`),
         apiFetch<Tarefa[]>(`/api/tarefas${q}`),
       ])
-      setObrigacoes(obrData)
-      setTarefas(tarData)
+      const onlyMine = (rid: string | null | undefined) =>
+        !scopedResponsavel || rid === scopedResponsavel
+      setObrigacoes(
+        obrData.filter((o) => onlyMine(o.responsavel_id ?? o.responsavel?.id)),
+      )
+      setTarefas(
+        tarData.filter((t) => onlyMine(t.responsavel_id ?? t.responsavel?.id)),
+      )
       if (isAdmin) {
         const resps = await apiFetch<Responsavel[]>('/api/responsaveis')
         setResponsaveis(resps.filter((r) => r.ativo))
@@ -112,11 +147,9 @@ export default function MinhasTarefas() {
         setEmpresas(emps.filter((e) => e.ativa))
       }
     } catch (err) {
-      setObrigacoes([])
-      setTarefas([])
       setError(err instanceof Error ? err.message : 'Erro ao carregar tarefas')
     } finally {
-      setLoading(false)
+      if (!opts?.silent) setLoading(false)
     }
   }, [
     competenciaIso,
@@ -126,6 +159,7 @@ export default function MinhasTarefas() {
     filters.responsavel_id,
     isAdmin,
     canWrite,
+    responsavelId,
   ])
 
   useEffect(() => {
@@ -136,13 +170,62 @@ export default function MinhasTarefas() {
       setLoading(false)
       return
     }
+    // Evita 1º load do admin sem o filtro do próprio responsável.
+    if (isAdmin && responsavelId && !defaultedOwnResponsavel) return
     void load()
-  }, [load, profileLoading, hasResponsavel, isAdmin])
+  }, [
+    load,
+    profileLoading,
+    hasResponsavel,
+    isAdmin,
+    responsavelId,
+    defaultedOwnResponsavel,
+  ])
 
-  const workItems = useMemo(
-    () => mergeWorkItems(obrigacoes, tarefas),
-    [obrigacoes, tarefas],
-  )
+  const workItems = useMemo(() => {
+    const items = mergeWorkItems(obrigacoes, tarefas)
+    const scoped = (isAdmin ? filters.responsavel_id : responsavelId) || ''
+    if (!scoped) return items
+    return items.filter((item) => {
+      const rid =
+        item.origem === 'tarefa'
+          ? item.tarefa?.responsavel_id ?? item.tarefa?.responsavel?.id
+          : item.obrigacao?.responsavel_id ?? item.obrigacao?.responsavel?.id
+      return rid === scoped
+    })
+  }, [obrigacoes, tarefas, filters.responsavel_id, isAdmin, responsavelId])
+
+  const exportHtml = () => {
+    if (exporting) return
+    if (workItems.length === 0) {
+      setError('Nada para exportar com os filtros atuais')
+      return
+    }
+    setExporting(true)
+    setError('')
+    try {
+      const personName =
+        responsavelNome?.trim() ||
+        session?.user?.email?.split('@')[0] ||
+        'Responsável'
+      const html = buildCheckpointHtml({
+        personName,
+        competenciaMonth: filters.competencia,
+        generatedAt: new Date(),
+        items: workItems,
+      })
+      downloadCheckpointHtml(
+        html,
+        checkpointFilename(personName, filters.competencia),
+      )
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Não foi possível gerar o HTML',
+      )
+    } finally {
+      setExporting(false)
+    }
+  }
 
   const bus = useMemo(
     () =>
@@ -286,6 +369,16 @@ export default function MinhasTarefas() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <NotificationBell />
+          <button
+            type="button"
+            className="btn-ghost !py-2"
+            disabled={exporting || loading}
+            onClick={exportHtml}
+          >
+            <Download className="h-4 w-4" strokeWidth={1.75} />
+            {exporting ? 'Gerando…' : 'Extrair HTML'}
+          </button>
           {canWrite ? (
             <button
               type="button"
@@ -296,7 +389,6 @@ export default function MinhasTarefas() {
               Nova tarefa
             </button>
           ) : null}
-          <NotificationBell />
           <div className="glass-panel flex items-center gap-1 p-1">
             <button
               type="button"
@@ -426,8 +518,14 @@ export default function MinhasTarefas() {
         open={Boolean(selectedObrigacao)}
         onClose={() => setSelectedObrigacao(null)}
         onSaved={(u) => {
-          setObrigacoes((prev) => prev.map((x) => (x.id === u.id ? u : x)))
-          setSelectedObrigacao(u)
+          setObrigacoes((prev) => {
+            const idx = prev.findIndex((x) => x.id === u.id)
+            if (idx < 0) return [u, ...prev]
+            const next = prev.slice()
+            next[idx] = { ...prev[idx], ...u }
+            return next
+          })
+          setSelectedObrigacao(null)
         }}
       />
 
@@ -437,8 +535,16 @@ export default function MinhasTarefas() {
         onClose={() => setSelectedTarefa(null)}
         readOnly={!canWrite}
         onSaved={(u) => {
-          setTarefas((prev) => prev.map((x) => (x.id === u.id ? u : x)))
-          setSelectedTarefa(u)
+          setTarefas((prev) => {
+            const idx = prev.findIndex((x) => x.id === u.id)
+            if (idx < 0) return [u, ...prev]
+            const next = prev.slice()
+            next[idx] = { ...prev[idx], ...u }
+            return next
+          })
+          setSelectedTarefa(null)
+          // Sem reload silencioso imediato: evita sobrescrever o merge otimista
+          // se o GET atrasar/falhar. Filtros e F5 ainda chamam load().
         }}
         onDeleted={(id) => {
           setTarefas((prev) => prev.filter((x) => x.id !== id))

@@ -193,6 +193,11 @@ def main() -> int:
         print("Nem Pendencias.xlsx nem Base_Banco_status_empresa.csv encontrados")
         return 1
 
+    baixadas = {"AVACON", "GBM MALHA NORTE", "SIGNA"}
+    for row in rows:
+        if row["empresa"].strip().upper() in baixadas:
+            row["situacao_cnpj"] = "Baixada"
+
     admin = get_admin_client(settings)
     admin.table("painel_fiscal_pendencias").delete().neq("empresa", "").execute()
 

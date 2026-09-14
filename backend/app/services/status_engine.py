@@ -30,6 +30,9 @@ def normalize_status(
     today = today or date.today()
     if data_entrega is not None or status == "ENTREGUE":
         return "ENTREGUE"
+    # Em andamento / revisão mantêm a coluna do Kanban; urgência marca o atraso.
+    if status in {"EM_ANDAMENTO", "EM_REVISAO"}:
+        return status
     reference = prazo_fiscal or prazo_legal
     if reference is not None and reference < today:
         return "ATRASADO"
