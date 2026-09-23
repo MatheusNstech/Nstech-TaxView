@@ -75,3 +75,84 @@ Entregue as senhas temporárias fora do git; no próximo login o usuário troca 
 
 ## Rate limits
 Login/Auth: limites nativos do Supabase Auth. Mutações pesadas: preferir plano Pro + spend cap se o tráfego crescer.
+
+## Integração desktop (valores de faturamento)
+
+O app desktop (BuscarNFSePortal) envia ISS e PIS/COFINS por empresa/competência.
+
+### 1) Provisionar usuário de integração
+```powershell
+cd backend
+$env:DESKTOP_EMAIL="desktop@nstech.com.br"
+$env:DESKTOP_PASSWORD="SenhaForte@123"
+$env:DESKTOP_ROLE="diretor"   # admin | diretor
+..\.venv\Scripts\python.exe -m scripts.ensure_desktop_integration_user
+```
+
+### 2) Login
+```http
+POST /api/auth/token
+Content-Type: application/json
+
+{ "email": "desktop@nstech.com.br", "password": "SenhaForte@123" }
+```
+Resposta: `access_token` (Bearer).
+
+### 3) Enviar valores (upsert por CNPJ + competência + tipo)
+```http
+POST /api/valores
+Authorization: Bearer <access_token>
+Content-Type: application/json
+```
+
+ISS:
+```json
+{
+  "competencia": "2026-07-01",
+  "tipo": "iss",
+  "empresa_cnpj": "21244758000145",
+  "empresa_alias": "CT6",
+  "empresa_razao": "CT6 TECNOLOGIA LTDA",
+  "origem": "desktop",
+  "valores": {
+    "erp_valor": 949622.04,
+    "erp_iss": 18992.39,
+    "iss_a_recolher": 18992.39,
+    "has_pg": false,
+    "has_portal": true,
+    "matched": 104
+  }
+}
+```
+
+PIS/COFINS:
+```json
+{
+  "competencia": "2026-07-01",
+  "tipo": "pis_cofins",
+  "empresa_cnpj": "21244758000145",
+  "empresa_alias": "CT6",
+  "empresa_razao": "CT6 TECNOLOGIA LTDA",
+  "origem": "desktop",
+  "valores": {
+    "receita_bruta": 949622.04,
+    "pis_debito": 6172.54,
+    "cofins_debito": 28488.66,
+    "pis_retido": 6172.47,
+    "cofins_retido": 28488.74,
+    "regime": "Cumulativo"
+  }
+}
+```
+
+Resposta inclui `changed` e `action` (`created` | `updated` | `unchanged`).  
+Reprocessar o mesmo mês **só altera** se o payload for diferente.
+
+### 4) Listar
+```http
+GET /api/valores?competencia=2026-07-01&tipo=iss&empresa_cnpj=21244758000145
+Authorization: Bearer <access_token>
+```
+
+Migrations: `supabase/migrations/20260923120000_valores_faturamento.sql` e
+`20260923143000_valores_faturamento_upsert.sql`.

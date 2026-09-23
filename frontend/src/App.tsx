@@ -11,6 +11,7 @@ import EsqueciSenha from './pages/EsqueciSenha'
 import DiretoriaFechamento from './pages/DiretoriaFechamento'
 import DiretoriaPendencias from './pages/DiretoriaPendencias'
 import DiretoriaPendenciasRfb from './pages/DiretoriaPendenciasRfb'
+import DiretoriaValores from './pages/DiretoriaValores'
 import Empresas from './pages/Empresas'
 import Importacao from './pages/Importacao'
 import Login from './pages/Login'
@@ -135,6 +136,14 @@ export default function App() {
           element={
             <DiretorRoute>
               <DiretoriaFechamento />
+            </DiretorRoute>
+          }
+        />
+        <Route
+          path="diretoria/valores"
+          element={
+            <DiretorRoute>
+              <DiretoriaValores />
             </DiretorRoute>
           }
         />

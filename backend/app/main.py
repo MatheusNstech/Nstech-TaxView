@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import (
     atividades,
+    auth_token,
     dashboard,
     empresas,
     importacao,
@@ -15,6 +16,7 @@ from app.api.routes import (
     responsaveis,
     tarefas,
     usuarios,
+    valores,
 )
 from app.core.config import get_settings
 
@@ -64,6 +66,8 @@ app.add_middleware(
 )
 
 app.include_router(me.router, prefix="/api")
+app.include_router(auth_token.router, prefix="/api")
+app.include_router(valores.router, prefix="/api")
 app.include_router(empresas.router, prefix="/api")
 app.include_router(atividades.router, prefix="/api")
 app.include_router(responsaveis.router, prefix="/api")
