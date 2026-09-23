@@ -163,15 +163,6 @@ body {
   border-radius: 55% 45% 48% 52%;
 }
 .cover-top, .cover-mid, .cover-foot { position: relative; z-index: 1; }
-.pill {
-  display: inline-block;
-  background: #fff;
-  color: var(--laranja);
-  font-weight: 700;
-  font-size: 0.82rem;
-  padding: 8px 16px;
-  border-radius: 6px;
-}
 .cover-title-row {
   display: flex; align-items: center; gap: 18px;
   margin-top: clamp(36px, 8vh, 72px);
@@ -186,10 +177,6 @@ body {
   font-size: clamp(1.75rem, 4.5vw, 3rem);
   font-weight: 800; font-style: italic;
   letter-spacing: -0.02em; line-height: 1.1;
-}
-.cover h1 .v {
-  font-size: 0.42em; font-weight: 600; font-style: normal;
-  vertical-align: super; margin-left: 6px; opacity: 0.9;
 }
 .agenda { margin: clamp(48px, 12vh, 100px) 0 clamp(24px, 6vh, 48px); }
 .agenda-line {
@@ -507,10 +494,9 @@ export function buildCheckpointHtml(input: CheckpointHtmlInput): string {
   <section class="cover" aria-label="Capa Checkpoint">
     <div class="cover-shapes" aria-hidden="true"><span></span><span></span></div>
     <div class="cover-top">
-      <span class="pill">${safePerson} · ${escapeHtml(compLabel)}</span>
       <div class="cover-title-row">
         <div class="cover-rays" aria-hidden="true"></div>
-        <h1>Minhas entregas<span class="v">v1</span></h1>
+        <h1>Checkpoint</h1>
       </div>
     </div>
     <nav class="cover-mid agenda" aria-label="Seções">

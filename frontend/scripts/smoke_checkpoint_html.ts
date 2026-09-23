@@ -73,7 +73,7 @@ const checks: [string, boolean][] = [
   ['status PENDENTE', html.includes('PENDENTE')],
   ['status ENTREGUE', html.includes('ENTREGUE')],
   ['no percent bars', !html.includes('progress-row') && !html.includes('bar-fill')],
-  ['capa', html.includes('Minhas entregas')],
+  ['capa', html.includes('Checkpoint')],
   ['farol', html.includes('id="farol"')],
 ]
 
