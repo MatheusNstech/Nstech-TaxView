@@ -7,6 +7,7 @@ from dateutil.relativedelta import relativedelta
 from supabase import Client
 
 from app.services.db import fetch_all
+from app.services.obrigacao_responsaveis import add_responsaveis_bulk, links_by_obrigacao
 from app.services.status_engine import compute_prazo
 
 
@@ -58,12 +59,15 @@ def gerar_competencia(
     existing_keys = {(e["empresa_id"], e["atividade_id"]) for e in existing}
 
     to_create: list[dict[str, Any]] = []
+    source_by_key: dict[tuple[str, str], str] = {}
     ignored = 0
     for row in origem:
         key = (row["empresa_id"], row["atividade_id"])
         if key in existing_keys:
             ignored += 1
             continue
+        if row.get("id"):
+            source_by_key[(str(key[0]), str(key[1]))] = str(row["id"])
         modelo = row.get("atividades_modelo") or {}
         to_create.append(
             {
@@ -85,14 +89,24 @@ def gerar_competencia(
             }
         )
 
+    created_rows: list[dict[str, Any]] = []
     if to_create:
         chunk_size = 100
         for i in range(0, len(to_create), chunk_size):
-            client.table("obrigacoes").upsert(
+            res = client.table("obrigacoes").upsert(
                 to_create[i : i + chunk_size],
                 on_conflict="empresa_id,atividade_id,competencia",
                 ignore_duplicates=True,
             ).execute()
+            created_rows.extend(res.data or [])
+
+    source_links = links_by_obrigacao(client, source_by_key.values())
+    co_links: list[tuple[str, str]] = []
+    for new_row in created_rows:
+        source_id = source_by_key.get((str(new_row["empresa_id"]), str(new_row["atividade_id"])))
+        for rid in source_links.get(source_id or "", set()):
+            co_links.append((str(new_row["id"]), rid))
+    add_responsaveis_bulk(client, co_links)
 
     return {
         "criadas": len(to_create),

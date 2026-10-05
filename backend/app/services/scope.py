@@ -9,6 +9,7 @@ from supabase import Client
 
 from app.core.auth import AuthUser
 from app.services.notifications import get_responsavel_for_user, sanitize_uuid
+from app.services.obrigacao_responsaveis import responsavel_ids_of
 
 
 def resolve_responsavel(user: AuthUser, client: Client) -> dict[str, Any] | None:
@@ -50,7 +51,14 @@ def assert_obrigacao_in_scope(
     if user.org_wide:
         return row
     scope = effective_responsavel_id(user, client)
-    if scope is None or str(row.get("responsavel_id") or "") != str(scope):
+    if scope is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Obrigação fora do seu escopo",
+        )
+    if str(row.get("responsavel_id") or "") == str(scope):
+        return row
+    if str(scope) not in responsavel_ids_of(client, obrigacao_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Obrigação fora do seu escopo",

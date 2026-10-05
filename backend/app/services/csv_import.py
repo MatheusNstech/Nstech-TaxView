@@ -10,6 +10,7 @@ from supabase import Client
 
 from app.core.clock import today_br
 from app.services.db import fetch_all
+from app.services.obrigacao_responsaveis import add_responsaveis_bulk, links_by_obrigacao
 from app.services.status_engine import compute_prazo
 
 COMPETENCIA_SUFFIX_RE = re.compile(r"\s*\((\d{2})/(\d{4})\)\s*$")
@@ -250,10 +251,80 @@ def _decode_csv(content: bytes) -> str:
     return content.decode("cp1252", errors="replace")
 
 
+_MESES_PT = {
+    "janeiro": 1, "jan": 1,
+    "fevereiro": 2, "fev": 2,
+    "marco": 3, "mar": 3,
+    "abril": 4, "abr": 4,
+    "maio": 5, "mai": 5,
+    "junho": 6, "jun": 6,
+    "julho": 7, "jul": 7,
+    "agosto": 8, "ago": 8,
+    "setembro": 9, "set": 9,
+    "outubro": 10, "out": 10,
+    "novembro": 11, "nov": 11,
+    "dezembro": 12, "dez": 12,
+}
+_MES_ANO_RE = re.compile(r"([a-zçã]+)\s*(?:de\s+|/|-)?\s*(\d{4})")
+_DIA_RE = re.compile(r"(?:dia\s*)?(\d{1,2})")
+CNPJ_DIGITS = 14
+
+
+def _parse_mes_ano(text: str) -> date | None:
+    """"Setembro 2026", "setembro de 2026", "Set/2026" -> 1º dia do mês."""
+    norm = text.strip().lower().replace("ç", "c").replace("ã", "a")
+    match = _MES_ANO_RE.fullmatch(norm)
+    if not match:
+        return None
+    month = _MESES_PT.get(match.group(1))
+    return date(int(match.group(2)), month, 1) if month else None
+
+
+def _parse_prazo(value: str, referencia: date | None) -> date | None:
+    """Data completa, ou "DIA NN" no mês/ano da referência (o prazo legal da linha)."""
+    parsed = _parse_iso_date(value)
+    if parsed:
+        return parsed
+    match = _DIA_RE.fullmatch(value.strip().lower())
+    if not match or referencia is None:
+        return None
+    day = int(match.group(1))
+    try:
+        return referencia.replace(day=day)
+    except ValueError:
+        return None
+
+
+def normalize_cnpj(value: str) -> str:
+    """CNPJ só com dígitos (ex.: número do Excel sem o zero à esquerda) vira 00.000.000/0000-00."""
+    text = value.strip()
+    digits = re.sub(r"\D", "", text)
+    if not digits:
+        return text
+    only_digits = digits == text
+    if only_digits and CNPJ_DIGITS - 2 <= len(digits) < CNPJ_DIGITS:
+        digits = digits.zfill(CNPJ_DIGITS)
+    if len(digits) != CNPJ_DIGITS:
+        return text
+    return f"{digits[:2]}.{digits[2:5]}.{digits[5:8]}/{digits[8:12]}-{digits[12:]}"
+
+
+def split_responsaveis(value: str) -> list[str]:
+    names: list[str] = []
+    for part in value.split("/"):
+        name = " ".join(part.split())
+        if name and name not in names:
+            names.append(name)
+    return names
+
+
 def _parse_iso_date(value: str) -> date | None:
     text = value.strip()
     if not text:
         return None
+    mes_ano = _parse_mes_ano(text)
+    if mes_ano:
+        return mes_ano
     if re.fullmatch(r"\d{4}-\d{2}", text):
         return date.fromisoformat(f"{text}-01")
     if re.fullmatch(r"\d{2}/\d{2}/\d{4}", text):
@@ -287,6 +358,11 @@ def _parse_status(value: str) -> str | None:
         "EM ANDAMENTO": "EM_ANDAMENTO",
         "EM REVISAO": "EM_REVISAO",
         "EM REVISÃO": "EM_REVISAO",
+        "EM_REVISÃO": "EM_REVISAO",
+        "CONCLUÍDO": "ENTREGUE",
+        "CONCLUIDO": "ENTREGUE",
+        "CONCLUÍDA": "ENTREGUE",
+        "CONCLUIDA": "ENTREGUE",
     }
     text = aliases.get(text, text)
     return text if text in VALID_STATUS else None
@@ -431,7 +507,7 @@ def _import_table_rows(
 
     for row in rows:
         tipo = _parse_tipo(get(row, "Tipo"))
-        cnpj = get(row, "CNPJ")
+        cnpj = normalize_cnpj(get(row, "CNPJ"))
         razao = get(row, "Razão Social", "Razao Social")
         bu = get(row, "BU") or "N/A"
         apuracao = parse_bool_pt(get(row, "Apuração", "Apuracao") or "VERDADEIRO")
@@ -447,11 +523,11 @@ def _import_table_rows(
         dia_fiscal = _parse_day(get(row, "Dia prazo fiscal")) or 15
         comp = _parse_iso_date(get(row, "Competência", "Competencia")) or default_comp
         prazo_legal = _parse_iso_date(get(row, "Prazo legal"))
-        prazo_fiscal = _parse_iso_date(get(row, "Prazo fiscal"))
+        prazo_fiscal = _parse_prazo(get(row, "Prazo fiscal"), prazo_legal)
         hora_inicio = _parse_time(get(row, "Hora início", "Hora inicio"))
         hora_fim = _parse_time(get(row, "Hora fim"))
-        data_entrega = _parse_iso_date(get(row, "Data entrega"))
-        recibo_numero = get(row, "Número recibo", "Numero recibo")
+        data_entrega = _parse_iso_date(get(row, "Data entrega", "Data da Entrega"))
+        recibo_numero = get(row, "Número recibo", "Numero recibo", "Recibo")
         observacao = get(row, "Observação", "Observacao")
         motivo_atraso = get(row, "Motivo atraso")
         status_value = _parse_status(get(row, "Status"))
@@ -511,17 +587,20 @@ def _import_table_rows(
             "dia_prazo_legal": dia_legal,
             "dia_prazo_fiscal": dia_fiscal,
         }
-        if responsavel:
-            row_resp = {"nome": responsavel, "ativo": True}
-            if email:
+        nomes_resp = split_responsaveis(responsavel)
+        for idx, nome_resp in enumerate(nomes_resp):
+            row_resp = {"nome": nome_resp, "ativo": True}
+            if email and idx == 0 and len(nomes_resp) == 1:
                 row_resp["email"] = email
-            responsaveis_rows[responsavel] = row_resp
+            if nome_resp not in responsaveis_rows or "email" in row_resp:
+                responsaveis_rows[nome_resp] = row_resp
 
         obrigacao_specs.append(
             {
                 "cnpj": cnpj,
                 "atividade": nome_atividade,
-                "responsavel": responsavel or None,
+                "responsavel": nomes_resp[0] if nomes_resp else None,
+                "responsaveis": nomes_resp,
                 "competencia": comp.isoformat(),
                 "prazo_legal": prazo_legal.isoformat() if prazo_legal else None,
                 "prazo_fiscal": prazo_fiscal.isoformat() if prazo_fiscal else None,
@@ -555,6 +634,7 @@ def _import_table_rows(
 
     payload: list[dict[str, Any]] = []
     seen: set[tuple[str, str, str]] = set()
+    desired_resp: dict[tuple[str, str, str], set[str]] = {}
     for spec in obrigacao_specs:
         empresa_id = empresa_ids[spec["cnpj"]]
         atividade_id = atividade_ids[spec["atividade"]]
@@ -562,6 +642,10 @@ def _import_table_rows(
         if key in seen:
             continue
         seen.add(key)
+        if spec.get("responsaveis"):
+            desired_resp[key] = {
+                str(responsavel_ids[n]) for n in spec["responsaveis"] if n in responsavel_ids
+            }
         current = existing_obrigacoes.get(key, {})
         atividade = atividades_db.get(atividade_id, {})
         comp_date = date.fromisoformat(spec["competencia"])
@@ -593,16 +677,20 @@ def _import_table_rows(
         payload.append(item)
 
     created = 0
+    upserted: list[dict[str, Any]] = []
     if payload:
         # upsert in chunks
         chunk_size = 100
         for i in range(0, len(payload), chunk_size):
             chunk = payload[i : i + chunk_size]
-            client.table("obrigacoes").upsert(
+            res = client.table("obrigacoes").upsert(
                 chunk,
                 on_conflict="empresa_id,atividade_id,competencia",
             ).execute()
+            upserted.extend(res.data or [])
             created += len(chunk)
+
+    _sync_obrigacao_responsaveis(client, upserted, desired_resp)
 
     tarefas_created = _insert_tarefas(
         client,
@@ -623,6 +711,37 @@ def _import_table_rows(
 
 
 _OBRIGACAO_OPTIONAL_FIELDS = ("data_entrega", "recibo_numero", "observacao", "motivo_atraso")
+
+
+def _sync_obrigacao_responsaveis(
+    client: Client,
+    upserted: list[dict[str, Any]],
+    desired: dict[tuple[str, str, str], set[str]],
+) -> None:
+    """Célula de responsável preenchida define o conjunto completo; vazia mantém o atual."""
+    id_by_key = {
+        (str(r["empresa_id"]), str(r["atividade_id"]), str(r["competencia"])[:10]): str(r["id"])
+        for r in upserted
+        if r.get("id")
+    }
+    targets = {id_by_key[k]: v for k, v in desired.items() if k in id_by_key}
+    if not targets:
+        return
+    current = links_by_obrigacao(client, targets.keys())
+    to_add: list[tuple[str, str]] = []
+    for obrigacao_id, wanted in targets.items():
+        have = current.get(obrigacao_id, set())
+        to_add.extend((obrigacao_id, rid) for rid in wanted - have)
+        extra = have - wanted
+        if extra:
+            (
+                client.table("obrigacao_responsaveis")
+                .delete()
+                .eq("obrigacao_id", obrigacao_id)
+                .in_("responsavel_id", sorted(extra))
+                .execute()
+            )
+    add_responsaveis_bulk(client, to_add)
 
 
 def _load_existing_obrigacoes(

@@ -42,6 +42,13 @@ from app.services.notifications import (
     notify_responsavel_of_obrigacao,
     write_audit,
 )
+from app.services.obrigacao_responsaveis import (
+    RESPONSAVEIS_EMBED,
+    apply_responsavel_filter,
+    pop_responsaveis,
+    select_with_responsavel_filter,
+    set_responsaveis,
+)
 from app.services.scope import assert_obrigacao_in_scope, effective_responsavel_id
 from app.services.status_engine import normalize_status, urgencia_label
 
@@ -49,7 +56,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/obrigacoes", tags=["obrigacoes"])
 
-_FULL_SELECT = "*, empresas(*), atividades_modelo(*), responsaveis(*)"
+_FULL_SELECT = f"*, empresas(*), atividades_modelo(*), responsaveis(*), {RESPONSAVEIS_EMBED}"
 
 
 def _enrich(row: dict[str, Any]) -> dict[str, Any]:
@@ -71,6 +78,7 @@ def _enrich(row: dict[str, Any]) -> dict[str, Any]:
         row["atividade"] = row.pop("atividades_modelo")
     if "responsaveis" in row:
         row["responsavel"] = row.pop("responsaveis")
+    row["responsaveis"] = pop_responsaveis(row, row.get("responsavel"))
     return row
 
 
@@ -117,12 +125,15 @@ def query_obrigacoes(
     if not user.org_wide and resolved is None:
         return []
 
+    rid = str(resolved) if resolved else None
+
     def build():
-        query = client.table("obrigacoes").select(_FULL_SELECT)
+        query = client.table("obrigacoes").select(
+            select_with_responsavel_filter(_FULL_SELECT, rid)
+        )
         if competencia:
             query = query.eq("competencia", competencia.isoformat())
-        if resolved:
-            query = query.eq("responsavel_id", str(resolved))
+        query = apply_responsavel_filter(query, rid)
         if status_filter:
             query = query.eq("status", status_filter.value)
         return query.order("competencia", desc=True).order("id")
@@ -186,11 +197,15 @@ def calendario(
         f"and(prazo_fiscal.is.null,prazo_legal.gte.{de_iso},prazo_legal.lte.{ate_iso})"
     )
 
+    rid = str(resolved) if resolved else None
+
     def build():
-        query = client.table("obrigacoes").select(_FULL_SELECT).or_(em_intervalo)
-        if resolved:
-            query = query.eq("responsavel_id", str(resolved))
-        return query.order("id")
+        query = (
+            client.table("obrigacoes")
+            .select(select_with_responsavel_filter(_FULL_SELECT, rid))
+            .or_(em_intervalo)
+        )
+        return apply_responsavel_filter(query, rid).order("id")
 
     enriched = [_enrich(r) for r in fetch_all(build)]
     if bu:
@@ -349,12 +364,17 @@ def create_obrigacao(
     client: Annotated[Client, Depends(get_db_client)],
 ):
     body = payload.model_dump(mode="json")
+    co_ids = [str(r) for r in (body.pop("responsavel_ids", None) or [])]
+    if not body.get("responsavel_id") and co_ids:
+        body["responsavel_id"] = co_ids[0]
     body["updated_by"] = user.id
     with constraint_errors(
         duplicate="Já existe essa obrigação para a empresa nesta competência",
         in_use="Empresa, atividade ou responsável inexistente",
     ):
         data = client.table("obrigacoes").insert(body).execute().data
+        if data and co_ids:
+            set_responsaveis(client, data[0]["id"], co_ids, body.get("responsavel_id"))
     if not data:
         raise HTTPException(status_code=400, detail="Falha ao criar obrigação")
     oid = data[0]["id"]
@@ -395,14 +415,27 @@ def update_obrigacao(
 
     body = payload.model_dump(exclude_unset=True, mode="json")
     reject_nulls(body, ("empresa_id", "atividade_id", "competencia", "status"))
+    new_responsavel_ids: list[str] | None = None
+    if "responsavel_ids" in body:
+        raw_ids = body.pop("responsavel_ids")
+        new_responsavel_ids = [str(r) for r in (raw_ids or [])]
     # Não-admin não pode reatribuir responsável
     if user.role != "admin":
+        new_responsavel_ids = None
         body.pop("responsavel_id", None)
         body.pop("empresa_id", None)
         body.pop("atividade_id", None)
         body.pop("prazo_legal", None)
         body.pop("prazo_fiscal", None)
         body.pop("competencia", None)
+    if new_responsavel_ids is not None:
+        principal = body.get("responsavel_id", before.get("responsavel_id"))
+        if principal and str(principal) not in new_responsavel_ids and "responsavel_id" not in body:
+            # Lista sem o principal atual: o primeiro da lista assume como principal.
+            principal = new_responsavel_ids[0] if new_responsavel_ids else None
+            body["responsavel_id"] = principal
+        elif not principal and new_responsavel_ids:
+            body["responsavel_id"] = new_responsavel_ids[0]
     body["updated_by"] = user.id
     if body.get("data_entrega") and not body.get("status"):
         body["status"] = "ENTREGUE"
@@ -464,11 +497,31 @@ def update_obrigacao(
         after=after,
     )
 
+    added: set[str] = set()
     if (
         user.role == "admin"
-        and body.get("responsavel_id")
-        and str(body.get("responsavel_id")) != str(before.get("responsavel_id") or "")
+        and after.get("responsavel_id")
+        and str(after.get("responsavel_id")) != str(before.get("responsavel_id") or "")
     ):
+        added.add(str(after["responsavel_id"]))
+    if new_responsavel_ids is not None:
+        novos, removidos = set_responsaveis(
+            client,
+            str(obrigacao_id),
+            new_responsavel_ids,
+            after.get("responsavel_id"),
+        )
+        added |= novos
+        if novos or removidos:
+            write_audit(
+                client,
+                obrigacao_id=str(obrigacao_id),
+                user_id=user.id,
+                acao="UPDATE",
+                campo="responsaveis",
+                valor_novo=",".join(sorted(new_responsavel_ids)),
+            )
+    if added:
         notify_responsavel_of_obrigacao(
             client,
             obrigacao_id=str(obrigacao_id),
@@ -476,6 +529,7 @@ def update_obrigacao(
             titulo="Obrigação atribuída",
             corpo="Uma obrigação foi atribuída a você.",
             exclude_user_id=user.id,
+            only_responsavel_ids=added,
         )
 
     return _fetch_full(client, str(obrigacao_id))

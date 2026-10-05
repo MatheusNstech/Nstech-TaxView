@@ -4,6 +4,7 @@ backend/.env
 frontend/.env
 **/credenciais*
 backend/scripts/credenciais_equipe.txt
+backend/scripts/backups/
 
 # Python
 .venv/

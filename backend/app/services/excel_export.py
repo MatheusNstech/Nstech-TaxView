@@ -155,13 +155,14 @@ def _row_values(kind: str, row: dict[str, Any]) -> tuple[list[Any], str]:
         ]
         return values, status
     atv = row.get("atividade") or {}
+    nomes = [r.get("nome") for r in row.get("responsaveis") or [] if r.get("nome")]
     values = [
         "Obrigação",
         emp.get("razao_social") or "",
         emp.get("cnpj") or "",
         emp.get("bu") or "",
         atv.get("nome") or "",
-        resp.get("nome") or "",
+        " / ".join(nomes) or resp.get("nome") or "",
         "",
         _as_date(row.get("competencia")),
         _as_date(row.get("prazo_legal")),

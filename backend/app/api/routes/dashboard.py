@@ -10,6 +10,11 @@ from app.core.auth import AuthUser, get_current_user, get_db_client
 from app.core.clock import today_br
 from app.schemas.models import DashboardSummary
 from app.services.db import fetch_all
+from app.services.obrigacao_responsaveis import (
+    apply_responsavel_filter,
+    pop_responsaveis,
+    select_with_responsavel_filter,
+)
 from app.services.scope import effective_responsavel_id
 from app.services.status_engine import normalize_status
 
@@ -62,11 +67,17 @@ def summary(
 
     def build(table: str, columns: str):
         def _query():
-            query = client.table(table).select(columns)
+            if table == "obrigacoes":
+                query = client.table(table).select(
+                    select_with_responsavel_filter(columns, scope_rid)
+                )
+                query = apply_responsavel_filter(query, scope_rid)
+            else:
+                query = client.table(table).select(columns)
+                if scope_rid:
+                    query = query.eq("responsavel_id", scope_rid)
             if competencia:
                 query = query.eq("competencia", competencia.isoformat())
-            if scope_rid:
-                query = query.eq("responsavel_id", scope_rid)
             return query.order("id")
 
         return _query
@@ -75,7 +86,8 @@ def summary(
         build(
             "obrigacoes",
             "id,status,prazo_legal,prazo_fiscal,data_entrega,responsavel_id,"
-            "empresas(bu,razao_social),responsaveis(nome,capacidade_max)",
+            "empresas(bu,razao_social),responsaveis(id,nome,capacidade_max),"
+            "obrigacao_responsaveis(responsavel_id,responsaveis(id,nome,capacidade_max))",
         )
     )
     tar_rows = fetch_all(
@@ -112,10 +124,15 @@ def summary(
         )
         status_counter[st] += 1
         bu_counter[(row.get("empresas") or {}).get("bu") or "N/A"] += 1
-        nome = (row.get("responsaveis") or {}).get("nome") or "Sem responsável"
-        resp_counter[nome] += 1
-        if nome not in capacidade:
-            capacidade[nome] = (row.get("responsaveis") or {}).get("capacidade_max")
+        # Cada responsável (principal ou co-responsável) carrega a obrigação.
+        resps = pop_responsaveis(row, row.pop("responsaveis", None))
+        if scope_rid:
+            resps = [r for r in resps if str(r.get("id")) == scope_rid]
+        for resp in resps or [{}]:
+            nome = resp.get("nome") or "Sem responsável"
+            resp_counter[nome] += 1
+            if nome not in capacidade:
+                capacidade[nome] = resp.get("capacidade_max")
         ref = row.get("prazo_fiscal") or row.get("prazo_legal")
         if st != "ENTREGUE" and ref:
             ref_date = date.fromisoformat(ref)

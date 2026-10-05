@@ -192,10 +192,15 @@ def notify_responsavel_of_obrigacao(
     corpo: str = "",
     dedupe_same_day: bool = False,
     exclude_user_id: str | None = None,
+    only_responsavel_ids: set[str] | None = None,
 ) -> int:
+    """Notifica o principal e os co-responsáveis (ou só `only_responsavel_ids`)."""
     row = (
         client.table("obrigacoes")
-        .select("id,responsavel_id,responsaveis(auth_user_id,nome)")
+        .select(
+            "id,responsavel_id,responsaveis(id,auth_user_id),"
+            "obrigacao_responsaveis(responsaveis(id,auth_user_id))"
+        )
         .eq("id", obrigacao_id)
         .limit(1)
         .execute()
@@ -204,17 +209,29 @@ def notify_responsavel_of_obrigacao(
     )
     if not row:
         return 0
-    resp = row[0].get("responsaveis") or {}
-    auth_id = resp.get("auth_user_id")
-    if not auth_id or auth_id == exclude_user_id:
-        return 0
-    created = create_notification(
-        client,
-        user_id=auth_id,
-        tipo=tipo,
-        titulo=titulo,
-        corpo=corpo,
-        obrigacao_id=obrigacao_id,
-        dedupe_same_day=dedupe_same_day,
-    )
-    return 1 if created else 0
+    resps = [row[0].get("responsaveis") or {}]
+    resps += [
+        link.get("responsaveis") or {} for link in row[0].get("obrigacao_responsaveis") or []
+    ]
+    targets: set[str] = set()
+    for resp in resps:
+        auth_id = resp.get("auth_user_id")
+        if not auth_id or auth_id == exclude_user_id:
+            continue
+        if only_responsavel_ids is not None and str(resp.get("id")) not in only_responsavel_ids:
+            continue
+        targets.add(str(auth_id))
+    sent = 0
+    for auth_id in sorted(targets):
+        created = create_notification(
+            client,
+            user_id=auth_id,
+            tipo=tipo,
+            titulo=titulo,
+            corpo=corpo,
+            obrigacao_id=obrigacao_id,
+            dedupe_same_day=dedupe_same_day,
+        )
+        if created:
+            sent += 1
+    return sent

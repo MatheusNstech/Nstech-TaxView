@@ -19,6 +19,7 @@ from app.schemas.models import ObrigacaoUpdate
 from app.services.csv_import import _import_table_rows
 from app.services.db import constraint_errors, fetch_all
 from app.services.excel_export import build_obrigacoes_xlsx
+from app.services.scope import assert_obrigacao_in_scope
 
 
 class _Query:
@@ -50,7 +51,13 @@ class _Query:
 
     def in_(self, key, values):
         allowed = {str(v) for v in values}
-        self.filters.append(lambda r: str(r.get(key))[:10] in allowed)
+        self.filters.append(
+            lambda r: str(r.get(key)) in allowed or str(r.get(key))[:10] in allowed
+        )
+        return self
+
+    def delete(self):
+        self.op = "delete"
         return self
 
     def range(self, start, end):
@@ -104,6 +111,9 @@ class _Query:
                 out.append(dict(new))
             return SimpleNamespace(data=out)
         matched = [r for r in table if all(f(r) for f in self.filters)]
+        if self.op == "delete":
+            table[:] = [r for r in table if r not in matched]
+            return SimpleNamespace(data=[dict(r) for r in matched])
         if self.op == "update":
             for row in matched:
                 row.update(self.payload or {})
@@ -251,3 +261,124 @@ def test_export_excel_nao_gera_formula_nem_quebra_com_controle():
     cell = ws.cell(5, 5)
     assert cell.data_type == "s"
     assert cell.value == '=HYPERLINK("http://evil","x")'
+
+
+def test_import_layout_cronograma_com_varios_responsaveis():
+    empresa_id, atividade_id = str(uuid4()), str(uuid4())
+    flavia, glaucia, solange = str(uuid4()), str(uuid4()), str(uuid4())
+    fake = _FakeDB(
+        empresas=[{"id": empresa_id, "cnpj": "05.074.351/0006-75"}],
+        atividades_modelo=[
+            {"id": atividade_id, "nome": "Apuração IRPJ/CSLL", "dia_prazo_legal": 30}
+        ],
+        responsaveis=[
+            {"id": flavia, "nome": "Flávia"},
+            {"id": glaucia, "nome": "Glaucia"},
+            {"id": solange, "nome": "Solange"},
+        ],
+        obrigacoes=[],
+        obrigacao_responsaveis=[],
+    )
+    rows = [
+        {
+            "CNPJ": "5074351000675",
+            "Razão Social": "BGMRODOTEC",
+            "BU": "TMS",
+            "Apuração": "VERDADEIRO",
+            "Atividade": "Apuração IRPJ/CSLL",
+            "Responsável": "Flávia/Glaucia/Solange",
+            "Competência": "Setembro 2026",
+            "Prazo Legal": "2026-10-01",
+            "Prazo Fiscal": "DIA 08",
+            "Data da Entrega": "2026-10-02",
+            "Status": "CONCLUÍDO",
+            "Recibo": "R-9",
+        }
+    ]
+
+    _import_table_rows(fake, rows, date(2026, 8, 1))  # type: ignore[arg-type]
+
+    assert len(fake.db["empresas"]) == 1
+    [obrig] = fake.db["obrigacoes"]
+    assert obrig["empresa_id"] == empresa_id
+    assert obrig["competencia"] == "2026-09-01"
+    assert obrig["prazo_fiscal"] == "2026-10-08"
+    assert obrig["status"] == "ENTREGUE"
+    assert obrig["data_entrega"] == "2026-10-02"
+    assert obrig["recibo_numero"] == "R-9"
+    assert obrig["responsavel_id"] == flavia
+    links = {
+        r["responsavel_id"]
+        for r in fake.db["obrigacao_responsaveis"]
+        if r["obrigacao_id"] == obrig["id"]
+    }
+    assert links == {flavia, glaucia, solange}
+
+    rows[0]["Responsável"] = "Flávia"
+    _import_table_rows(fake, rows, date(2026, 8, 1))  # type: ignore[arg-type]
+    links = {r["responsavel_id"] for r in fake.db["obrigacao_responsaveis"]}
+    assert links == {flavia}
+
+
+def test_co_responsavel_entra_no_escopo_da_obrigacao():
+    oid, principal, co, outro = str(uuid4()), uuid4(), uuid4(), uuid4()
+    fake = _FakeDB(
+        obrigacoes=[{"id": oid, "responsavel_id": str(principal)}],
+        obrigacao_responsaveis=[
+            {"id": str(uuid4()), "obrigacao_id": oid, "responsavel_id": str(principal)},
+            {"id": str(uuid4()), "obrigacao_id": oid, "responsavel_id": str(co)},
+        ],
+    )
+    user = AuthUser(id=str(uuid4()), email="u@x.com", access_token="t", role="user")
+
+    with patch("app.services.scope.effective_responsavel_id", return_value=co):
+        assert assert_obrigacao_in_scope(user, fake, oid)["id"] == oid  # type: ignore[arg-type]
+    with patch("app.services.scope.effective_responsavel_id", return_value=outro):
+        with pytest.raises(HTTPException) as exc:
+            assert_obrigacao_in_scope(user, fake, oid)  # type: ignore[arg-type]
+    assert exc.value.status_code == 403
+
+
+def test_admin_define_co_responsaveis_e_notifica_so_os_novos():
+    oid, principal, co = uuid4(), str(uuid4()), str(uuid4())
+    fake = _FakeDB(
+        obrigacoes=[
+            {
+                "id": str(oid),
+                "status": "PENDENTE",
+                "responsavel_id": principal,
+                "prazo_legal": "2099-01-20",
+            }
+        ],
+        obrigacao_responsaveis=[
+            {"id": str(uuid4()), "obrigacao_id": str(oid), "responsavel_id": principal}
+        ],
+        obrigacao_audit_log=[],
+    )
+    admin = AuthUser(id=str(uuid4()), email="a@x.com", access_token="t", role="admin")
+    body = ObrigacaoUpdate(responsavel_ids=[principal, co])  # type: ignore[arg-type]
+
+    with (
+        patch("app.api.routes.obrigacoes.assert_obrigacao_in_scope"),
+        patch("app.api.routes.obrigacoes.notify_responsavel_of_obrigacao") as notify,
+    ):
+        update_obrigacao(oid, body, admin, fake)  # type: ignore[arg-type]
+
+    links = {r["responsavel_id"] for r in fake.db["obrigacao_responsaveis"]}
+    assert links == {principal, co}
+    assert fake.db["obrigacoes"][0]["responsavel_id"] == principal
+    assert notify.call_args.kwargs["only_responsavel_ids"] == {co}
+
+
+def test_export_excel_lista_todos_os_responsaveis_da_obrigacao():
+    obrigacao = {
+        "status": "PENDENTE",
+        "empresa": {},
+        "atividade": {"nome": "IRPJ"},
+        "responsavel": {"nome": "Flávia"},
+        "responsaveis": [{"nome": "Flávia"}, {"nome": "Glaucia"}],
+    }
+    content = build_obrigacoes_xlsx([obrigacao], competencia=None, tarefas=[])
+    ws = load_workbook(io.BytesIO(content)).active
+    valores = [c.value for row in ws.iter_rows() for c in row]
+    assert "Flávia / Glaucia" in valores

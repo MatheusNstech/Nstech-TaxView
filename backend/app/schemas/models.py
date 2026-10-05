@@ -143,13 +143,14 @@ class ObrigacaoBase(BaseModel):
 
 
 class ObrigacaoCreate(ObrigacaoBase):
-    pass
+    responsavel_ids: list[UUID] | None = None
 
 
 class ObrigacaoUpdate(BaseModel):
     empresa_id: UUID | None = None
     atividade_id: UUID | None = None
     responsavel_id: UUID | None = None
+    responsavel_ids: list[UUID] | None = None
     competencia: date | None = None
     prazo_legal: date | None = None
     prazo_fiscal: date | None = None
@@ -167,6 +168,7 @@ class ObrigacaoOut(ObrigacaoBase):
     empresa: EmpresaOut | None = None
     atividade: AtividadeOut | None = None
     responsavel: ResponsavelOut | None = None
+    responsaveis: list[ResponsavelOut] = Field(default_factory=list)
     urgencia: str | None = None
     aprovado_por: UUID | None = None
     aprovado_em: datetime | None = None
