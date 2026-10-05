@@ -54,6 +54,7 @@ def summary(
     competencia: date | None = None,
     bu: str | None = None,
     responsavel_id: UUID | None = None,
+    atividade_id: UUID | None = None,
 ):
     scope_rid: str | None = None
     if user.org_wide:
@@ -72,6 +73,8 @@ def summary(
                     select_with_responsavel_filter(columns, scope_rid)
                 )
                 query = apply_responsavel_filter(query, scope_rid)
+                if atividade_id:
+                    query = query.eq("atividade_id", str(atividade_id))
             else:
                 query = client.table(table).select(columns)
                 if scope_rid:
@@ -90,11 +93,16 @@ def summary(
             "obrigacao_responsaveis(responsavel_id,responsaveis(id,nome,capacidade_max))",
         )
     )
-    tar_rows = fetch_all(
-        build(
-            "tarefas",
-            "id,status,prazo,responsavel_id,"
-            "empresas(bu,razao_social),responsaveis(nome,capacidade_max)",
+    # Tarefas avulsas não têm tipo de serviço: somem quando o filtro está ativo.
+    tar_rows = (
+        []
+        if atividade_id
+        else fetch_all(
+            build(
+                "tarefas",
+                "id,status,prazo,responsavel_id,"
+                "empresas(bu,razao_social),responsaveis(nome,capacidade_max)",
+            )
         )
     )
 

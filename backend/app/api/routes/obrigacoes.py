@@ -119,6 +119,7 @@ def query_obrigacoes(
     responsavel_id: UUID | None = None,
     status_filter: StatusObrigacao | None = None,
     q: str | None = None,
+    atividade_id: UUID | None = None,
 ) -> list[dict[str, Any]]:
     # Atraso e aviso saem do job diário run_atrasos_diarios, não desta listagem.
     resolved = _scoped_responsavel_id(user, client, responsavel_id)
@@ -136,6 +137,8 @@ def query_obrigacoes(
         query = apply_responsavel_filter(query, rid)
         if status_filter:
             query = query.eq("status", status_filter.value)
+        if atividade_id:
+            query = query.eq("atividade_id", str(atividade_id))
         return query.order("competencia", desc=True).order("id")
 
     enriched = [_enrich(r) for r in fetch_all(build)]
@@ -162,6 +165,7 @@ def list_obrigacoes(
     responsavel_id: UUID | None = None,
     status_filter: StatusObrigacao | None = Query(default=None, alias="status"),
     q: str | None = None,
+    atividade_id: UUID | None = None,
     minhas: bool = False,  # legado; escopo real vem do papel
 ):
     return query_obrigacoes(
@@ -172,6 +176,7 @@ def list_obrigacoes(
         responsavel_id=responsavel_id,
         status_filter=status_filter,
         q=q,
+        atividade_id=atividade_id,
     )
 
 
@@ -261,10 +266,12 @@ def calendario(
 def _export_rows(
     user: AuthUser,
     client: Client,
+    atividade_id: UUID | None = None,
     **filters: Any,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    rows = query_obrigacoes(user, client, **filters)
-    tarefas = query_tarefas(user, client, **filters)
+    rows = query_obrigacoes(user, client, atividade_id=atividade_id, **filters)
+    # Tarefas avulsas não têm tipo de serviço: somem quando o filtro está ativo.
+    tarefas = [] if atividade_id else query_tarefas(user, client, **filters)
     return rows, tarefas
 
 
@@ -277,11 +284,13 @@ def export_xlsx(
     responsavel_id: UUID | None = None,
     status_filter: StatusObrigacao | None = Query(default=None, alias="status"),
     q: str | None = None,
+    atividade_id: UUID | None = None,
     minhas: bool = False,
 ):
     rows, tarefas = _export_rows(
         user,
         client,
+        atividade_id=atividade_id,
         competencia=competencia,
         bu=bu,
         responsavel_id=responsavel_id,
@@ -315,11 +324,13 @@ def export_pptx(
     responsavel_id: UUID | None = None,
     status_filter: StatusObrigacao | None = Query(default=None, alias="status"),
     q: str | None = None,
+    atividade_id: UUID | None = None,
     minhas: bool = False,
 ):
     rows, tarefas = _export_rows(
         user,
         client,
+        atividade_id=atividade_id,
         competencia=competencia,
         bu=bu,
         responsavel_id=responsavel_id,

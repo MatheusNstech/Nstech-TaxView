@@ -12,7 +12,8 @@ from fastapi import HTTPException
 from openpyxl import load_workbook
 from postgrest.exceptions import APIError
 
-from app.api.routes.obrigacoes import update_obrigacao
+from app.api.routes.dashboard import summary as dashboard_summary
+from app.api.routes.obrigacoes import _export_rows, update_obrigacao
 from app.core import clock
 from app.core.auth import AuthUser
 from app.schemas.models import ObrigacaoUpdate
@@ -405,3 +406,27 @@ def test_export_excel_lista_todos_os_responsaveis_da_obrigacao():
     ws = load_workbook(io.BytesIO(content)).active
     valores = [c.value for row in ws.iter_rows() for c in row]
     assert "Flávia / Glaucia" in valores
+
+
+def test_filtro_por_tipo_de_servico_traz_so_a_atividade_e_esconde_tarefas():
+    pis, icms = uuid4(), uuid4()
+    comp = "2026-09-01"
+    fake = _FakeDB(
+        obrigacoes=[
+            {"id": str(uuid4()), "atividade_id": str(pis), "competencia": comp, "status": "PENDENTE"},
+            {"id": str(uuid4()), "atividade_id": str(pis), "competencia": comp, "status": "ENTREGUE"},
+            {"id": str(uuid4()), "atividade_id": str(icms), "competencia": comp, "status": "PENDENTE"},
+        ],
+        tarefas=[{"id": str(uuid4()), "competencia": comp, "status": "PENDENTE"}],
+    )
+    admin = AuthUser(id=str(uuid4()), email="a@x.com", access_token="t", role="admin")
+
+    filtrado = dashboard_summary(admin, fake, competencia=date(2026, 9, 1), atividade_id=pis)  # type: ignore[arg-type]
+    assert (filtrado.total, filtrado.pendente, filtrado.entregue) == (2, 1, 1)
+    todos = dashboard_summary(admin, fake, competencia=date(2026, 9, 1))  # type: ignore[arg-type]
+    assert todos.total == 4
+
+    with patch("app.api.routes.obrigacoes.query_tarefas") as query_tarefas:
+        rows, tarefas = _export_rows(admin, fake, atividade_id=pis, competencia=date(2026, 9, 1))  # type: ignore[arg-type]
+    assert len(rows) == 2 and tarefas == []
+    query_tarefas.assert_not_called()

@@ -27,6 +27,7 @@ import {
   nextCompetenciaDate,
 } from '../lib/format'
 import type {
+  Atividade,
   DashboardSummary,
   FilterValues,
   GerarCompetenciaResponse,
@@ -50,7 +51,9 @@ export default function Dashboard() {
     status: '',
     search: '',
     responsavel_id: '',
+    atividade_id: '',
   })
+  const [atividades, setAtividades] = useState<Atividade[]>([])
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
   const [obrigacoes, setObrigacoes] = useState<Obrigacao[]>([])
   const [responsaveis, setResponsaveis] = useState<Responsavel[]>([])
@@ -70,6 +73,7 @@ export default function Dashboard() {
               isAdmin && filters.responsavel_id
                 ? filters.responsavel_id
                 : undefined,
+            atividade_id: filters.atividade_id || undefined,
           })}`,
         ),
         apiFetch<Obrigacao[]>(
@@ -82,6 +86,7 @@ export default function Dashboard() {
                 ? filters.responsavel_id
                 : undefined,
             q: filters.search || undefined,
+            atividade_id: filters.atividade_id || undefined,
           })}`,
         ),
       ])
@@ -105,12 +110,19 @@ export default function Dashboard() {
     filters.status,
     filters.search,
     filters.responsavel_id,
+    filters.atividade_id,
     isAdmin,
   ])
 
   useEffect(() => {
     void loadData()
   }, [loadData])
+
+  useEffect(() => {
+    apiFetch<Atividade[]>('/api/atividades')
+      .then((rows) => setAtividades(rows.filter((a) => a.ativa)))
+      .catch(() => setAtividades([]))
+  }, [])
 
   const handleGerar = async () => {
     setGenerating(true)
@@ -143,6 +155,7 @@ export default function Dashboard() {
     status: filters.status || undefined,
     responsavel_id: filters.responsavel_id || undefined,
     q: filters.search || undefined,
+    atividade_id: filters.atividade_id || undefined,
   })
 
   const bus = summary ? Object.keys(summary.por_bu).sort() : []
@@ -297,6 +310,7 @@ export default function Dashboard() {
         onChange={setFilters}
         bus={bus}
         responsaveis={isAdmin ? responsaveis : undefined}
+        atividades={atividades}
       />
 
       {loading && !summary ? (

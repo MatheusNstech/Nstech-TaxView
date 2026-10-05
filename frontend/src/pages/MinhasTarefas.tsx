@@ -25,6 +25,7 @@ import {
 import { obrigacaoTemResponsavel } from '../lib/responsaveis'
 import { mergeWorkItems } from '../lib/workItems'
 import type {
+  Atividade,
   Empresa,
   FilterValues,
   Obrigacao,
@@ -70,7 +71,9 @@ export default function MinhasTarefas() {
     status: '',
     search: '',
     responsavel_id: '',
+    atividade_id: '',
   })
+  const [atividades, setAtividades] = useState<Atividade[]>([])
   const [defaultedOwnResponsavel, setDefaultedOwnResponsavel] = useState(false)
   const [obrigacoes, setObrigacoes] = useState<Obrigacao[]>([])
   const [tarefas, setTarefas] = useState<Tarefa[]>([])
@@ -118,16 +121,22 @@ export default function MinhasTarefas() {
     try {
       const scopedResponsavel =
         (isAdmin ? filters.responsavel_id : responsavelId) || undefined
-      const q = buildQuery({
+      const params = {
         competencia: competenciaIso,
         bu: filters.bu || undefined,
         status: filters.status || undefined,
         responsavel_id: scopedResponsavel,
         q: filters.search || undefined,
-      })
+      }
+      const atividadeId = filters.atividade_id || undefined
+      // Tarefas avulsas não têm tipo de serviço: somem quando o filtro está ativo.
       const [obrData, tarData] = await Promise.all([
-        apiFetch<Obrigacao[]>(`/api/obrigacoes${q}`),
-        apiFetch<Tarefa[]>(`/api/tarefas${q}`),
+        apiFetch<Obrigacao[]>(
+          `/api/obrigacoes${buildQuery({ ...params, atividade_id: atividadeId })}`,
+        ),
+        atividadeId
+          ? Promise.resolve<Tarefa[]>([])
+          : apiFetch<Tarefa[]>(`/api/tarefas${buildQuery(params)}`),
       ])
       const onlyMine = (rid: string | null | undefined) =>
         !scopedResponsavel || rid === scopedResponsavel
@@ -160,10 +169,17 @@ export default function MinhasTarefas() {
     filters.status,
     filters.search,
     filters.responsavel_id,
+    filters.atividade_id,
     isAdmin,
     canWrite,
     responsavelId,
   ])
+
+  useEffect(() => {
+    apiFetch<Atividade[]>('/api/atividades')
+      .then((rows) => setAtividades(rows.filter((a) => a.ativa)))
+      .catch(() => setAtividades([]))
+  }, [])
 
   useEffect(() => {
     if (profileLoading) return
@@ -428,6 +444,7 @@ export default function MinhasTarefas() {
         onChange={setFilters}
         bus={bus}
         responsaveis={isAdmin ? responsaveis : undefined}
+        atividades={atividades}
       />
 
       {error && (

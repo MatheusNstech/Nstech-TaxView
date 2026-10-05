@@ -1,18 +1,25 @@
 import {
   Building2,
+  ClipboardList,
   Filter,
   Search,
   UserRound,
 } from 'lucide-react'
 import GlassMonthPicker from './GlassMonthPicker'
 import GlassSelect from './GlassSelect'
-import type { FilterValues, Responsavel, StatusObrigacao } from '../types'
+import type {
+  Atividade,
+  FilterValues,
+  Responsavel,
+  StatusObrigacao,
+} from '../types'
 
 interface FiltersBarProps {
   filters: FilterValues
   onChange: (filters: FilterValues) => void
   bus?: string[]
   responsaveis?: Responsavel[]
+  atividades?: Atividade[]
   showStatus?: boolean
   showSearch?: boolean
 }
@@ -33,6 +40,7 @@ export default function FiltersBar({
   onChange,
   bus = [],
   responsaveis = [],
+  atividades,
   showStatus = true,
   showSearch = true,
 }: FiltersBarProps) {
@@ -47,6 +55,11 @@ export default function FiltersBar({
   const responsavelOptions = [
     { value: '', label: 'Responsável' },
     ...responsaveis.map((r) => ({ value: r.id, label: r.nome })),
+  ]
+
+  const atividadeOptions = [
+    { value: '', label: 'Tipo de serviço' },
+    ...(atividades ?? []).map((a) => ({ value: a.id, label: a.nome })),
   ]
 
   return (
@@ -69,6 +82,17 @@ export default function FiltersBar({
         onChange={(bu) => update({ bu })}
         options={buOptions}
       />
+
+      {atividades && (
+        <GlassSelect
+          className="min-w-[11rem] flex-1 basis-[11rem]"
+          icon={ClipboardList}
+          ariaLabel="Tipo de serviço"
+          value={filters.atividade_id ?? ''}
+          onChange={(atividade_id) => update({ atividade_id })}
+          options={atividadeOptions}
+        />
+      )}
 
       {responsaveis.length > 0 && (
         <GlassSelect

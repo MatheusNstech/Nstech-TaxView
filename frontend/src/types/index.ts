@@ -260,6 +260,7 @@ export interface FilterValues {
   status: string
   search: string
   responsavel_id?: string
+  atividade_id?: string
 }
 
 export const KANBAN_COLUMNS: { id: StatusObrigacao; label: string }[] = [
