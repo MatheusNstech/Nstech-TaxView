@@ -1,6 +1,6 @@
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import { formatCompetencia } from '../lib/format'
+import { currentCompetenciaMonth, formatCompetencia } from '../lib/format'
 
 const MONTHS = [
   { value: 1, label: 'Jan' },
@@ -23,6 +23,8 @@ interface GlassMonthPickerProps {
   className?: string
   ariaLabel?: string
   align?: 'left' | 'right'
+  shortcutValue?: string
+  shortcutLabel?: string
 }
 
 function parseMonth(value: string): { year: number; month: number } {
@@ -44,6 +46,8 @@ export default function GlassMonthPicker({
   className = '',
   ariaLabel = 'Competência',
   align = 'left',
+  shortcutValue,
+  shortcutLabel = 'Competência atual',
 }: GlassMonthPickerProps) {
   const [open, setOpen] = useState(false)
   const parsed = useMemo(() => parseMonth(value), [value])
@@ -75,8 +79,7 @@ export default function GlassMonthPicker({
     }
   }, [open])
 
-  const today = new Date()
-  const thisMonth = toValue(today.getFullYear(), today.getMonth() + 1)
+  const thisMonth = shortcutValue ?? currentCompetenciaMonth()
 
   return (
     <div ref={rootRef} className={`relative min-w-0 ${className}`}>
@@ -170,7 +173,7 @@ export default function GlassMonthPicker({
               }}
               className="rounded-lg px-2 py-1 text-xs font-semibold text-brand-600 transition-colors hover:bg-brand-500/10 dark:text-brand-400"
             >
-              Este mês
+              {shortcutLabel}
             </button>
             <button
               type="button"

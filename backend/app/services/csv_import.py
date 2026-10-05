@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import re
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
 
 from supabase import Client
@@ -503,7 +503,8 @@ def _import_table_rows(
     obrigacao_specs: list[dict[str, Any]] = []
     tarefa_specs: list[dict[str, Any]] = []
 
-    default_comp = competencia or today_br().replace(day=1)
+    # Competência em trabalho é o mês anterior ao do calendário.
+    default_comp = competencia or (today_br().replace(day=1) - timedelta(days=1)).replace(day=1)
 
     for row in rows:
         tipo = _parse_tipo(get(row, "Tipo"))

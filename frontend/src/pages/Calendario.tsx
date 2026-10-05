@@ -186,6 +186,8 @@ export default function Calendario() {
             className="w-[9.5rem] shrink-0"
             align="right"
             ariaLabel="Mês do calendário"
+            shortcutValue={`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`}
+            shortcutLabel="Este mês"
             value={ym}
             onChange={(next) => {
               setYm(next)

@@ -61,10 +61,14 @@ export function monthToCompetencia(month: string): string {
   return `${month}-01`
 }
 
-/** Mês corrente do calendário ("YYYY-MM"), padrão dos filtros de competência. */
+/**
+ * Competência em trabalho ("YYYY-MM"), padrão dos filtros: o mês anterior ao
+ * do calendário, porque em outubro se fecha a competência de setembro.
+ */
 export function currentCompetenciaMonth(): string {
   const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+  return `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`
 }
 
 export function nextCompetenciaDate(fromMonth?: string): string {
