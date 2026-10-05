@@ -22,6 +22,7 @@ import {
   formatHorario,
   monthToCompetencia,
 } from '../lib/format'
+import { obrigacaoTemResponsavel } from '../lib/responsaveis'
 import { mergeWorkItems } from '../lib/workItems'
 import type {
   Empresa,
@@ -131,7 +132,9 @@ export default function MinhasTarefas() {
       const onlyMine = (rid: string | null | undefined) =>
         !scopedResponsavel || rid === scopedResponsavel
       setObrigacoes(
-        obrData.filter((o) => onlyMine(o.responsavel_id ?? o.responsavel?.id)),
+        obrData.filter(
+          (o) => !scopedResponsavel || obrigacaoTemResponsavel(o, scopedResponsavel),
+        ),
       )
       setTarefas(
         tarData.filter((t) => onlyMine(t.responsavel_id ?? t.responsavel?.id)),
@@ -187,10 +190,10 @@ export default function MinhasTarefas() {
     const scoped = (isAdmin ? filters.responsavel_id : responsavelId) || ''
     if (!scoped) return items
     return items.filter((item) => {
-      const rid =
-        item.origem === 'tarefa'
-          ? item.tarefa?.responsavel_id ?? item.tarefa?.responsavel?.id
-          : item.obrigacao?.responsavel_id ?? item.obrigacao?.responsavel?.id
+      if (item.origem === 'obrigacao') {
+        return item.obrigacao ? obrigacaoTemResponsavel(item.obrigacao, scoped) : false
+      }
+      const rid = item.tarefa?.responsavel_id ?? item.tarefa?.responsavel?.id
       return rid === scoped
     })
   }, [obrigacoes, tarefas, filters.responsavel_id, isAdmin, responsavelId])

@@ -9,6 +9,7 @@ import PersonAvatar from '../components/PersonAvatar'
 import StatusBadge from '../components/StatusBadge'
 import { TableSkeleton } from '../components/ui/PageSkeletons'
 import { apiFetch, buildQuery } from '../lib/api'
+import { obrigacaoTemResponsavelNome } from '../lib/responsaveis'
 import {
   buildDiretoriaRiscos,
   countRiscosByTipo,
@@ -115,7 +116,7 @@ export default function DiretoriaPendencias() {
 
   const obrigacoesDoResponsavel = useCallback(
     (nome: string) =>
-      obrigacoes.filter((o) => (o.responsavel?.nome ?? '') === nome),
+      obrigacoes.filter((o) => obrigacaoTemResponsavelNome(o, nome)),
     [obrigacoes],
   )
 

@@ -87,6 +87,8 @@ export interface Obrigacao {
   empresa: Empresa | null
   atividade: Atividade | null
   responsavel: Responsavel | null
+  /** Principal primeiro, depois os co-responsáveis. */
+  responsaveis?: Responsavel[]
   urgencia: string | null
   aprovado_por?: string | null
   aprovado_em?: string | null

@@ -7,6 +7,7 @@ import NotificationBell from '../components/NotificationBell'
 import ObrigacaoDrawer from '../components/ObrigacaoDrawer'
 import PersonAvatar from '../components/PersonAvatar'
 import { apiFetch, buildQuery } from '../lib/api'
+import { obrigacaoResponsaveis, obrigacaoResponsaveisLabel } from '../lib/responsaveis'
 import {
   empresasComExcecao,
   fechamentoStatus,
@@ -101,7 +102,7 @@ export default function DiretoriaFechamento() {
       const hay = [
         o.empresa?.razao_social,
         o.atividade?.nome,
-        o.responsavel?.nome,
+        obrigacaoResponsaveisLabel(o),
         o.empresa?.bu,
       ]
         .filter(Boolean)
@@ -460,13 +461,14 @@ export default function DiretoriaFechamento() {
                               {o.atividade?.nome ?? '—'}
                             </td>
                             <td className="whitespace-nowrap px-2 py-3">
-                              {o.responsavel?.nome ? (
+                              {obrigacaoResponsaveis(o).length > 0 ? (
                                 <span className="inline-flex items-center gap-2">
-                                  <PersonAvatar
-                                    nome={o.responsavel.nome}
-                                    fotoUrl={o.responsavel.foto_url}
-                                  />
-                                  {o.responsavel.nome}
+                                  <span className="inline-flex -space-x-2">
+                                    {obrigacaoResponsaveis(o).map((r) => (
+                                      <PersonAvatar key={r.id} nome={r.nome} fotoUrl={r.foto_url} />
+                                    ))}
+                                  </span>
+                                  {obrigacaoResponsaveisLabel(o)}
                                 </span>
                               ) : (
                                 '—'

@@ -1,5 +1,6 @@
 import type { Obrigacao, Tarefa, WorkItem } from '../types'
 import { tarefaCategoriaLabel } from '../types'
+import { obrigacaoResponsaveisLabel } from './responsaveis'
 
 export function workItemFromObrigacao(o: Obrigacao): WorkItem {
   const categoria = o.categoria ?? 'fechamento'
@@ -9,7 +10,7 @@ export function workItemFromObrigacao(o: Obrigacao): WorkItem {
     id: o.id,
     title: o.empresa?.razao_social ?? 'Empresa',
     subtitle: o.atividade?.nome ?? '—',
-    responsavelNome: o.responsavel?.nome ?? null,
+    responsavelNome: obrigacaoResponsaveisLabel(o),
     solicitanteNome: null,
     prazo: o.prazo_fiscal || o.prazo_legal,
     status: o.status,

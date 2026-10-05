@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { StatusObrigacao, WorkItem } from '../../types'
 import { formatDate, statusLabel } from '../../lib/format'
 import { workItemServicoNome } from '../../lib/diretoriaAggregates'
+import { obrigacaoResponsaveis } from '../../lib/responsaveis'
 import PersonAvatar from '../PersonAvatar'
 import StatusBadge from '../StatusBadge'
 
@@ -40,11 +41,25 @@ function itemBu(item: WorkItem): string {
   return item.tarefa?.empresa?.bu ?? '—'
 }
 
-function itemFoto(item: WorkItem): string | null {
-  if (item.origem === 'obrigacao') {
-    return item.obrigacao?.responsavel?.foto_url ?? null
+function itemResponsavelNomes(item: WorkItem): string[] {
+  if (item.origem === 'obrigacao' && item.obrigacao) {
+    return obrigacaoResponsaveis(item.obrigacao)
+      .map((r) => r.nome.trim())
+      .filter(Boolean)
   }
-  return item.tarefa?.responsavel?.foto_url ?? null
+  const nome = item.responsavelNome?.trim()
+  return nome ? [nome] : []
+}
+
+function itemAvatares(item: WorkItem): { nome: string; fotoUrl: string | null }[] {
+  if (item.origem === 'obrigacao' && item.obrigacao) {
+    return obrigacaoResponsaveis(item.obrigacao).map((r) => ({
+      nome: r.nome,
+      fotoUrl: r.foto_url ?? null,
+    }))
+  }
+  const nome = item.responsavelNome
+  return nome ? [{ nome, fotoUrl: item.tarefa?.responsavel?.foto_url ?? null }] : []
 }
 
 export default function DiretoriaDrillModal({
@@ -98,8 +113,7 @@ export default function DiretoriaDrillModal({
   const responsaveis = useMemo(() => {
     const set = new Set<string>()
     for (const item of items) {
-      const v = item.responsavelNome?.trim()
-      if (v) set.add(v)
+      for (const nome of itemResponsavelNomes(item)) set.add(nome)
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'))
   }, [items])
@@ -108,7 +122,7 @@ export default function DiretoriaDrillModal({
     const q = search.trim().toLowerCase()
     return items.filter((item) => {
       if (bu && itemBu(item) !== bu) return false
-      if (responsavel && (item.responsavelNome ?? '') !== responsavel) return false
+      if (responsavel && !itemResponsavelNomes(item).includes(responsavel)) return false
       if (status && item.status !== status) return false
       if (!q) return true
       const hay = [
@@ -301,10 +315,11 @@ export default function DiretoriaDrillModal({
                     <td className="whitespace-nowrap px-5 py-3.5 text-slate-700">
                       {item.responsavelNome ? (
                         <span className="inline-flex items-center gap-2">
-                          <PersonAvatar
-                            nome={item.responsavelNome}
-                            fotoUrl={itemFoto(item)}
-                          />
+                          <span className="inline-flex -space-x-2">
+                            {itemAvatares(item).map((a) => (
+                              <PersonAvatar key={a.nome} nome={a.nome} fotoUrl={a.fotoUrl} />
+                            ))}
+                          </span>
                           <span>{item.responsavelNome}</span>
                         </span>
                       ) : (

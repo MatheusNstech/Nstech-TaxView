@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../lib/api'
 import { formatDate, statusLabel } from '../lib/format'
+import { obrigacaoResponsaveis } from '../lib/responsaveis'
 import type {
   AuditLog,
   Comentario,
@@ -437,15 +438,20 @@ export default function ObrigacaoDrawer({
               ) : (
                 <dl className="rounded-xl border border-slate-100 px-4">
                   <FieldRow
-                    label="Responsável"
+                    label={
+                      obrigacaoResponsaveis(obrigacao).length > 1
+                        ? 'Responsáveis'
+                        : 'Responsável'
+                    }
                     value={
-                      obrigacao.responsavel?.nome ? (
-                        <span className="inline-flex items-center gap-2">
-                          <PersonAvatar
-                            nome={obrigacao.responsavel.nome}
-                            fotoUrl={obrigacao.responsavel.foto_url}
-                          />
-                          {obrigacao.responsavel.nome}
+                      obrigacaoResponsaveis(obrigacao).length > 0 ? (
+                        <span className="inline-flex flex-wrap items-center justify-end gap-x-3 gap-y-1.5">
+                          {obrigacaoResponsaveis(obrigacao).map((r) => (
+                            <span key={r.id} className="inline-flex items-center gap-2">
+                              <PersonAvatar nome={r.nome} fotoUrl={r.foto_url} />
+                              {r.nome}
+                            </span>
+                          ))}
                         </span>
                       ) : (
                         '—'

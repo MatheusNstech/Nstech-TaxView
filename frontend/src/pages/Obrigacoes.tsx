@@ -7,6 +7,7 @@ import ObrigacaoDrawer from '../components/ObrigacaoDrawer'
 import StatusBadge from '../components/StatusBadge'
 import { TableSkeleton } from '../components/ui/PageSkeletons'
 import { apiFetch, buildQuery } from '../lib/api'
+import { obrigacaoResponsaveisLabel } from '../lib/responsaveis'
 import {
   currentCompetenciaMonth,
   formatDate,
@@ -132,7 +133,7 @@ export default function Obrigacoes() {
                       {o.atividade?.nome ?? '—'}
                     </td>
                     <td className="px-5 py-3 text-[color:var(--color-muted)]">
-                      {o.responsavel?.nome ?? '—'}
+                      {obrigacaoResponsaveisLabel(o) ?? '—'}
                     </td>
                     <td className="px-5 py-3 text-[color:var(--color-muted)]">
                       {formatDate(o.prazo_fiscal ?? o.prazo_legal)}

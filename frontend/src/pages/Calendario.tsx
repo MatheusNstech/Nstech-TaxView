@@ -10,6 +10,7 @@ import { CalendarSkeleton } from '../components/ui/PageSkeletons'
 import { apiFetch, buildQuery } from '../lib/api'
 import { formatDate, formatHorario, statusLabel } from '../lib/format'
 import { tarefaIsAtrasada } from '../lib/diretoriaFechamento'
+import { obrigacaoResponsaveisLabel } from '../lib/responsaveis'
 import type {
   CalendarioResponse,
   Obrigacao,
@@ -136,7 +137,7 @@ export default function Calendario() {
       if (filtroStatus && o.status !== filtroStatus) return false
       if (filtroBu && (o.empresa?.bu ?? '') !== filtroBu) return false
       if (!q) return true
-      const hay = [o.atividade?.nome, o.empresa?.razao_social, o.responsavel?.nome]
+      const hay = [o.atividade?.nome, o.empresa?.razao_social, obrigacaoResponsaveisLabel(o)]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()

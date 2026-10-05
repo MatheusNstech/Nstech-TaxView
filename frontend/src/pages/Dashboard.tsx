@@ -19,6 +19,7 @@ import NotificationBell from '../components/NotificationBell'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch, buildQuery } from '../lib/api'
 import { resolveAvatarUrl } from '../lib/avatars'
+import { obrigacaoResponsaveis } from '../lib/responsaveis'
 import {
   currentCompetenciaMonth,
   formatCompetencia,
@@ -155,15 +156,17 @@ export default function Dashboard() {
     >()
 
     for (const o of obrigacoes) {
-      const nome = o.responsavel?.nome ?? 'Sem responsável'
       const atividade = o.atividade?.nome ?? 'Sem atividade'
-      const bucket = byResp.get(nome) ?? {
-        total: 0,
-        atividades: new Map<string, number>(),
+      const nomes = obrigacaoResponsaveis(o).map((r) => r.nome)
+      for (const nome of nomes.length > 0 ? nomes : ['Sem responsável']) {
+        const bucket = byResp.get(nome) ?? {
+          total: 0,
+          atividades: new Map<string, number>(),
+        }
+        bucket.total += 1
+        bucket.atividades.set(atividade, (bucket.atividades.get(atividade) ?? 0) + 1)
+        byResp.set(nome, bucket)
       }
-      bucket.total += 1
-      bucket.atividades.set(atividade, (bucket.atividades.get(atividade) ?? 0) + 1)
-      byResp.set(nome, bucket)
     }
 
     // Garante quem veio só do summary também aparece

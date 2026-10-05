@@ -1,5 +1,6 @@
 import type { DashboardSummary, Obrigacao, Tarefa } from '../types'
 import { tarefaCategoriaLabel } from '../types'
+import { obrigacaoResponsaveisLabel } from './responsaveis'
 
 export type DiretoriaRiscoTipo = 'atrasado' | 'vence_7d' | 'sobrecarga'
 
@@ -53,7 +54,7 @@ export function buildDiretoriaRiscos(
       id: `atr-${o.id}`,
       tipo: 'atrasado',
       titulo: o.atividade?.nome ?? 'Obrigação atrasada',
-      detalhe: `${o.empresa?.razao_social ?? 'Empresa'} · ${o.responsavel?.nome ?? 'Sem responsável'} · ${o.empresa?.bu ?? '—'}`,
+      detalhe: `${o.empresa?.razao_social ?? 'Empresa'} · ${obrigacaoResponsaveisLabel(o) ?? 'Sem responsável'} · ${o.empresa?.bu ?? '—'}`,
       obrigacao: o,
       diasRef: days != null ? Math.abs(Math.min(days, 0)) : null,
     })
@@ -90,7 +91,7 @@ export function buildDiretoriaRiscos(
       id: `7d-${o.id}`,
       tipo: 'vence_7d',
       titulo: o.atividade?.nome ?? 'Vencimento em até 7 dias',
-      detalhe: `${o.empresa?.razao_social ?? 'Empresa'} · ${o.responsavel?.nome ?? 'Sem responsável'} · ${o.empresa?.bu ?? '—'}`,
+      detalhe: `${o.empresa?.razao_social ?? 'Empresa'} · ${obrigacaoResponsaveisLabel(o) ?? 'Sem responsável'} · ${o.empresa?.bu ?? '—'}`,
       obrigacao: o,
       diasRef: days,
     })
