@@ -92,12 +92,25 @@ export default function MinhasTarefas() {
   const [error, setError] = useState('')
   const [exporting, setExporting] = useState(false)
 
+  const [equipe, setEquipe] = useState<Responsavel[]>([])
+
   const competenciaIso = monthToCompetencia(filters.competencia)
+  const podeFiltrarResp = isAdmin || equipe.length > 1
+
+  useEffect(() => {
+    if (profileLoading || isAdmin || !hasResponsavel) {
+      setEquipe([])
+      return
+    }
+    apiFetch<Responsavel[]>('/api/responsaveis/equipe')
+      .then(setEquipe)
+      .catch(() => setEquipe([]))
+  }, [profileLoading, isAdmin, hasResponsavel])
 
   useEffect(() => {
     if (defaultedOwnResponsavel || profileLoading) return
-    if (!isAdmin || !responsavelId) {
-      if (!profileLoading && !responsavelId) setDefaultedOwnResponsavel(true)
+    if (!responsavelId) {
+      setDefaultedOwnResponsavel(true)
       return
     }
     setFilters((prev) =>
@@ -106,12 +119,7 @@ export default function MinhasTarefas() {
         : { ...prev, responsavel_id: responsavelId },
     )
     setDefaultedOwnResponsavel(true)
-  }, [
-    defaultedOwnResponsavel,
-    profileLoading,
-    isAdmin,
-    responsavelId,
-  ])
+  }, [defaultedOwnResponsavel, profileLoading, responsavelId])
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     if (!opts?.silent) {
@@ -120,12 +128,13 @@ export default function MinhasTarefas() {
     }
     try {
       const scopedResponsavel =
-        (isAdmin ? filters.responsavel_id : responsavelId) || undefined
+        (podeFiltrarResp ? filters.responsavel_id : responsavelId) || undefined
       const params = {
         competencia: competenciaIso,
         bu: filters.bu || undefined,
         status: filters.status || undefined,
         responsavel_id: scopedResponsavel,
+        equipe: !isAdmin && !scopedResponsavel ? 'true' : undefined,
         q: filters.search || undefined,
       }
       const atividadeId = filters.atividade_id || undefined
@@ -171,6 +180,7 @@ export default function MinhasTarefas() {
     filters.responsavel_id,
     filters.atividade_id,
     isAdmin,
+    podeFiltrarResp,
     canWrite,
     responsavelId,
   ])
@@ -189,8 +199,8 @@ export default function MinhasTarefas() {
       setLoading(false)
       return
     }
-    // Evita 1º load do admin sem o filtro do próprio responsável.
-    if (isAdmin && responsavelId && !defaultedOwnResponsavel) return
+    // Evita 1º load sem o filtro do próprio responsável.
+    if (responsavelId && !defaultedOwnResponsavel) return
     void load()
   }, [
     load,
@@ -203,7 +213,7 @@ export default function MinhasTarefas() {
 
   const workItems = useMemo(() => {
     const items = mergeWorkItems(obrigacoes, tarefas)
-    const scoped = (isAdmin ? filters.responsavel_id : responsavelId) || ''
+    const scoped = (podeFiltrarResp ? filters.responsavel_id : responsavelId) || ''
     if (!scoped) return items
     return items.filter((item) => {
       if (item.origem === 'obrigacao') {
@@ -212,7 +222,7 @@ export default function MinhasTarefas() {
       const rid = item.tarefa?.responsavel_id ?? item.tarefa?.responsavel?.id
       return rid === scoped
     })
-  }, [obrigacoes, tarefas, filters.responsavel_id, isAdmin, responsavelId])
+  }, [obrigacoes, tarefas, filters.responsavel_id, podeFiltrarResp, responsavelId])
 
   const exportHtml = () => {
     if (exporting) return
@@ -223,7 +233,11 @@ export default function MinhasTarefas() {
     setExporting(true)
     setError('')
     try {
+      const filtrado = (isAdmin ? responsaveis : equipe).find(
+        (r) => r.id === filters.responsavel_id,
+      )
       const personName =
+        filtrado?.nome?.trim() ||
         responsavelNome?.trim() ||
         session?.user?.email?.split('@')[0] ||
         'Responsável'
@@ -443,7 +457,7 @@ export default function MinhasTarefas() {
         filters={filters}
         onChange={setFilters}
         bus={bus}
-        responsaveis={isAdmin ? responsaveis : undefined}
+        responsaveis={isAdmin ? responsaveis : podeFiltrarResp ? equipe : undefined}
         atividades={atividades}
       />
 

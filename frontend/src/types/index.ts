@@ -189,6 +189,14 @@ export interface Comentario {
   created_at: string
 }
 
+export interface TarefaAudit {
+  id: string
+  tarefa_id: string
+  user_id: string | null
+  acao: string
+  created_at: string
+}
+
 export interface AuditLog {
   id: string
   obrigacao_id: string

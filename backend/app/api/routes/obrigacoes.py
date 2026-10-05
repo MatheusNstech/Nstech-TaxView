@@ -37,7 +37,9 @@ from app.schemas.models import (
     StatusObrigacao,
 )
 from app.services.competencia import gerar_competencia
+from app.services.equipe import registrar_acao_equipe_obrigacao
 from app.services.notifications import (
+    AUDIT_FIELDS,
     audit_diff,
     notify_responsavel_of_obrigacao,
     write_audit,
@@ -49,7 +51,11 @@ from app.services.obrigacao_responsaveis import (
     select_with_responsavel_filter,
     set_responsaveis,
 )
-from app.services.scope import assert_obrigacao_in_scope, effective_responsavel_id
+from app.services.scope import (
+    assert_obrigacao_in_scope,
+    effective_responsavel_id,
+    list_scope_ids,
+)
 from app.services.status_engine import normalize_status, urgencia_label
 
 logger = logging.getLogger(__name__)
@@ -120,13 +126,12 @@ def query_obrigacoes(
     status_filter: StatusObrigacao | None = None,
     q: str | None = None,
     atividade_id: UUID | None = None,
+    equipe: bool = False,
 ) -> list[dict[str, Any]]:
     # Atraso e aviso saem do job diário run_atrasos_diarios, não desta listagem.
-    resolved = _scoped_responsavel_id(user, client, responsavel_id)
-    if not user.org_wide and resolved is None:
+    rid = list_scope_ids(user, client, responsavel_id, equipe=equipe)
+    if rid is not None and not rid:
         return []
-
-    rid = str(resolved) if resolved else None
 
     def build():
         query = client.table("obrigacoes").select(
@@ -166,6 +171,7 @@ def list_obrigacoes(
     status_filter: StatusObrigacao | None = Query(default=None, alias="status"),
     q: str | None = None,
     atividade_id: UUID | None = None,
+    equipe: bool = False,
     minhas: bool = False,  # legado; escopo real vem do papel
 ):
     return query_obrigacoes(
@@ -177,6 +183,7 @@ def list_obrigacoes(
         status_filter=status_filter,
         q=q,
         atividade_id=atividade_id,
+        equipe=equipe,
     )
 
 
@@ -543,7 +550,12 @@ def update_obrigacao(
             only_responsavel_ids=added,
         )
 
-    return _fetch_full(client, str(obrigacao_id))
+    full = _fetch_full(client, str(obrigacao_id))
+    if any(str(before.get(c) or "") != str(after.get(c) or "") for c in AUDIT_FIELDS):
+        registrar_acao_equipe_obrigacao(
+            client, user, full, status_antes=before.get("status")
+        )
+    return full
 
 
 @router.post("/{obrigacao_id}/aprovar", response_model=ObrigacaoOut)

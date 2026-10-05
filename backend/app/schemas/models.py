@@ -204,6 +204,14 @@ class AuditLogOut(BaseModel):
     created_at: datetime
 
 
+class TarefaAuditOut(BaseModel):
+    id: UUID
+    tarefa_id: UUID
+    user_id: UUID | None = None
+    acao: str
+    created_at: datetime
+
+
 class NotificacaoOut(BaseModel):
     id: UUID
     user_id: UUID

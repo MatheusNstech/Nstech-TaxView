@@ -11,18 +11,22 @@ from app.core.auth import AuthUser, get_current_user, get_db_client, require_not
 from app.core.clock import today_br
 from app.schemas.models import (
     StatusObrigacao,
+    TarefaAuditOut,
     TarefaCategoria,
     TarefaCreate,
     TarefaOut,
     TarefaUpdate,
 )
 from app.services.db import fetch_all, reject_nulls
+from app.services.equipe import registrar_acao_equipe_tarefa
 from app.services.notifications import create_notification
 from app.services.scope import (
     assert_obrigacao_in_scope,
     assert_tarefa_in_scope,
     effective_responsavel_id,
+    list_scope_ids,
     resolve_responsavel,
+    team_responsavel_ids,
 )
 from app.services.status_engine import urgencia_label
 
@@ -78,18 +82,6 @@ def _is_late_entrega(
     return prazo is not None and prazo < today
 
 
-def _scoped_responsavel_id(
-    user: AuthUser,
-    client: Client,
-    responsavel_id: UUID | None,
-) -> UUID | None:
-    if user.role == "admin":
-        return responsavel_id
-    if user.org_wide:
-        return None
-    return effective_responsavel_id(user, client)
-
-
 def _notify_assignee(
     client: Client,
     *,
@@ -136,9 +128,10 @@ def query_tarefas(
     status_filter: StatusObrigacao | None = None,
     categoria: TarefaCategoria | None = None,
     q: str | None = None,
+    equipe: bool = False,
 ) -> list[dict[str, Any]]:
-    resolved = _scoped_responsavel_id(user, client, responsavel_id)
-    if not user.org_wide and resolved is None:
+    resolved = list_scope_ids(user, client, responsavel_id, equipe=equipe)
+    if resolved is not None and not resolved:
         return []
 
     def build():
@@ -149,8 +142,10 @@ def query_tarefas(
             query = query.gte("prazo", prazo_de.isoformat())
         if prazo_ate:
             query = query.lte("prazo", prazo_ate.isoformat())
-        if resolved:
-            query = query.eq("responsavel_id", str(resolved))
+        if resolved and len(resolved) == 1:
+            query = query.eq("responsavel_id", resolved[0])
+        elif resolved:
+            query = query.in_("responsavel_id", resolved)
         if status_filter:
             query = query.eq("status", status_filter.value)
         if categoria:
@@ -195,6 +190,7 @@ def list_tarefas(
     status_filter: StatusObrigacao | None = Query(default=None, alias="status"),
     categoria: TarefaCategoria | None = None,
     q: str | None = None,
+    equipe: bool = False,
 ):
     return query_tarefas(
         user,
@@ -207,6 +203,7 @@ def list_tarefas(
         status_filter=status_filter,
         categoria=categoria,
         q=q,
+        equipe=equipe,
     )
 
 
@@ -376,8 +373,7 @@ def update_tarefa(
         assert_obrigacao_in_scope(user, client, str(patch["obrigacao_id"]))
 
     if "responsavel_id" in patch and not user.org_wide:
-        scope = effective_responsavel_id(user, client)
-        if scope is None or str(patch["responsavel_id"]) != str(scope):
+        if str(patch["responsavel_id"]) not in team_responsavel_ids(user, client):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Não é possível reatribuir fora do seu escopo",
@@ -437,7 +433,27 @@ def update_tarefa(
             corpo="Uma tarefa foi atribuída a você.",
             actor_user_id=user.id,
         )
-    return _fetch_full(client, str(tarefa_id))
+    full = _fetch_full(client, str(tarefa_id))
+    registrar_acao_equipe_tarefa(client, user, full, status_antes=current.get("status"))
+    return full
+
+
+@router.get("/{tarefa_id}/audit", response_model=list[TarefaAuditOut])
+def list_tarefa_audit(
+    tarefa_id: UUID,
+    user: Annotated[AuthUser, Depends(get_current_user)],
+    client: Annotated[Client, Depends(get_db_client)],
+):
+    assert_tarefa_in_scope(user, client, str(tarefa_id))
+    return (
+        client.table("tarefa_audit_log")
+        .select("*")
+        .eq("tarefa_id", str(tarefa_id))
+        .order("created_at", desc=True)
+        .execute()
+        .data
+        or []
+    )
 
 
 @router.delete("/{tarefa_id}", status_code=status.HTTP_204_NO_CONTENT)

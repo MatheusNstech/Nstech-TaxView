@@ -54,7 +54,7 @@ export default function NotificationBell({
         prev.map((x) => (x.id === n.id ? { ...x, lida: true } : x)),
       )
       setOpen(false)
-      if (n.obrigacao_id) {
+      if (n.obrigacao_id || n.tipo === 'EQUIPE' || n.tipo === 'ATRIBUICAO') {
         navigate('/minhas-tarefas')
       }
     } catch {

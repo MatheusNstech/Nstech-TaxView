@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { apiFetch } from '../lib/api'
 import { formatDate, formatHorario, formatTime, statusLabel } from '../lib/format'
-import type { StatusObrigacao, Tarefa, TarefaUpdate } from '../types'
+import type { StatusObrigacao, Tarefa, TarefaAudit, TarefaUpdate } from '../types'
 import { tarefaCategoriaLabel } from '../types'
 import GlassDatePicker from './GlassDatePicker'
 import StatusBadge from './StatusBadge'
@@ -72,6 +72,22 @@ export default function TarefaDrawer({
   const [motivoAtraso, setMotivoAtraso] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [audit, setAudit] = useState<TarefaAudit[]>([])
+
+  const tarefaId = open ? tarefa?.id : undefined
+  useEffect(() => {
+    setAudit([])
+    if (!tarefaId) return
+    let cancelled = false
+    apiFetch<TarefaAudit[]>(`/api/tarefas/${tarefaId}/audit`)
+      .then((rows) => {
+        if (!cancelled) setAudit(rows)
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [tarefaId])
 
   useEffect(() => {
     if (!tarefa) return
@@ -425,6 +441,25 @@ export default function TarefaDrawer({
                 </div>
               </>
             )}
+
+            {audit.length > 0 ? (
+              <div>
+                <p className="mb-1.5 text-xs font-medium text-slate-500">Histórico</p>
+                <div className="space-y-2">
+                  {audit.map((a) => (
+                    <div
+                      key={a.id}
+                      className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5 text-xs"
+                    >
+                      <p className="font-medium text-slate-800">{a.acao}</p>
+                      <p className="mt-1 text-[10px] text-slate-400">
+                        {new Date(a.created_at).toLocaleString('pt-BR')}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
             {error ? (
               <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">

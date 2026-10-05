@@ -16,21 +16,34 @@ RESPONSAVEIS_EMBED = "obrigacao_responsaveis(responsavel_id,responsaveis(*))"
 _FILTER_ALIAS = "filtro_resp"
 
 
-def select_with_responsavel_filter(columns: str, responsavel_id: str | None) -> str:
+def _ids(responsavel_id: str | list[str] | None) -> list[str]:
+    if not responsavel_id:
+        return []
+    if isinstance(responsavel_id, str):
+        return [responsavel_id]
+    return [str(r) for r in responsavel_id]
+
+
+def select_with_responsavel_filter(
+    columns: str, responsavel_id: str | list[str] | None
+) -> str:
     """Acrescenta um inner join na tabela de vínculo quando há filtro por responsável.
 
     Use junto com `apply_responsavel_filter`; o embed com alias não altera a lista de
     responsáveis devolvida em `obrigacao_responsaveis`.
     """
-    if not responsavel_id:
+    if not _ids(responsavel_id):
         return columns
     return f"{columns},{_FILTER_ALIAS}:obrigacao_responsaveis!inner(responsavel_id)"
 
 
-def apply_responsavel_filter(query: Any, responsavel_id: str | None) -> Any:
-    if not responsavel_id:
+def apply_responsavel_filter(query: Any, responsavel_id: str | list[str] | None) -> Any:
+    ids = _ids(responsavel_id)
+    if not ids:
         return query
-    return query.eq(f"{_FILTER_ALIAS}.responsavel_id", str(responsavel_id))
+    if len(ids) == 1:
+        return query.eq(f"{_FILTER_ALIAS}.responsavel_id", ids[0])
+    return query.in_(f"{_FILTER_ALIAS}.responsavel_id", ids)
 
 
 def pop_responsaveis(row: dict[str, Any], principal: dict[str, Any] | None) -> list[dict[str, Any]]:

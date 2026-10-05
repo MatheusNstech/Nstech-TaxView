@@ -1,4 +1,5 @@
-"""Escopo de dados: admin/diretor veem tudo; user/viewer só o responsável efetivo."""
+"""Escopo de dados: admin/diretor veem tudo; user/viewer o responsável efetivo e,
+se ele for da equipe compartilhada, os colegas da equipe."""
 from __future__ import annotations
 
 from typing import Any
@@ -31,6 +32,63 @@ def effective_responsavel_id(user: AuthUser, client: Client) -> UUID | None:
     return UUID(str(resp["id"]))
 
 
+def team_responsavel_ids(user: AuthUser, client: Client) -> set[str]:
+    """Responsáveis que o usuário pode ver/operar: o próprio e, se ele for da equipe
+    compartilhada, todos os membros ativos dela. Vazio = sem responsável."""
+    own = effective_responsavel_id(user, client)
+    if own is None:
+        return set()
+    own_id = str(own)
+    flag = (
+        client.table("responsaveis")
+        .select("id,equipe_compartilhada")
+        .eq("id", own_id)
+        .limit(1)
+        .execute()
+        .data
+        or []
+    )
+    if not flag or not flag[0].get("equipe_compartilhada"):
+        return {own_id}
+    rows = (
+        client.table("responsaveis")
+        .select("id")
+        .eq("equipe_compartilhada", True)
+        .eq("ativo", True)
+        .execute()
+        .data
+        or []
+    )
+    return {own_id} | {str(r["id"]) for r in rows}
+
+
+def list_scope_ids(
+    user: AuthUser,
+    client: Client,
+    responsavel_id: UUID | None,
+    *,
+    equipe: bool = False,
+) -> list[str] | None:
+    """Responsáveis a listar. None = sem filtro (admin sem filtro / diretor).
+
+    Fora de admin/diretor, o padrão continua sendo só o próprio; a equipe só entra
+    quando a tela pede (`responsavel_id` de um colega ou `equipe=True`).
+    """
+    if user.role == "admin":
+        return [str(responsavel_id)] if responsavel_id else None
+    if user.org_wide:
+        return None
+    own = effective_responsavel_id(user, client)
+    if own is None:
+        return []
+    if not responsavel_id and not equipe:
+        return [str(own)]
+    team = team_responsavel_ids(user, client)
+    if responsavel_id:
+        return [str(responsavel_id)] if str(responsavel_id) in team else [str(own)]
+    return sorted(team)
+
+
 def assert_obrigacao_in_scope(
     user: AuthUser,
     client: Client,
@@ -50,15 +108,15 @@ def assert_obrigacao_in_scope(
     row = rows[0]
     if user.org_wide:
         return row
-    scope = effective_responsavel_id(user, client)
-    if scope is None:
+    team = team_responsavel_ids(user, client)
+    if not team:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Obrigação fora do seu escopo",
         )
-    if str(row.get("responsavel_id") or "") == str(scope):
+    if str(row.get("responsavel_id") or "") in team:
         return row
-    if str(scope) not in responsavel_ids_of(client, obrigacao_id):
+    if not team & responsavel_ids_of(client, obrigacao_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Obrigação fora do seu escopo",
@@ -88,8 +146,7 @@ def assert_tarefa_in_scope(
     row = rows[0]
     if user.org_wide:
         return row
-    scope = effective_responsavel_id(user, client)
-    if scope is None or str(row.get("responsavel_id") or "") != str(scope):
+    if str(row.get("responsavel_id") or "") not in team_responsavel_ids(user, client):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Tarefa fora do seu escopo",

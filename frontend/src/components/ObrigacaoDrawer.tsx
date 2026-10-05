@@ -558,9 +558,11 @@ export default function ObrigacaoDrawer({
                     {a.acao}
                     {a.campo ? ` · ${a.campo}` : ''}
                   </p>
-                  <p className="text-slate-500">
-                    {a.valor_anterior ?? '—'} → {a.valor_novo ?? '—'}
-                  </p>
+                  {a.campo ? (
+                    <p className="text-slate-500">
+                      {a.valor_anterior ?? '—'} → {a.valor_novo ?? '—'}
+                    </p>
+                  ) : null}
                   <p className="mt-1 text-[10px] text-slate-400">
                     {new Date(a.created_at).toLocaleString('pt-BR')}
                   </p>

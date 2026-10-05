@@ -7,6 +7,7 @@ from supabase import Client
 from app.core.auth import AuthUser, get_current_user, get_db_client, require_admin
 from app.schemas.models import ResponsavelCreate, ResponsavelOut, ResponsavelUpdate
 from app.services.db import constraint_errors, fetch_all, reject_nulls
+from app.services.scope import team_responsavel_ids
 
 router = APIRouter(prefix="/responsaveis", tags=["responsaveis"])
 
@@ -21,6 +22,19 @@ def list_responsaveis(
     return fetch_all(
         lambda: client.table("responsaveis").select("*").order("nome").order("id")
     )
+
+
+@router.get("/equipe", response_model=list[ResponsavelOut])
+def list_equipe(
+    user: Annotated[AuthUser, Depends(get_current_user)],
+    client: Annotated[Client, Depends(get_db_client)],
+):
+    """Colegas cujas tarefas o usuário pode ver; vazio para quem não é da equipe."""
+    team = team_responsavel_ids(user, client)
+    if len(team) < 2:
+        return []
+    rows = client.table("responsaveis").select("*").in_("id", sorted(team)).execute().data or []
+    return sorted(rows, key=lambda r: str(r.get("nome") or "").lower())
 
 
 @router.post("", response_model=ResponsavelOut, status_code=status.HTTP_201_CREATED)
