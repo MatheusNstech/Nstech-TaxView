@@ -320,6 +320,29 @@ def test_import_layout_cronograma_com_varios_responsaveis():
     assert links == {flavia}
 
 
+def test_import_com_prazo_legal_nao_inventa_prazo_fiscal():
+    empresa_id, atividade_id = str(uuid4()), str(uuid4())
+    fake = _FakeDB(
+        empresas=[{"id": empresa_id, "cnpj": "111"}],
+        atividades_modelo=[
+            {"id": atividade_id, "nome": "EFD", "dia_prazo_legal": 20, "dia_prazo_fiscal": 15}
+        ],
+        responsaveis=[],
+        obrigacoes=[],
+        obrigacao_responsaveis=[],
+    )
+    base = {"CNPJ": "111", "Atividade": "EFD", "Prazo Fiscal": ""}
+    _import_table_rows(  # type: ignore[arg-type]
+        fake, [{**base, "Competência": "Agosto 2026", "Prazo Legal": "2026-10-15"}]
+    )
+    _import_table_rows(fake, [{**base, "Competência": "Setembro 2026"}])  # type: ignore[arg-type]
+
+    by_comp = {o["competencia"]: o for o in fake.db["obrigacoes"]}
+    assert by_comp["2026-08-01"]["prazo_legal"] == "2026-10-15"
+    assert by_comp["2026-08-01"]["prazo_fiscal"] is None
+    assert by_comp["2026-09-01"]["prazo_fiscal"] is not None
+
+
 def test_co_responsavel_entra_no_escopo_da_obrigacao():
     oid, principal, co, outro = str(uuid4()), uuid4(), uuid4(), uuid4()
     fake = _FakeDB(

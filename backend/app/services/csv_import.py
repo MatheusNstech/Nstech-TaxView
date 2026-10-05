@@ -654,7 +654,8 @@ def _import_table_rows(
         if not prazo_legal and atividade.get("dia_prazo_legal"):
             computed = compute_prazo(comp_date, atividade.get("dia_prazo_legal"))
             prazo_legal = computed.isoformat() if computed else None
-        if not prazo_fiscal and atividade.get("dia_prazo_fiscal"):
+        # Linha com prazo legal informado: o dia padrão da atividade não vale para o fiscal.
+        if not prazo_fiscal and not spec.get("prazo_legal") and atividade.get("dia_prazo_fiscal"):
             computed = compute_prazo(comp_date, atividade.get("dia_prazo_fiscal"))
             prazo_fiscal = computed.isoformat() if computed else None
         # Upsert em lote envia a união das colunas: toda linha precisa das mesmas
