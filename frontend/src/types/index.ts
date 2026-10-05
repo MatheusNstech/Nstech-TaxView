@@ -302,6 +302,44 @@ export interface PainelFiscalPendencia {
   nota_02: string
 }
 
+export type PerdcompPrazoSituacao = 'vencido' | 'vence_7d' | 'no_prazo' | 'sem_prazo'
+
+export interface PerdcompFields {
+  perdcomp: string
+  processo: string
+  empresa: string
+  tributo_credito: string
+  periodo: string
+  valor_pedido: number | null
+  status: string
+  observacoes: string
+  prazo_cumprimento: string
+  data_base_ciencia: string
+  data_limite: string | null
+  providencia: string
+}
+
+export interface PerdcompProcesso extends PerdcompFields {
+  id: string
+  prazo_situacao: PerdcompPrazoSituacao
+  dias_para_prazo: number | null
+  updated_at: string | null
+}
+
+export interface PerdcompSummary {
+  total_processos: number
+  valor_total: number
+  valor_indeferido: number
+  por_status: { status: string; quantidade: number; valor: number }[]
+  por_empresa: { empresa: string; quantidade: number; valor: number }[]
+  prazos: {
+    vencidos: number
+    vence_7d: number
+    vence_30d: number
+    sem_prazo: number
+  }
+}
+
 export interface PainelFiscalSummary {
   total_empresas: number
   ativas: number
