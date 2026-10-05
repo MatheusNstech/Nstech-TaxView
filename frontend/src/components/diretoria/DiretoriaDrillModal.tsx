@@ -144,8 +144,10 @@ export default function DiretoriaDrillModal({
 
   if (!open) return null
 
+  // Só esconde a coluna quando o título do modal já diz qual é o serviço.
   const sameServico =
     items.length > 0 &&
+    title.includes(workItemServicoNome(items[0])) &&
     items.every(
       (item) => workItemServicoNome(item) === workItemServicoNome(items[0]),
     )
