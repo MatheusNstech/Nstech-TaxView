@@ -471,11 +471,11 @@ def update_obrigacao(
         if late:
             motivo = (body.get("motivo_atraso") or before.get("motivo_atraso") or "")
             motivo = str(motivo).strip()
-            if len(motivo) < 50:
+            if len(motivo) < 20:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=(
-                        "Informe o motivo do atraso (mínimo 50 caracteres) "
+                        "Informe o motivo do atraso (mínimo 20 caracteres) "
                         "para entregar fora do prazo"
                     ),
                 )

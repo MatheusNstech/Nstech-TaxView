@@ -30,12 +30,12 @@ export default function MotivoAtrasoModal({
   if (!open) return null
 
   const trimmed = motivo.trim()
-  const canSubmit = trimmed.length >= 50 && !submitting
+  const canSubmit = trimmed.length >= 20 && !submitting
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    if (trimmed.length < 50) {
-      setError('Informe o motivo do atraso (mínimo 50 caracteres)')
+    if (trimmed.length < 20) {
+      setError('Informe o motivo do atraso (mínimo 20 caracteres)')
       return
     }
     setError('')
@@ -93,7 +93,7 @@ export default function MotivoAtrasoModal({
             disabled={submitting}
           />
           <p className="mt-1 text-[11px] text-[color:var(--color-muted)]">
-            Obrigatório para confirmar a entrega (mín. 50 caracteres).
+            Obrigatório para confirmar a entrega (mín. 20 caracteres).
           </p>
         </div>
 

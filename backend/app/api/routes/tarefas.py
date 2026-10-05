@@ -276,11 +276,11 @@ def create_tarefa(
     motivo_atraso = None
     if body.status.value == "ENTREGUE" and body.prazo < today_br():
         motivo = (body.motivo_atraso or "").strip()
-        if len(motivo) < 50:
+        if len(motivo) < 20:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=(
-                    "Informe o motivo do atraso (mínimo 50 caracteres) "
+                    "Informe o motivo do atraso (mínimo 20 caracteres) "
                     "para criar a tarefa já entregue fora do prazo"
                 ),
             )
@@ -400,11 +400,11 @@ def update_tarefa(
         if late:
             motivo = patch.get("motivo_atraso") or current.get("motivo_atraso") or ""
             motivo = str(motivo).strip()
-            if len(motivo) < 50:
+            if len(motivo) < 20:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=(
-                        "Informe o motivo do atraso (mínimo 50 caracteres) "
+                        "Informe o motivo do atraso (mínimo 20 caracteres) "
                         "para entregar fora do prazo"
                     ),
                 )

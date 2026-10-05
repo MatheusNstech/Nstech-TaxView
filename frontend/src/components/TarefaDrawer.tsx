@@ -109,8 +109,8 @@ export default function TarefaDrawer({
       return
     }
     const motivo = motivoAtraso.trim()
-    if (needsMotivo && motivo.length < 50) {
-      setError('Informe o motivo do atraso (mínimo 50 caracteres)')
+    if (needsMotivo && motivo.length < 20) {
+      setError('Informe o motivo do atraso (mínimo 20 caracteres)')
       return
     }
     const inicio = formatTime(horaInicio)
@@ -335,7 +335,7 @@ export default function TarefaDrawer({
                       placeholder="Por que a entrega está fora do prazo?"
                     />
                     <p className="mt-1 text-[11px] text-slate-500">
-                      Obrigatório para entregar após o prazo (mín. 50 caracteres).
+                      Obrigatório para entregar após o prazo (mín. 20 caracteres).
                     </p>
                   </div>
                 ) : null}
