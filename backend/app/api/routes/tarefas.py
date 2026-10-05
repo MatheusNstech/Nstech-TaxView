@@ -8,7 +8,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from supabase import Client
 
 from app.core.auth import AuthUser, get_current_user, get_db_client, require_not_viewer
-from app.schemas.models import TarefaCreate, TarefaOut, TarefaUpdate
+from app.core.clock import today_br
+from app.schemas.models import (
+    StatusObrigacao,
+    TarefaCategoria,
+    TarefaCreate,
+    TarefaOut,
+    TarefaUpdate,
+)
+from app.services.db import fetch_all, reject_nulls
 from app.services.notifications import create_notification
 from app.services.scope import (
     assert_obrigacao_in_scope,
@@ -35,15 +43,18 @@ def _enrich(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def _fetch_full(client: Client, tarefa_id: str) -> dict[str, Any]:
-    full = (
+    rows = (
         client.table("tarefas")
         .select("*, empresas(*), responsaveis(*)")
         .eq("id", tarefa_id)
-        .single()
+        .limit(1)
         .execute()
         .data
+        or []
     )
-    return _enrich(full)
+    if not rows:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tarefa não encontrada")
+    return _enrich(rows[0])
 
 
 def _time_value(value: time | str | None) -> str | None:
@@ -61,7 +72,7 @@ def _is_late_entrega(
     prazo: date | None,
     today: date | None = None,
 ) -> bool:
-    today = today or date.today()
+    today = today or today_br()
     if current_status == "ATRASADO":
         return True
     return prazo is not None and prazo < today
@@ -113,37 +124,40 @@ def _notify_assignee(
         return
 
 
-@router.get("", response_model=list[TarefaOut])
-def list_tarefas(
-    user: Annotated[AuthUser, Depends(get_current_user)],
-    client: Annotated[Client, Depends(get_db_client)],
+def query_tarefas(
+    user: AuthUser,
+    client: Client,
+    *,
     competencia: date | None = None,
     prazo_de: date | None = None,
     prazo_ate: date | None = None,
     bu: str | None = None,
     responsavel_id: UUID | None = None,
-    status_filter: str | None = Query(default=None, alias="status"),
-    categoria: str | None = None,
+    status_filter: StatusObrigacao | None = None,
+    categoria: TarefaCategoria | None = None,
     q: str | None = None,
-):
+) -> list[dict[str, Any]]:
     resolved = _scoped_responsavel_id(user, client, responsavel_id)
     if not user.org_wide and resolved is None:
         return []
 
-    query = client.table("tarefas").select("*, empresas(*), responsaveis(*)")
-    if competencia and not (prazo_de or prazo_ate):
-        query = query.eq("competencia", competencia.isoformat())
-    if prazo_de:
-        query = query.gte("prazo", prazo_de.isoformat())
-    if prazo_ate:
-        query = query.lte("prazo", prazo_ate.isoformat())
-    if resolved:
-        query = query.eq("responsavel_id", str(resolved))
-    if status_filter:
-        query = query.eq("status", status_filter)
-    if categoria:
-        query = query.eq("categoria", categoria)
-    rows = query.order("created_at", desc=True).execute().data or []
+    def build():
+        query = client.table("tarefas").select("*, empresas(*), responsaveis(*)")
+        if competencia and not (prazo_de or prazo_ate):
+            query = query.eq("competencia", competencia.isoformat())
+        if prazo_de:
+            query = query.gte("prazo", prazo_de.isoformat())
+        if prazo_ate:
+            query = query.lte("prazo", prazo_ate.isoformat())
+        if resolved:
+            query = query.eq("responsavel_id", str(resolved))
+        if status_filter:
+            query = query.eq("status", status_filter.value)
+        if categoria:
+            query = query.eq("categoria", categoria.value)
+        return query.order("created_at", desc=True).order("id")
+
+    rows = fetch_all(build)
 
     out: list[dict[str, Any]] = []
     needle = (q or "").strip().lower()
@@ -167,6 +181,33 @@ def list_tarefas(
                 continue
         out.append(enriched)
     return out
+
+
+@router.get("", response_model=list[TarefaOut])
+def list_tarefas(
+    user: Annotated[AuthUser, Depends(get_current_user)],
+    client: Annotated[Client, Depends(get_db_client)],
+    competencia: date | None = None,
+    prazo_de: date | None = None,
+    prazo_ate: date | None = None,
+    bu: str | None = None,
+    responsavel_id: UUID | None = None,
+    status_filter: StatusObrigacao | None = Query(default=None, alias="status"),
+    categoria: TarefaCategoria | None = None,
+    q: str | None = None,
+):
+    return query_tarefas(
+        user,
+        client,
+        competencia=competencia,
+        prazo_de=prazo_de,
+        prazo_ate=prazo_ate,
+        bu=bu,
+        responsavel_id=responsavel_id,
+        status_filter=status_filter,
+        categoria=categoria,
+        q=q,
+    )
 
 
 @router.post("", response_model=TarefaOut, status_code=status.HTTP_201_CREATED)
@@ -233,7 +274,7 @@ def create_tarefa(
             raise HTTPException(status_code=404, detail="Empresa não encontrada")
 
     motivo_atraso = None
-    if body.status.value == "ENTREGUE" and body.prazo < date.today():
+    if body.status.value == "ENTREGUE" and body.prazo < today_br():
         motivo = (body.motivo_atraso or "").strip()
         if len(motivo) < 50:
             raise HTTPException(
@@ -289,6 +330,7 @@ def update_tarefa(
 ):
     current = assert_tarefa_in_scope(user, client, str(tarefa_id))
     patch = body.model_dump(exclude_unset=True)
+    reject_nulls(patch, ("titulo", "categoria", "status", "responsavel_id", "solicitante_nome"))
     if "categoria" in patch and patch["categoria"] is not None:
         patch["categoria"] = patch["categoria"].value
     if "status" in patch and patch["status"] is not None:
@@ -343,9 +385,14 @@ def update_tarefa(
 
     new_status = patch.get("status")
     if new_status == "ENTREGUE":
-        # Usa o prazo enviado no body quando houver; senão o já gravado.
-        prazo_raw = patch.get("prazo", current.get("prazo"))
-        prazo = date.fromisoformat(str(prazo_raw)[:10]) if prazo_raw else None
+        # Vale o prazo mais cedo entre o gravado e o enviado: adiar o prazo no
+        # mesmo PATCH da entrega não dispensa o motivo do atraso.
+        prazos = [
+            date.fromisoformat(str(raw)[:10])
+            for raw in (current.get("prazo"), patch.get("prazo"))
+            if raw
+        ]
+        prazo = min(prazos) if prazos else None
         late = _is_late_entrega(
             current_status=str(current.get("status") or "PENDENTE"),
             prazo=prazo,

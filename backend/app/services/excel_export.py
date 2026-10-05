@@ -5,6 +5,7 @@ from datetime import date, datetime
 from typing import Any
 
 from openpyxl import Workbook
+from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
@@ -241,7 +242,12 @@ def build_obrigacoes_xlsx(
         values, status = _row_values(kind, row)
         zebra = index % 2 == 1
         for col, value in enumerate(values, start=1):
+            if isinstance(value, str):
+                value = ILLEGAL_CHARACTERS_RE.sub("", value)
             cell = ws.cell(excel_row, col, value)
+            if isinstance(value, str) and value.startswith("="):
+                # Texto digitado pelo usuário não pode virar fórmula na planilha.
+                cell.data_type = "s"
             cell.font = body_font
             cell.border = THIN
             cell.alignment = Alignment(vertical="center")

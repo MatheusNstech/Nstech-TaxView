@@ -12,10 +12,12 @@ from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from postgrest.exceptions import APIError
 from pydantic import BaseModel, Field, field_validator
 from supabase import Client
 
-from app.core.auth import AuthUser, get_current_user, get_db_client
+from app.core.auth import AuthUser, assert_password_changed, get_current_user, get_db_client
+from app.services.db import PG_UNIQUE_VIOLATION
 
 router = APIRouter(prefix="/valores", tags=["valores"])
 
@@ -164,7 +166,9 @@ def ingest_valor(
     user: Annotated[AuthUser, Depends(get_current_user)],
     client: Annotated[Client, Depends(get_db_client)],
 ):
+    # Diretor grava aqui de propósito: é a conta de integração do app desktop.
     _require_valores_access(user)
+    assert_password_changed(user)
     payload = _canonical_payload(body.valores)
     now = datetime.now(timezone.utc).isoformat()
 
@@ -188,15 +192,32 @@ def ingest_valor(
             "created_by": user.id,
             "updated_at": now,
         }
-        result = client.table(TABLE).insert(row).execute()
-        data = getattr(result, "data", None) or []
-        if not data:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Não foi possível gravar o valor",
+        try:
+            result = client.table(TABLE).insert(row).execute()
+        except APIError as exc:
+            # Envio concorrente gravou a mesma chave: segue como atualização.
+            if exc.code != PG_UNIQUE_VIOLATION:
+                raise
+            existing = _find_existing(
+                client,
+                empresa_cnpj=body.empresa_cnpj,
+                competencia=body.competencia,
+                tipo=body.tipo,
             )
-        response.status_code = status.HTTP_201_CREATED
-        return _row_to_out(data[0], changed=True, action="created")
+            if existing is None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Valor gravado em paralelo; envie novamente",
+                ) from exc
+        else:
+            data = getattr(result, "data", None) or []
+            if not data:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Não foi possível gravar o valor",
+                )
+            response.status_code = status.HTTP_201_CREATED
+            return _row_to_out(data[0], changed=True, action="created")
 
     if _payloads_equal(existing.get("payload") or {}, payload):
         # Atualiza metadados leves se alias/razão mudarem, sem marcar changed

@@ -6,8 +6,11 @@ from supabase import Client
 
 from app.core.auth import AuthUser, get_current_user, get_db_client, require_admin
 from app.schemas.models import AtividadeCreate, AtividadeOut, AtividadeUpdate
+from app.services.db import constraint_errors, fetch_all, reject_nulls
 
 router = APIRouter(prefix="/atividades", tags=["atividades"])
+
+DUPLICADA = "Já existe uma atividade com esse nome"
 
 
 @router.get("", response_model=list[AtividadeOut])
@@ -15,7 +18,9 @@ def list_atividades(
     _: Annotated[AuthUser, Depends(get_current_user)],
     client: Annotated[Client, Depends(get_db_client)],
 ):
-    return client.table("atividades_modelo").select("*").order("nome").execute().data or []
+    return fetch_all(
+        lambda: client.table("atividades_modelo").select("*").order("nome").order("id")
+    )
 
 
 @router.post("", response_model=AtividadeOut, status_code=status.HTTP_201_CREATED)
@@ -24,7 +29,8 @@ def create_atividade(
     _: Annotated[AuthUser, Depends(require_admin)],
     client: Annotated[Client, Depends(get_db_client)],
 ):
-    data = client.table("atividades_modelo").insert(payload.model_dump()).execute().data
+    with constraint_errors(duplicate=DUPLICADA):
+        data = client.table("atividades_modelo").insert(payload.model_dump()).execute().data
     if not data:
         raise HTTPException(status_code=400, detail="Falha ao criar atividade")
     return data[0]
@@ -38,13 +44,15 @@ def update_atividade(
     client: Annotated[Client, Depends(get_db_client)],
 ):
     body = payload.model_dump(exclude_unset=True)
-    data = (
-        client.table("atividades_modelo")
-        .update(body)
-        .eq("id", str(atividade_id))
-        .execute()
-        .data
-    )
+    reject_nulls(body, ("nome", "requer_apuracao", "recorrencia", "ativa"))
+    with constraint_errors(duplicate=DUPLICADA):
+        data = (
+            client.table("atividades_modelo")
+            .update(body)
+            .eq("id", str(atividade_id))
+            .execute()
+            .data
+        )
     if not data:
         raise HTTPException(status_code=404, detail="Atividade não encontrada")
     return data[0]
@@ -56,4 +64,5 @@ def delete_atividade(
     _: Annotated[AuthUser, Depends(require_admin)],
     client: Annotated[Client, Depends(get_db_client)],
 ):
-    client.table("atividades_modelo").delete().eq("id", str(atividade_id)).execute()
+    with constraint_errors(in_use="Atividade usada em obrigações; desative-a em vez de excluir"):
+        client.table("atividades_modelo").delete().eq("id", str(atividade_id)).execute()

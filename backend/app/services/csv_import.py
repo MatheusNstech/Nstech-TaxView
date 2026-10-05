@@ -8,9 +8,10 @@ from typing import Any
 
 from supabase import Client
 
+from app.core.clock import today_br
+from app.services.db import fetch_all
 from app.services.status_engine import compute_prazo
 
-COMPETENCIA_DEFAULT = date(2026, 8, 1)
 COMPETENCIA_SUFFIX_RE = re.compile(r"\s*\((\d{2})/(\d{4})\)\s*$")
 VALID_STATUS = {"PENDENTE", "EM_ANDAMENTO", "EM_REVISAO", "ENTREGUE", "ATRASADO"}
 
@@ -280,7 +281,7 @@ def _parse_day(value: str) -> int | None:
     return None
 
 
-def _parse_status(value: str) -> str:
+def _parse_status(value: str) -> str | None:
     text = value.strip().upper().replace(" ", "_")
     aliases = {
         "EM ANDAMENTO": "EM_ANDAMENTO",
@@ -288,7 +289,7 @@ def _parse_status(value: str) -> str:
         "EM REVISÃO": "EM_REVISAO",
     }
     text = aliases.get(text, text)
-    return text if text in VALID_STATUS else "PENDENTE"
+    return text if text in VALID_STATUS else None
 
 
 def _parse_tipo(value: str) -> str:
@@ -340,11 +341,15 @@ def _upsert_map(
     result: dict[str, str] = {}
     if not rows:
         return result
-    # fetch existing
-    existing = client.table(table).select(f"id,{key_field}").execute().data or []
-    for item in existing:
-        result[str(item[key_field])] = item["id"]
 
+    def load_existing() -> None:
+        existing = fetch_all(
+            lambda: client.table(table).select(f"id,{key_field}").order("id")
+        )
+        for item in existing:
+            result[str(item[key_field])] = item["id"]
+
+    load_existing()
     to_insert = [r for r in rows if r[key_field] not in result]
     if to_insert:
         inserted = client.table(table).upsert(to_insert, on_conflict=key_field).execute().data or []
@@ -352,9 +357,7 @@ def _upsert_map(
             result[str(item[key_field])] = item["id"]
         # refresh if upsert didn't return
         if len(result) < len(rows):
-            existing = client.table(table).select(f"id,{key_field}").execute().data or []
-            for item in existing:
-                result[str(item[key_field])] = item["id"]
+            load_existing()
     return result
 
 
@@ -424,7 +427,7 @@ def _import_table_rows(
     obrigacao_specs: list[dict[str, Any]] = []
     tarefa_specs: list[dict[str, Any]] = []
 
-    default_comp = competencia or COMPETENCIA_DEFAULT
+    default_comp = competencia or today_br().replace(day=1)
 
     for row in rows:
         tipo = _parse_tipo(get(row, "Tipo"))
@@ -482,7 +485,7 @@ def _import_table_rows(
                     "prazo": prazo.isoformat(),
                     "hora_inicio": hora_inicio,
                     "hora_fim": hora_fim,
-                    "status": status_value,
+                    "status": status_value or "PENDENTE",
                     "motivo_atraso": motivo_atraso[:2000] if motivo_atraso else None,
                     "entregue": status_value == "ENTREGUE",
                 }
@@ -542,49 +545,51 @@ def _import_table_rows(
     # load atividade prazo days
     atividades_db = {
         a["id"]: a
-        for a in (client.table("atividades_modelo").select("*").execute().data or [])
+        for a in fetch_all(
+            lambda: client.table("atividades_modelo").select("*").order("id")
+        )
     }
+    existing_obrigacoes = _load_existing_obrigacoes(
+        client, {spec["competencia"] for spec in obrigacao_specs}
+    )
 
     payload: list[dict[str, Any]] = []
     seen: set[tuple[str, str, str]] = set()
     for spec in obrigacao_specs:
         empresa_id = empresa_ids[spec["cnpj"]]
         atividade_id = atividade_ids[spec["atividade"]]
-        key = (empresa_id, atividade_id, spec["competencia"])
+        key = (str(empresa_id), str(atividade_id), spec["competencia"])
         if key in seen:
             continue
         seen.add(key)
+        current = existing_obrigacoes.get(key, {})
         atividade = atividades_db.get(atividade_id, {})
         comp_date = date.fromisoformat(spec["competencia"])
-        prazo_legal = spec.get("prazo_legal")
-        prazo_fiscal = spec.get("prazo_fiscal")
+        prazo_legal = spec.get("prazo_legal") or current.get("prazo_legal")
+        prazo_fiscal = spec.get("prazo_fiscal") or current.get("prazo_fiscal")
         if not prazo_legal and atividade.get("dia_prazo_legal"):
             computed = compute_prazo(comp_date, atividade.get("dia_prazo_legal"))
             prazo_legal = computed.isoformat() if computed else None
         if not prazo_fiscal and atividade.get("dia_prazo_fiscal"):
             computed = compute_prazo(comp_date, atividade.get("dia_prazo_fiscal"))
             prazo_fiscal = computed.isoformat() if computed else None
+        # Upsert em lote envia a união das colunas: toda linha precisa das mesmas
+        # chaves, senão o PostgREST grava NULL (e categoria é NOT NULL).
+        # Célula vazia preserva o valor já gravado.
         item: dict[str, Any] = {
             "empresa_id": empresa_id,
             "atividade_id": atividade_id,
+            "competencia": spec["competencia"],
             "responsavel_id": responsavel_ids.get(spec["responsavel"])
             if spec["responsavel"]
-            else None,
-            "competencia": spec["competencia"],
+            else current.get("responsavel_id"),
             "prazo_legal": prazo_legal,
             "prazo_fiscal": prazo_fiscal,
-            "status": spec.get("status") or "PENDENTE",
+            "status": spec.get("status") or current.get("status") or "PENDENTE",
+            "categoria": spec.get("categoria") or current.get("categoria") or "fechamento",
         }
-        if spec.get("categoria"):
-            item["categoria"] = spec["categoria"]
-        if spec.get("data_entrega"):
-            item["data_entrega"] = spec["data_entrega"]
-        if spec.get("recibo_numero"):
-            item["recibo_numero"] = spec["recibo_numero"]
-        if spec.get("observacao"):
-            item["observacao"] = spec["observacao"]
-        if spec.get("motivo_atraso"):
-            item["motivo_atraso"] = spec["motivo_atraso"]
+        for field in _OBRIGACAO_OPTIONAL_FIELDS:
+            item[field] = spec.get(field) or current.get(field)
         payload.append(item)
 
     created = 0
@@ -617,6 +622,41 @@ def _import_table_rows(
     }
 
 
+_OBRIGACAO_OPTIONAL_FIELDS = ("data_entrega", "recibo_numero", "observacao", "motivo_atraso")
+
+
+def _load_existing_obrigacoes(
+    client: Client, competencias: set[str]
+) -> dict[tuple[str, str, str], dict[str, Any]]:
+    if not competencias:
+        return {}
+    comps = sorted(competencias)
+    columns = ",".join(
+        (
+            "id",
+            "empresa_id",
+            "atividade_id",
+            "competencia",
+            "responsavel_id",
+            "prazo_legal",
+            "prazo_fiscal",
+            "status",
+            "categoria",
+            *_OBRIGACAO_OPTIONAL_FIELDS,
+        )
+    )
+    rows = fetch_all(
+        lambda: client.table("obrigacoes")
+        .select(columns)
+        .in_("competencia", comps)
+        .order("id")
+    )
+    return {
+        (str(r["empresa_id"]), str(r["atividade_id"]), str(r["competencia"])[:10]): r
+        for r in rows
+    }
+
+
 def _insert_tarefas(
     client: Client,
     specs: list[dict[str, Any]],
@@ -627,12 +667,10 @@ def _insert_tarefas(
     if not specs:
         return 0
 
-    existing_rows = (
-        client.table("tarefas")
-        .select("titulo,responsavel_id,prazo,hora_inicio,empresa_id")
-        .execute()
-        .data
-        or []
+    existing_rows = fetch_all(
+        lambda: client.table("tarefas")
+        .select("id,titulo,responsavel_id,prazo,hora_inicio,empresa_id")
+        .order("id")
     )
     existing = {
         (

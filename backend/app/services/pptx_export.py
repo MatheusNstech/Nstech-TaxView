@@ -13,6 +13,8 @@ from pptx.enum.shapes import MSO_SHAPE
 from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.util import Emu, Inches, Pt
 
+from app.core.clock import today_br
+
 BRAND = RGBColor(0xFF, 0x3C, 0x02)
 INK = RGBColor(0x1F, 0x29, 0x37)
 MUTED = RGBColor(0x6B, 0x72, 0x80)
@@ -170,7 +172,7 @@ def _resolve_anchor(competencia: date | None, rows: list[dict[str, Any]]) -> dat
     known = [item for item in dates if item is not None]
     if known:
         return _month_end(known[0])
-    return _month_end(date.today())
+    return _month_end(today_br())
 
 
 def _status(row: dict[str, Any]) -> str:

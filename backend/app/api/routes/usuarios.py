@@ -16,10 +16,10 @@ from app.core.auth import (
     invalidate_auth_cache,
     require_admin,
 )
-
-logger = logging.getLogger(__name__)
 from app.core.config import Settings, get_settings
 from app.schemas.models import UsuarioCreate, UsuarioOut, UsuarioRole, UsuarioUpdate
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/usuarios", tags=["usuarios"])
 
@@ -73,6 +73,21 @@ def _row_to_out(row: dict[str, Any]) -> UsuarioOut:
     )
 
 
+_AUTH_PAGE_SIZE = 1000
+
+
+def _list_all_auth_users(admin: Client) -> list[Any]:
+    # GoTrue pagina (50 por padrão); sem loop a lista some a partir do 51º usuário.
+    users: list[Any] = []
+    page = 1
+    while True:
+        batch = admin.auth.admin.list_users(page=page, per_page=_AUTH_PAGE_SIZE) or []
+        users.extend(batch)
+        if len(batch) < _AUTH_PAGE_SIZE:
+            return users
+        page += 1
+
+
 def _rpc_error(exc: Exception, default: str) -> HTTPException:
     detail = str(exc)
     lower = detail.lower()
@@ -103,18 +118,14 @@ def list_usuarios(
     if _has_service_role(settings):
         admin = get_admin_client(settings)
         try:
-            response = admin.auth.admin.list_users()
+            users = _list_all_auth_users(admin)
         except Exception as exc:  # noqa: BLE001
             logger.exception("Falha ao listar usuários")
             raise HTTPException(
                 status_code=400,
                 detail="Falha ao listar usuários",
             ) from exc
-
-        users = getattr(response, "users", None)
-        if users is None and isinstance(response, list):
-            users = response
-        return [_to_out(u) for u in (users or [])]
+        return [_to_out(u) for u in users]
 
     client = get_user_client(current.access_token, settings)
     try:
@@ -248,7 +259,10 @@ def update_usuario(
         admin = get_admin_client(settings)
         attributes: dict = {}
         if payload.role is not None:
-            existing = admin.auth.admin.get_user_by_id(str(user_id))
+            try:
+                existing = admin.auth.admin.get_user_by_id(str(user_id))
+            except Exception as exc:  # noqa: BLE001
+                raise HTTPException(status_code=404, detail="Usuário não encontrado") from exc
             current_user = existing.user
             if current_user is None:
                 raise HTTPException(status_code=404, detail="Usuário não encontrado")
@@ -329,12 +343,11 @@ def bootstrap_admin(
 
     admin = get_admin_client(settings)
     try:
-        response = admin.auth.admin.list_users()
+        users = _list_all_auth_users(admin)
     except Exception as exc:  # noqa: BLE001
         logger.exception("Falha no bootstrap-admin")
         raise HTTPException(status_code=400, detail="Falha ao consultar usuários") from exc
 
-    users = getattr(response, "users", None) or []
     has_admin = any(_role_from_user(u) == "admin" for u in users)
     if has_admin and current.role != "admin":
         raise HTTPException(

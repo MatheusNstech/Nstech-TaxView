@@ -6,9 +6,10 @@ from functools import lru_cache
 from typing import Annotated, Literal
 from uuid import UUID
 
+import httpx
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from supabase import Client, create_client
+from supabase import Client, ClientOptions, create_client
 
 from app.core.config import Settings, get_settings
 
@@ -66,7 +67,15 @@ def _sanitize_uuid(value: object) -> str | None:
 
 @lru_cache(maxsize=2)
 def _cached_client(url: str, key: str) -> Client:
-    return create_client(url, key)
+    # Cliente compartilhado entre as threads do FastAPI: HTTP/2 do postgrest
+    # multiplexa uma conexão só e falha em concorrência (WinError 10035).
+    # Abaixo do maxDuration de 60s da Vercel: falha limpa em vez de 504.
+    http_client = httpx.Client(
+        http2=False,
+        timeout=httpx.Timeout(25.0),
+        follow_redirects=True,
+    )
+    return create_client(url, key, options=ClientOptions(httpx_client=http_client))
 
 
 def get_anon_client(settings: Settings | None = None) -> Client:
@@ -140,7 +149,7 @@ def invalidate_auth_cache(token: str | None = None) -> None:
         _auth_user_cache.clear()
 
 
-async def get_current_user(
+def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> AuthUser:
@@ -257,6 +266,29 @@ async def require_painel_fiscal_editor(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Sem permissão para editar pendências RFB / PGFN",
+        )
+    assert_password_changed(user)
+    return user
+
+
+async def require_perdcomp_reader(
+    user: Annotated[AuthUser, Depends(get_current_user)],
+) -> AuthUser:
+    if not user.can_read_painel_fiscal:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acesso restrito ao acompanhamento PER/DCOMP",
+        )
+    return user
+
+
+async def require_perdcomp_editor(
+    user: Annotated[AuthUser, Depends(get_current_user)],
+) -> AuthUser:
+    if not user.can_edit_painel_fiscal:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Sem permissão para editar processos PER/DCOMP",
         )
     assert_password_changed(user)
     return user

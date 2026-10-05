@@ -61,9 +61,10 @@ export function monthToCompetencia(month: string): string {
   return `${month}-01`
 }
 
-/** Competência padrão do cronograma seedado (operação Ago/2026). */
+/** Mês corrente do calendário ("YYYY-MM"), padrão dos filtros de competência. */
 export function currentCompetenciaMonth(): string {
-  return '2026-08'
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
 export function nextCompetenciaDate(fromMonth?: string): string {

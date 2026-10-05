@@ -103,5 +103,12 @@ def change_password(
             detail="Falha ao trocar senha",
         ) from None
 
+    # Quem entrou com a senha antiga (ex.: a padrão) perde o acesso;
+    # a sessão atual continua válida.
+    try:
+        admin.auth.admin.sign_out(user.access_token, "others")
+    except Exception:  # noqa: BLE001
+        logger.warning("Falha ao revogar outras sessões user_id=%s", user.id)
+
     invalidate_auth_cache(user.access_token)
     return ChangePasswordOut()

@@ -6,53 +6,8 @@ from typing import Any
 from dateutil.relativedelta import relativedelta
 from supabase import Client
 
-from app.services.notifications import format_alerta_obrigacao, notify_responsavel_of_obrigacao
-from app.services.status_engine import compute_prazo, normalize_status
-
-
-def mark_overdue(client: Client, today: date | None = None) -> dict[str, int]:
-    today = today or date.today()
-    rows = (
-        client.table("obrigacoes")
-        .select(
-            "id,status,prazo_legal,prazo_fiscal,data_entrega,"
-            "atividades_modelo(nome),empresas(razao_social)"
-        )
-        .neq("status", "ENTREGUE")
-        .execute()
-        .data
-        or []
-    )
-    updates = 0
-    notificacoes = 0
-    for row in rows:
-        new_status = normalize_status(
-            row["status"],
-            date.fromisoformat(row["prazo_legal"]) if row.get("prazo_legal") else None,
-            date.fromisoformat(row["prazo_fiscal"]) if row.get("prazo_fiscal") else None,
-            date.fromisoformat(row["data_entrega"]) if row.get("data_entrega") else None,
-            today=today,
-        )
-        if new_status != row["status"]:
-            client.table("obrigacoes").update({"status": new_status}).eq("id", row["id"]).execute()
-            updates += 1
-            if new_status == "ATRASADO" and row["status"] != "ATRASADO":
-                atividade = row.get("atividades_modelo") or {}
-                empresa = row.get("empresas") or {}
-                titulo, corpo = format_alerta_obrigacao(
-                    nome=atividade.get("nome"),
-                    empresa=empresa.get("razao_social"),
-                    tipo="ATRASADO",
-                )
-                notificacoes += notify_responsavel_of_obrigacao(
-                    client,
-                    obrigacao_id=row["id"],
-                    tipo="ATRASADO",
-                    titulo=titulo,
-                    corpo=corpo,
-                    dedupe_same_day=True,
-                )
-    return {"atualizadas": updates, "notificacoes_criadas": notificacoes}
+from app.services.db import fetch_all
+from app.services.status_engine import compute_prazo
 
 
 def gerar_competencia(
@@ -63,22 +18,22 @@ def gerar_competencia(
     if competencia_origem is None:
         competencia_origem = competencia_destino - relativedelta(months=1)
 
-    origem = (
-        client.table("obrigacoes")
+    origem = fetch_all(
+        lambda: client.table("obrigacoes")
         .select(
-            "empresa_id,atividade_id,responsavel_id,"
+            "id,empresa_id,atividade_id,responsavel_id,"
             "atividades_modelo(dia_prazo_legal,dia_prazo_fiscal)"
         )
         .eq("competencia", competencia_origem.isoformat())
-        .execute()
-        .data
-        or []
+        .order("id")
     )
 
     if not origem:
-        empresas = client.table("empresas").select("id").eq("ativa", True).execute().data or []
-        atividades = (
-            client.table("atividades_modelo").select("*").eq("ativa", True).execute().data or []
+        empresas = fetch_all(
+            lambda: client.table("empresas").select("id").eq("ativa", True).order("id")
+        )
+        atividades = fetch_all(
+            lambda: client.table("atividades_modelo").select("*").eq("ativa", True).order("id")
         )
         for empresa in empresas:
             for atividade in atividades:
@@ -94,13 +49,11 @@ def gerar_competencia(
                     }
                 )
 
-    existing = (
-        client.table("obrigacoes")
-        .select("empresa_id,atividade_id")
+    existing = fetch_all(
+        lambda: client.table("obrigacoes")
+        .select("id,empresa_id,atividade_id")
         .eq("competencia", competencia_destino.isoformat())
-        .execute()
-        .data
-        or []
+        .order("id")
     )
     existing_keys = {(e["empresa_id"], e["atividade_id"]) for e in existing}
 
@@ -135,7 +88,11 @@ def gerar_competencia(
     if to_create:
         chunk_size = 100
         for i in range(0, len(to_create), chunk_size):
-            client.table("obrigacoes").insert(to_create[i : i + chunk_size]).execute()
+            client.table("obrigacoes").upsert(
+                to_create[i : i + chunk_size],
+                on_conflict="empresa_id,atividade_id,competencia",
+                ignore_duplicates=True,
+            ).execute()
 
     return {
         "criadas": len(to_create),

@@ -246,33 +246,64 @@ def test_user_role_forbidden():
     assert exc.value.status_code == 403
 
 
+def _gotrue_response(status_code: int, payload: dict | None = None) -> MagicMock:
+    resp = MagicMock()
+    resp.status_code = status_code
+    resp.json.return_value = payload or {}
+    return resp
+
+
+def _token_payload(role: str) -> dict:
+    return {
+        "access_token": "abc",
+        "refresh_token": "r",
+        "expires_in": 3600,
+        "user": {
+            "id": str(uuid4()),
+            "email": "user@nstech.com.br",
+            "app_metadata": {"role": role},
+        },
+    }
+
+
+_SETTINGS = Settings(
+    supabase_url="https://example.supabase.co",
+    supabase_anon_key="anon",
+)
+_BODY = TokenRequest(email="user@nstech.com.br", password="SenhaForte@1")
+
+
 def test_auth_token_rejects_user_role():
     """Garante que /api/auth/token bloqueia contas sem admin/diretor."""
-    fake_session = SimpleNamespace(
-        access_token="abc",
-        refresh_token="r",
-        expires_in=3600,
-    )
-    fake_user = SimpleNamespace(
-        id=str(uuid4()),
-        email="user@nstech.com.br",
-        app_metadata={"role": "user"},
-    )
-    fake_result = SimpleNamespace(session=fake_session, user=fake_user)
-    fake_auth = MagicMock()
-    fake_auth.sign_in_with_password.return_value = fake_result
-    fake_client = MagicMock()
-    fake_client.auth = fake_auth
-
-    with patch("app.api.routes.auth_token.get_anon_client", return_value=fake_client):
-        settings = Settings(
-            supabase_url="https://example.supabase.co",
-            supabase_anon_key="anon",
-        )
+    with patch(
+        "app.api.routes.auth_token.httpx.post",
+        side_effect=[_gotrue_response(200, _token_payload("user")), _gotrue_response(204)],
+    ) as post:
         with pytest.raises(HTTPException) as exc:
-            login_token(
-                TokenRequest(email="user@nstech.com.br", password="SenhaForte@1"),
-                settings,
-            )
-        assert exc.value.status_code == 403
-        fake_auth.sign_out.assert_called()
+            login_token(_BODY, _SETTINGS)
+    assert exc.value.status_code == 403
+    logout_url = post.call_args_list[1].args[0]
+    assert logout_url.endswith("/auth/v1/logout?scope=local")
+    assert post.call_args_list[1].kwargs["headers"]["Authorization"] == "Bearer abc"
+
+
+def test_auth_token_returns_session_for_diretor():
+    with patch(
+        "app.api.routes.auth_token.httpx.post",
+        return_value=_gotrue_response(200, _token_payload("diretor")),
+    ) as post:
+        out = login_token(_BODY, _SETTINGS)
+    assert out.access_token == "abc"
+    assert out.role == "diretor"
+    assert out.expires_in == 3600
+    assert post.call_count == 1
+
+
+def test_auth_token_invalid_credentials():
+    with patch(
+        "app.api.routes.auth_token.httpx.post",
+        return_value=_gotrue_response(400, {"error": "invalid_grant"}),
+    ):
+        with pytest.raises(HTTPException) as exc:
+            login_token(_BODY, _SETTINGS)
+    assert exc.value.status_code == 401

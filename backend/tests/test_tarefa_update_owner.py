@@ -11,6 +11,7 @@ from fastapi import HTTPException
 
 from app.api.routes.tarefas import update_tarefa
 from app.core.auth import AuthUser, require_not_viewer
+from app.core.clock import today_br
 from app.schemas.models import TarefaUpdate
 
 
@@ -176,11 +177,11 @@ def test_out_of_scope_returns_403():
         assert exc.value.status_code == 403
 
 
-def test_late_entrega_uses_new_prazo_from_body():
-    """Prazo antigo atrasado + novo prazo futuro → sem exigir motivo."""
+def test_late_entrega_cannot_skip_motivo_by_moving_prazo():
+    """Prazo gravado vencido + novo prazo futuro no mesmo PATCH → ainda exige motivo."""
     user = _user()
-    yesterday = (date.today() - timedelta(days=1)).isoformat()
-    future = date.today() + timedelta(days=10)
+    yesterday = (today_br() - timedelta(days=1)).isoformat()
+    future = today_br() + timedelta(days=10)
     current = _current_row(prazo=yesterday, status="PENDENTE")
     client = FakeClient(current)
     body = TarefaUpdate(
@@ -192,17 +193,47 @@ def test_late_entrega_uses_new_prazo_from_body():
         "app.api.routes.tarefas.assert_tarefa_in_scope",
         return_value=current,
     ):
-        out = update_tarefa(TAREFA_ID, body, user, client)  # type: ignore[arg-type]
+        with pytest.raises(HTTPException) as exc:
+            update_tarefa(TAREFA_ID, body, user, client)  # type: ignore[arg-type]
+    assert exc.value.status_code == 400
+    assert client.store["tarefas"][str(TAREFA_ID)]["prazo"] == yesterday
 
+
+def test_entrega_on_time_does_not_require_motivo():
+    user = _user()
+    future = (today_br() + timedelta(days=3)).isoformat()
+    current = _current_row(prazo=future, status="EM_ANDAMENTO")
+    client = FakeClient(current)
+    body = TarefaUpdate(status="ENTREGUE")  # type: ignore[arg-type]
+
+    with patch(
+        "app.api.routes.tarefas.assert_tarefa_in_scope",
+        return_value=current,
+    ):
+        out = update_tarefa(TAREFA_ID, body, user, client)  # type: ignore[arg-type]
     assert out["status"] == "ENTREGUE"
-    assert out["prazo"] == future.isoformat()
     assert not out.get("motivo_atraso")
+
+
+def test_patch_null_titulo_returns_422():
+    user = _user()
+    current = _current_row()
+    client = FakeClient(current)
+    body = TarefaUpdate(titulo=None)
+
+    with patch(
+        "app.api.routes.tarefas.assert_tarefa_in_scope",
+        return_value=current,
+    ):
+        with pytest.raises(HTTPException) as exc:
+            update_tarefa(TAREFA_ID, body, user, client)  # type: ignore[arg-type]
+    assert exc.value.status_code == 422
 
 
 def test_late_entrega_requires_motivo_with_new_past_prazo():
     user = _user()
-    old_future = (date.today() + timedelta(days=5)).isoformat()
-    new_past = date.today() - timedelta(days=2)
+    old_future = (today_br() + timedelta(days=5)).isoformat()
+    new_past = today_br() - timedelta(days=2)
     current = _current_row(prazo=old_future, status="PENDENTE")
     client = FakeClient(current)
     body = TarefaUpdate(

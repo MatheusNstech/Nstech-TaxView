@@ -7,7 +7,9 @@ from fastapi import APIRouter, Depends
 from supabase import Client
 
 from app.core.auth import AuthUser, get_current_user, get_db_client
+from app.core.clock import today_br
 from app.schemas.models import DashboardSummary
+from app.services.db import fetch_all
 from app.services.scope import effective_responsavel_id
 from app.services.status_engine import normalize_status
 
@@ -58,24 +60,31 @@ def summary(
             return _empty_summary()
         scope_rid = str(scope)
 
-    obr_query = client.table("obrigacoes").select(
-        "id,status,prazo_legal,prazo_fiscal,data_entrega,responsavel_id,"
-        "empresas(bu,razao_social),responsaveis(nome,capacidade_max)"
-    )
-    tar_query = client.table("tarefas").select(
-        "id,status,prazo,responsavel_id,"
-        "empresas(bu,razao_social),responsaveis(nome,capacidade_max)"
-    )
-    if competencia:
-        iso = competencia.isoformat()
-        obr_query = obr_query.eq("competencia", iso)
-        tar_query = tar_query.eq("competencia", iso)
-    if scope_rid:
-        obr_query = obr_query.eq("responsavel_id", scope_rid)
-        tar_query = tar_query.eq("responsavel_id", scope_rid)
+    def build(table: str, columns: str):
+        def _query():
+            query = client.table(table).select(columns)
+            if competencia:
+                query = query.eq("competencia", competencia.isoformat())
+            if scope_rid:
+                query = query.eq("responsavel_id", scope_rid)
+            return query.order("id")
 
-    obr_rows = obr_query.execute().data or []
-    tar_rows = tar_query.execute().data or []
+        return _query
+
+    obr_rows = fetch_all(
+        build(
+            "obrigacoes",
+            "id,status,prazo_legal,prazo_fiscal,data_entrega,responsavel_id,"
+            "empresas(bu,razao_social),responsaveis(nome,capacidade_max)",
+        )
+    )
+    tar_rows = fetch_all(
+        build(
+            "tarefas",
+            "id,status,prazo,responsavel_id,"
+            "empresas(bu,razao_social),responsaveis(nome,capacidade_max)",
+        )
+    )
 
     if bu:
         obr_rows = [
@@ -85,7 +94,7 @@ def summary(
             r for r in tar_rows if (r.get("empresas") or {}).get("bu") == bu
         ]
 
-    today = date.today()
+    today = today_br()
     limit = today + timedelta(days=7)
     status_counter: Counter[str] = Counter()
     bu_counter: Counter[str] = Counter()

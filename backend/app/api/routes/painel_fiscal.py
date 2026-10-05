@@ -15,10 +15,34 @@ from app.core.auth import (
     require_painel_fiscal_editor,
     require_painel_fiscal_reader,
 )
+from app.services.db import fetch_all, reject_nulls
 
 router = APIRouter(prefix="/painel-fiscal", tags=["painel-fiscal"])
 
 TABLE = "painel_fiscal_pendencias"
+TEXT_FIELDS = (
+    "razao_social",
+    "situacao_cnpj",
+    "cnpj",
+    "cidade_iss",
+    "uf",
+    "orgao",
+    "sucedida",
+    "cnpj_sucedida",
+    "empresa_sucedida",
+    "natureza",
+    "fase",
+    "tipo",
+    "situacao",
+    "codigo",
+    "periodo_apuracao",
+    "motivo",
+    "numero_processo",
+    "cnd",
+    "status_cnd",
+    "nota_01",
+    "nota_02",
+)
 
 # Cadastro Tax: 34 empresas, das quais 3 baixadas.
 CADASTRO_TOTAL_EMPRESAS = 34
@@ -195,6 +219,10 @@ def _normalize_status_cnd(raw: str) -> str | None:
 
 def _payload(body: BaseModel, *, user_id: str | None = None) -> dict[str, Any]:
     data = body.model_dump(exclude_unset=True)
+    reject_nulls(data, ("empresa",))
+    for key in TEXT_FIELDS:
+        if key in data and data[key] is None:
+            data[key] = ""
     if "orgao" in data and data["orgao"] is not None:
         data["orgao"] = _normalize_orgao(str(data["orgao"]))
     for key in ("principal", "multa", "juros", "total"):
@@ -215,14 +243,17 @@ def summary(
     ano: int | None = None,
     mes: int | None = None,
 ):
-    query = client.table(TABLE).select(
-        "empresa,cnpj,situacao_cnpj,orgao,total,status_cnd,nota_01,nota_02,ano,mes"
-    )
-    if ano is not None:
-        query = query.eq("ano", ano)
-    if mes is not None:
-        query = query.eq("mes", mes)
-    rows = query.execute().data or []
+    def build():
+        query = client.table(TABLE).select(
+            "id,empresa,cnpj,situacao_cnpj,orgao,total,status_cnd,nota_01,nota_02,ano,mes"
+        )
+        if ano is not None:
+            query = query.eq("ano", ano)
+        if mes is not None:
+            query = query.eq("mes", mes)
+        return query.order("id")
+
+    rows = fetch_all(build)
 
     # Census oficial do painel Tax: 34 empresas, 3 baixadas.
     baixadas = len(EMPRESAS_BAIXADAS)
@@ -306,18 +337,27 @@ def list_pendencias(
     status_cnd: str | None = None,
     limit: int = Query(default=2000, ge=1, le=5000),
 ):
-    query = client.table(TABLE).select("*").order("empresa").order("ano", desc=True)
-    if ano is not None:
-        query = query.eq("ano", ano)
-    if mes is not None:
-        query = query.eq("mes", mes)
-    if orgao:
-        query = query.eq("orgao", orgao)
-    if empresa:
-        query = query.ilike("empresa", f"%{empresa}%")
-    if status_cnd:
-        query = query.ilike("status_cnd", f"%{status_cnd}%")
-    rows = query.limit(limit).execute().data or []
+    def build():
+        query = (
+            client.table(TABLE)
+            .select("*")
+            .order("empresa")
+            .order("ano", desc=True)
+            .order("id")
+        )
+        if ano is not None:
+            query = query.eq("ano", ano)
+        if mes is not None:
+            query = query.eq("mes", mes)
+        if orgao:
+            query = query.eq("orgao", orgao)
+        if empresa:
+            query = query.ilike("empresa", f"%{empresa}%")
+        if status_cnd:
+            query = query.ilike("status_cnd", f"%{status_cnd}%")
+        return query
+
+    rows = fetch_all(build, max_rows=limit)
     return [PainelFiscalOut.model_validate(row) for row in rows]
 
 
@@ -342,7 +382,7 @@ def update_pendencia(
     client: Annotated[Client, Depends(get_db_client)],
 ):
     payload = _payload(body, user_id=user.id)
-    if not payload:
+    if set(payload) <= {"updated_by"}:
         raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
     result = (
         client.table(TABLE)

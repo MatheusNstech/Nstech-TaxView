@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from collections import defaultdict
 from datetime import date, datetime, timezone
 from typing import Annotated, Any
@@ -9,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
 from supabase import Client
 
+from app.api.routes.tarefas import query_tarefas
 from app.core.auth import (
     AuthUser,
     get_current_user,
@@ -16,6 +18,8 @@ from app.core.auth import (
     require_admin,
     require_not_viewer,
 )
+from app.core.clock import today_br
+from app.services.db import constraint_errors, fetch_all, reject_nulls
 from app.services.excel_export import build_obrigacoes_xlsx
 from app.services.pptx_export import build_market_call_pptx, market_call_filename
 from app.schemas.models import (
@@ -30,6 +34,7 @@ from app.schemas.models import (
     ObrigacaoOut,
     ObrigacaoUpdate,
     ReprovarRequest,
+    StatusObrigacao,
 )
 from app.services.competencia import gerar_competencia
 from app.services.notifications import (
@@ -40,7 +45,11 @@ from app.services.notifications import (
 from app.services.scope import assert_obrigacao_in_scope, effective_responsavel_id
 from app.services.status_engine import normalize_status, urgencia_label
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/obrigacoes", tags=["obrigacoes"])
+
+_FULL_SELECT = "*, empresas(*), atividades_modelo(*), responsaveis(*)"
 
 
 def _enrich(row: dict[str, Any]) -> dict[str, Any]:
@@ -79,45 +88,46 @@ def _scoped_responsavel_id(
 
 
 def _fetch_full(client: Client, obrigacao_id: str) -> dict[str, Any]:
-    full = (
+    rows = (
         client.table("obrigacoes")
-        .select("*, empresas(*), atividades_modelo(*), responsaveis(*)")
+        .select(_FULL_SELECT)
         .eq("id", obrigacao_id)
-        .single()
+        .limit(1)
         .execute()
         .data
+        or []
     )
-    return _enrich(full)
+    if not rows:
+        raise HTTPException(status_code=404, detail="Obrigação não encontrada")
+    return _enrich(rows[0])
 
 
-@router.get("", response_model=list[ObrigacaoOut])
-def list_obrigacoes(
-    user: Annotated[AuthUser, Depends(get_current_user)],
-    client: Annotated[Client, Depends(get_db_client)],
+def query_obrigacoes(
+    user: AuthUser,
+    client: Client,
+    *,
     competencia: date | None = None,
     bu: str | None = None,
     responsavel_id: UUID | None = None,
-    status_filter: str | None = Query(default=None, alias="status"),
+    status_filter: StatusObrigacao | None = None,
     q: str | None = None,
-    minhas: bool = False,  # legado; escopo real vem do papel
-):
+) -> list[dict[str, Any]]:
     # Atraso e aviso saem do job diário run_atrasos_diarios, não desta listagem.
-
     resolved = _scoped_responsavel_id(user, client, responsavel_id)
     if not user.org_wide and resolved is None:
         return []
 
-    query = client.table("obrigacoes").select(
-        "*, empresas(*), atividades_modelo(*), responsaveis(*)"
-    )
-    if competencia:
-        query = query.eq("competencia", competencia.isoformat())
-    if resolved:
-        query = query.eq("responsavel_id", str(resolved))
-    if status_filter:
-        query = query.eq("status", status_filter)
-    rows = query.order("competencia", desc=True).execute().data or []
-    enriched = [_enrich(r) for r in rows]
+    def build():
+        query = client.table("obrigacoes").select(_FULL_SELECT)
+        if competencia:
+            query = query.eq("competencia", competencia.isoformat())
+        if resolved:
+            query = query.eq("responsavel_id", str(resolved))
+        if status_filter:
+            query = query.eq("status", status_filter.value)
+        return query.order("competencia", desc=True).order("id")
+
+    enriched = [_enrich(r) for r in fetch_all(build)]
     if bu:
         enriched = [r for r in enriched if (r.get("empresa") or {}).get("bu") == bu]
     if q:
@@ -130,6 +140,28 @@ def list_obrigacoes(
             or ql in ((r.get("atividade") or {}).get("nome") or "").lower()
         ]
     return enriched
+
+
+@router.get("", response_model=list[ObrigacaoOut])
+def list_obrigacoes(
+    user: Annotated[AuthUser, Depends(get_current_user)],
+    client: Annotated[Client, Depends(get_db_client)],
+    competencia: date | None = None,
+    bu: str | None = None,
+    responsavel_id: UUID | None = None,
+    status_filter: StatusObrigacao | None = Query(default=None, alias="status"),
+    q: str | None = None,
+    minhas: bool = False,  # legado; escopo real vem do papel
+):
+    return query_obrigacoes(
+        user,
+        client,
+        competencia=competencia,
+        bu=bu,
+        responsavel_id=responsavel_id,
+        status_filter=status_filter,
+        q=q,
+    )
 
 
 @router.get("/calendario", response_model=CalendarioResponse)
@@ -147,13 +179,20 @@ def calendario(
     if not user.org_wide and resolved is None:
         return CalendarioResponse(dias=[], detalhe=[])
 
-    query = client.table("obrigacoes").select(
-        "*, empresas(*), atividades_modelo(*), responsaveis(*)"
+    de_iso, ate_iso = de.isoformat(), ate.isoformat()
+    # Mesmo critério do agrupamento abaixo: prazo_fiscal, ou prazo_legal quando não há fiscal.
+    em_intervalo = (
+        f"and(prazo_fiscal.gte.{de_iso},prazo_fiscal.lte.{ate_iso}),"
+        f"and(prazo_fiscal.is.null,prazo_legal.gte.{de_iso},prazo_legal.lte.{ate_iso})"
     )
-    if resolved:
-        query = query.eq("responsavel_id", str(resolved))
-    rows = query.execute().data or []
-    enriched = [_enrich(r) for r in rows]
+
+    def build():
+        query = client.table("obrigacoes").select(_FULL_SELECT).or_(em_intervalo)
+        if resolved:
+            query = query.eq("responsavel_id", str(resolved))
+        return query.order("id")
+
+    enriched = [_enrich(r) for r in fetch_all(build)]
     if bu:
         enriched = [r for r in enriched if (r.get("empresa") or {}).get("bu") == bu]
 
@@ -188,22 +227,30 @@ def calendario(
     if detalhe_dia:
         detalhe = by_day.get(detalhe_dia.isoformat(), [])
 
-    from app.api.routes.tarefas import list_tarefas
-
     tarefas: list[Any] = []
     try:
-        tarefas = list_tarefas(
-            user=user,
-            client=client,
+        tarefas = query_tarefas(
+            user,
+            client,
             prazo_de=de,
             prazo_ate=ate,
             bu=bu,
             responsavel_id=responsavel_id,
         )
-    except Exception:
-        tarefas = []
+    except Exception:  # noqa: BLE001
+        logger.exception("Falha ao carregar tarefas do calendário")
 
     return CalendarioResponse(dias=dias, detalhe=detalhe, tarefas=tarefas)
+
+
+def _export_rows(
+    user: AuthUser,
+    client: Client,
+    **filters: Any,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    rows = query_obrigacoes(user, client, **filters)
+    tarefas = query_tarefas(user, client, **filters)
+    return rows, tarefas
 
 
 @router.get("/export.xlsx")
@@ -213,25 +260,13 @@ def export_xlsx(
     competencia: date | None = None,
     bu: str | None = None,
     responsavel_id: UUID | None = None,
-    status_filter: str | None = Query(default=None, alias="status"),
+    status_filter: StatusObrigacao | None = Query(default=None, alias="status"),
     q: str | None = None,
     minhas: bool = False,
 ):
-    rows = list_obrigacoes(
-        user=user,
-        client=client,
-        competencia=competencia,
-        bu=bu,
-        responsavel_id=responsavel_id,
-        status_filter=status_filter,
-        q=q,
-        minhas=minhas,
-    )
-    from app.api.routes.tarefas import list_tarefas
-
-    tarefas = list_tarefas(
-        user=user,
-        client=client,
+    rows, tarefas = _export_rows(
+        user,
+        client,
         competencia=competencia,
         bu=bu,
         responsavel_id=responsavel_id,
@@ -263,25 +298,13 @@ def export_pptx(
     competencia: date | None = None,
     bu: str | None = None,
     responsavel_id: UUID | None = None,
-    status_filter: str | None = Query(default=None, alias="status"),
+    status_filter: StatusObrigacao | None = Query(default=None, alias="status"),
     q: str | None = None,
     minhas: bool = False,
 ):
-    rows = list_obrigacoes(
-        user=user,
-        client=client,
-        competencia=competencia,
-        bu=bu,
-        responsavel_id=responsavel_id,
-        status_filter=status_filter,
-        q=q,
-        minhas=minhas,
-    )
-    from app.api.routes.tarefas import list_tarefas
-
-    tarefas = list_tarefas(
-        user=user,
-        client=client,
+    rows, tarefas = _export_rows(
+        user,
+        client,
         competencia=competencia,
         bu=bu,
         responsavel_id=responsavel_id,
@@ -327,7 +350,11 @@ def create_obrigacao(
 ):
     body = payload.model_dump(mode="json")
     body["updated_by"] = user.id
-    data = client.table("obrigacoes").insert(body).execute().data
+    with constraint_errors(
+        duplicate="Já existe essa obrigação para a empresa nesta competência",
+        in_use="Empresa, atividade ou responsável inexistente",
+    ):
+        data = client.table("obrigacoes").insert(body).execute().data
     if not data:
         raise HTTPException(status_code=400, detail="Falha ao criar obrigação")
     oid = data[0]["id"]
@@ -367,6 +394,7 @@ def update_obrigacao(
     before = before_rows[0]
 
     body = payload.model_dump(exclude_unset=True, mode="json")
+    reject_nulls(body, ("empresa_id", "atividade_id", "competencia", "status"))
     # Não-admin não pode reatribuir responsável
     if user.role != "admin":
         body.pop("responsavel_id", None)
@@ -380,12 +408,16 @@ def update_obrigacao(
         body["status"] = "ENTREGUE"
 
     new_status = body.get("status")
+    if new_status and new_status != "ENTREGUE":
+        # normalize_status trata data_entrega preenchida como ENTREGUE; sem limpar,
+        # a obrigação nunca sai da coluna Entregue.
+        body["data_entrega"] = None
     if new_status == "ENTREGUE":
         # Atraso usa o prazo já gravado, não o prazo enviado neste PATCH.
         prazo_fiscal = before.get("prazo_fiscal")
         prazo_legal = before.get("prazo_legal")
         ref = prazo_fiscal or prazo_legal
-        today = date.today()
+        today = today_br()
         late = before.get("status") == "ATRASADO"
         if not late and ref:
             try:
@@ -409,9 +441,13 @@ def update_obrigacao(
         if not before.get("data_entrega") and not body.get("data_entrega"):
             body["data_entrega"] = today.isoformat()
 
-    data = (
-        client.table("obrigacoes").update(body).eq("id", str(obrigacao_id)).execute().data
-    )
+    with constraint_errors(
+        duplicate="Já existe essa obrigação para a empresa nesta competência",
+        in_use="Empresa, atividade ou responsável inexistente",
+    ):
+        data = (
+            client.table("obrigacoes").update(body).eq("id", str(obrigacao_id)).execute().data
+        )
     if not data:
         # Select ok + update vazio = RLS/permissão (ex.: sem service_role + viewer)
         raise HTTPException(
@@ -470,11 +506,13 @@ def aprovar_obrigacao(
         "updated_by": user.id,
     }
     if not before.get("data_entrega"):
-        body["data_entrega"] = date.today().isoformat()
+        body["data_entrega"] = today_br().isoformat()
 
     data = (
         client.table("obrigacoes").update(body).eq("id", str(obrigacao_id)).execute().data
     )
+    if not data:
+        raise HTTPException(status_code=404, detail="Obrigação não encontrada")
     after = data[0]
     audit_diff(
         client,
@@ -522,6 +560,8 @@ def reprovar_obrigacao(
     data = (
         client.table("obrigacoes").update(body).eq("id", str(obrigacao_id)).execute().data
     )
+    if not data:
+        raise HTTPException(status_code=404, detail="Obrigação não encontrada")
     after = data[0]
     audit_diff(
         client,

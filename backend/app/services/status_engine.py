@@ -1,6 +1,8 @@
 from calendar import monthrange
 from datetime import date, timedelta
 
+from app.core.clock import today_br
+
 ACTIVE_STATUSES = {"PENDENTE", "EM_ANDAMENTO", "EM_REVISAO", "ATRASADO"}
 
 
@@ -27,7 +29,7 @@ def normalize_status(
     data_entrega: date | None,
     today: date | None = None,
 ) -> str:
-    today = today or date.today()
+    today = today or today_br()
     if data_entrega is not None or status == "ENTREGUE":
         return "ENTREGUE"
     # Em andamento / revisão mantêm a coluna do Kanban; urgência marca o atraso.
@@ -47,7 +49,7 @@ def urgencia_label(
     prazo_fiscal: date | None,
     today: date | None = None,
 ) -> str:
-    today = today or date.today()
+    today = today or today_br()
     if status == "ENTREGUE":
         return "ok"
     reference = prazo_fiscal or prazo_legal

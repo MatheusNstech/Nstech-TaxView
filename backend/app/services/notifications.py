@@ -1,11 +1,13 @@
 """Helpers: resolve responsável do usuário e write audit / notifications."""
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date
 from typing import Any
 from uuid import UUID
 
 from supabase import Client
+
+from app.core.clock import now_br
 
 
 def sanitize_uuid(value: Any) -> str | None:
@@ -124,7 +126,7 @@ def create_notification(
 ) -> bool:
     """Returns True if a notification was created."""
     if dedupe_same_day:
-        start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        start = now_br().replace(hour=0, minute=0, second=0, microsecond=0)
         query = (
             client.table("notificacoes")
             .select("id")
@@ -216,49 +218,3 @@ def notify_responsavel_of_obrigacao(
         dedupe_same_day=dedupe_same_day,
     )
     return 1 if created else 0
-
-
-def scan_prazo_7d(client: Client, today: date | None = None) -> int:
-    today = today or date.today()
-    end = date.fromordinal(today.toordinal() + 7)
-    rows = (
-        client.table("obrigacoes")
-        .select(
-            "id,prazo_legal,prazo_fiscal,status,"
-            "responsaveis(auth_user_id),atividades_modelo(nome),empresas(razao_social)"
-        )
-        .neq("status", "ENTREGUE")
-        .execute()
-        .data
-        or []
-    )
-    created = 0
-    for row in rows:
-        prazo = row.get("prazo_fiscal") or row.get("prazo_legal")
-        if not prazo:
-            continue
-        d = date.fromisoformat(prazo)
-        if not (today <= d <= end):
-            continue
-        auth_id = (row.get("responsaveis") or {}).get("auth_user_id")
-        if not auth_id:
-            continue
-        atividade = row.get("atividades_modelo") or {}
-        empresa = row.get("empresas") or {}
-        titulo, corpo = format_alerta_obrigacao(
-            nome=atividade.get("nome"),
-            empresa=empresa.get("razao_social"),
-            tipo="PRAZO_7D",
-            prazo=prazo,
-        )
-        if create_notification(
-            client,
-            user_id=auth_id,
-            tipo="PRAZO_7D",
-            titulo=titulo,
-            corpo=corpo,
-            obrigacao_id=row["id"],
-            dedupe_same_day=True,
-        ):
-            created += 1
-    return created

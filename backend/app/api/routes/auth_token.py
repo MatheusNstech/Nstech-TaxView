@@ -1,15 +1,17 @@
 """Autenticação para clientes externos (app desktop)."""
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
 
-from app.core.auth import get_anon_client
 from app.core.config import Settings, get_settings
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+_GOTRUE_TIMEOUT = httpx.Timeout(15.0)
 
 
 class TokenRequest(BaseModel):
@@ -27,6 +29,52 @@ class TokenResponse(BaseModel):
     role: str | None = None
 
 
+def _gotrue_headers(settings: Settings, access_token: str | None = None) -> dict[str, str]:
+    headers = {
+        "apikey": settings.supabase_anon_key,
+        "Content-Type": "application/json",
+    }
+    if access_token:
+        headers["Authorization"] = f"Bearer {access_token}"
+    return headers
+
+
+def _password_grant(settings: Settings, email: str, password: str) -> dict[str, Any] | None:
+    # Chamada sem estado: o cliente supabase compartilhado guardaria a sessão
+    # (e o refresh automático) do último usuário logado.
+    url = f"{settings.supabase_url.rstrip('/')}/auth/v1/token?grant_type=password"
+    try:
+        resp = httpx.post(
+            url,
+            json={"email": email, "password": password},
+            headers=_gotrue_headers(settings),
+            timeout=_GOTRUE_TIMEOUT,
+        )
+    except httpx.HTTPError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Auth indisponível",
+        ) from None
+    if resp.status_code != 200:
+        return None
+    try:
+        return resp.json()
+    except ValueError:
+        return None
+
+
+def _revoke_session(settings: Settings, access_token: str) -> None:
+    url = f"{settings.supabase_url.rstrip('/')}/auth/v1/logout?scope=local"
+    try:
+        httpx.post(
+            url,
+            headers=_gotrue_headers(settings, access_token),
+            timeout=_GOTRUE_TIMEOUT,
+        )
+    except httpx.HTTPError:
+        pass
+
+
 @router.post("/token", response_model=TokenResponse)
 def login_token(
     body: TokenRequest,
@@ -39,44 +87,31 @@ def login_token(
             detail="Auth indisponível",
         )
 
-    client = get_anon_client(settings)
-    try:
-        result = client.auth.sign_in_with_password(
-            {"email": body.email.strip(), "password": body.password}
-        )
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="E-mail ou senha inválidos",
-        ) from None
-
-    session = getattr(result, "session", None)
-    user = getattr(result, "user", None)
-    if session is None or not getattr(session, "access_token", None):
+    data = _password_grant(settings, body.email.strip(), body.password)
+    access_token = (data or {}).get("access_token")
+    if not access_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="E-mail ou senha inválidos",
         )
 
-    meta = getattr(user, "app_metadata", None) or {}
+    user = data.get("user") or {}
+    meta = user.get("app_metadata") or {}
     role = meta.get("role") if isinstance(meta, dict) else None
     if role not in ("admin", "diretor"):
         # Desktop de faturamento: só contas admin/diretor
-        try:
-            client.auth.sign_out()
-        except Exception:
-            pass
+        _revoke_session(settings, access_token)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Conta sem permissão para integração de valores",
         )
 
-    expires_in = getattr(session, "expires_in", None)
+    expires_in = data.get("expires_in")
     return TokenResponse(
-        access_token=session.access_token,
-        refresh_token=getattr(session, "refresh_token", None),
+        access_token=access_token,
+        refresh_token=data.get("refresh_token"),
         expires_in=int(expires_in) if expires_in is not None else None,
-        user_id=str(user.id) if user and getattr(user, "id", None) else None,
-        email=getattr(user, "email", None),
+        user_id=str(user["id"]) if user.get("id") else None,
+        email=user.get("email"),
         role=str(role),
     )
