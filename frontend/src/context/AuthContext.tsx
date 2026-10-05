@@ -83,7 +83,7 @@ export function homePathForRole(
   if (role === 'admin') return '/diretoria'
   if (role === 'diretor') return '/diretoria'
   if (opts?.painelFiscalEditor) return '/diretoria/pendencias-rfb'
-  return '/minhas-tarefas'
+  return '/'
 }
 
 function readRecoveryFlag(): boolean {
