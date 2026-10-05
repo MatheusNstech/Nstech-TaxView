@@ -45,6 +45,10 @@ Thumbs.db
 /*.webp
 /*.gif
 
+# Planilhas (dados fiscais / exports locais)
+*.xlsx
+*.xls
+
 # Logs
 *.log
 npm-debug.log*
