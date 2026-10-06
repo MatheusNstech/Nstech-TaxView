@@ -14,6 +14,7 @@ from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.util import Emu, Inches, Pt
 
 from app.core.clock import today_br
+from app.services.status_engine import is_delivered
 
 BRAND = RGBColor(0xFF, 0x3C, 0x02)
 INK = RGBColor(0x1F, 0x29, 0x37)
@@ -31,6 +32,7 @@ STATUS_LABELS = {
     "PENDENTE": "Pendente",
     "EM_ANDAMENTO": "Em andamento",
     "EM_REVISAO": "Em revisão",
+    "ENTREGA_PARCIAL": "Entrega parcial",
     "ENTREGUE": "Entregue",
     "ATRASADO": "Atrasado",
 }
@@ -38,6 +40,7 @@ STATUS_COLORS = {
     "PENDENTE": RGBColor(0x64, 0x74, 0x8B),
     "EM_ANDAMENTO": RGBColor(0x02, 0x84, 0xC7),
     "EM_REVISAO": RGBColor(0xD9, 0x77, 0x06),
+    "ENTREGA_PARCIAL": RGBColor(0x0D, 0x94, 0x88),
     "ENTREGUE": RGBColor(0x05, 0x96, 0x69),
     "ATRASADO": RGBColor(0xE1, 0x1D, 0x48),
 }
@@ -558,6 +561,8 @@ def _add_gestao(
     counts = {key: 0 for key in STATUS_LABELS}
     for row in [*obrigacoes, *tarefas]:
         status = _status(row)
+        if is_delivered(status):
+            status = "ENTREGUE"
         counts[status] = counts.get(status, 0) + 1
     late = counts.get("ATRASADO", 0)
     entries = [

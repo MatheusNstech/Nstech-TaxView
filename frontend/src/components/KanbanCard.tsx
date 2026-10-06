@@ -1,6 +1,6 @@
 import { useDraggable } from '@dnd-kit/core'
 import { CSS } from '@dnd-kit/utilities'
-import { formatDate, formatHorario } from '../lib/format'
+import { formatDate, formatHorario, isEntregue } from '../lib/format'
 import type { WorkItem } from '../types'
 import StatusBadge from './StatusBadge'
 
@@ -23,8 +23,9 @@ export default function KanbanCard({
     })
 
   const overdue =
-    item.status !== 'ENTREGUE' &&
+    !isEntregue(item.status) &&
     (item.urgencia === 'atrasado' || item.status === 'ATRASADO')
+  const reaberta = Boolean(item.entregaOriginal) && !isEntregue(item.status)
 
   const style = {
     transform: CSS.Translate.toString(transform),
@@ -59,6 +60,14 @@ export default function KanbanCard({
           {overdue ? (
             <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-bold uppercase text-rose-600 dark:bg-rose-500/20 dark:text-rose-200">
               Atraso
+            </span>
+          ) : null}
+          {reaberta ? (
+            <span
+              className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-bold uppercase text-violet-600 dark:bg-violet-500/20 dark:text-violet-200"
+              title={`Entregue em ${formatDate(item.entregaOriginal?.slice(0, 10))} e reaberta`}
+            >
+              Reaberta
             </span>
           ) : null}
         </div>

@@ -26,6 +26,7 @@ const statusOptions: StatusObrigacao[] = [
   'PENDENTE',
   'EM_ANDAMENTO',
   'EM_REVISAO',
+  'ENTREGA_PARCIAL',
   'ENTREGUE',
   'ATRASADO',
 ]
@@ -407,6 +408,12 @@ export default function ObrigacaoDrawer({
                       onChange={(e) => setDataEntrega(e.target.value)}
                       className="glass-input"
                     />
+                    {obrigacao.entrega_original ? (
+                      <p className="mt-1 text-[11px] text-slate-500">
+                        Reaberta. Ao entregar de novo vale a entrega de{' '}
+                        {formatDate(obrigacao.entrega_original)}.
+                      </p>
+                    ) : null}
                   </div>
 
                   <div>
@@ -474,6 +481,12 @@ export default function ObrigacaoDrawer({
                     label="Data entrega"
                     value={formatDate(obrigacao.data_entrega)}
                   />
+                  {obrigacao.entrega_original ? (
+                    <FieldRow
+                      label="Reaberta"
+                      value={`Entregue em ${formatDate(obrigacao.entrega_original)}`}
+                    />
+                  ) : null}
                   <FieldRow
                     label="Nº recibo"
                     value={displayOrDash(obrigacao.recibo_numero)}

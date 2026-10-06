@@ -28,7 +28,12 @@ from app.services.scope import (
     resolve_responsavel,
     team_responsavel_ids,
 )
-from app.services.status_engine import urgencia_label
+from app.services.status_engine import (
+    as_br_date,
+    is_delivered,
+    status_filter_values,
+    urgencia_label,
+)
 
 router = APIRouter(prefix="/tarefas", tags=["tarefas"])
 
@@ -38,7 +43,12 @@ def _enrich(row: dict[str, Any]) -> dict[str, Any]:
     prazo = date.fromisoformat(row["prazo"]) if row.get("prazo") else None
     # Não sobrescreve o status do workflow (ex.: EM_REVISAO → ATRASADO),
     # senão o Kanban devolve o card para Pendente. Atraso fica só na urgência.
-    row["urgencia"] = urgencia_label(status_value, prazo, prazo)
+    row["urgencia"] = urgencia_label(
+        status_value,
+        prazo,
+        prazo,
+        entrega_original=as_br_date(row.get("entrega_original")),
+    )
     if "empresas" in row:
         row["empresa"] = row.pop("empresas")
     if "responsaveis" in row:
@@ -147,7 +157,7 @@ def query_tarefas(
         elif resolved:
             query = query.in_("responsavel_id", resolved)
         if status_filter:
-            query = query.eq("status", status_filter.value)
+            query = query.in_("status", status_filter_values(status_filter.value))
         if categoria:
             query = query.eq("categoria", categoria.value)
         return query.order("created_at", desc=True).order("id")
@@ -271,7 +281,7 @@ def create_tarefa(
             raise HTTPException(status_code=404, detail="Empresa não encontrada")
 
     motivo_atraso = None
-    if body.status.value == "ENTREGUE" and body.prazo < today_br():
+    if is_delivered(body.status.value) and body.prazo < today_br():
         motivo = (body.motivo_atraso or "").strip()
         if len(motivo) < 20:
             raise HTTPException(
@@ -300,7 +310,7 @@ def create_tarefa(
         "motivo_atraso": motivo_atraso,
         "entregue_em": (
             datetime.now(timezone.utc).isoformat()
-            if body.status.value == "ENTREGUE"
+            if is_delivered(body.status.value)
             else None
         ),
     }
@@ -380,7 +390,17 @@ def update_tarefa(
             )
 
     new_status = patch.get("status")
-    if new_status == "ENTREGUE":
+    entrega_original = current.get("entrega_original")
+    if new_status and not is_delivered(new_status):
+        if current.get("entregue_em") or is_delivered(current.get("status")):
+            # Reabertura: a data guardada evita que a tarefa volte como atrasada.
+            patch["entrega_original"] = (
+                entrega_original
+                or current.get("entregue_em")
+                or datetime.now(timezone.utc).isoformat()
+            )
+            patch["entregue_em"] = None
+    if is_delivered(new_status):
         # Vale o prazo mais cedo entre o gravado e o enviado: adiar o prazo no
         # mesmo PATCH da entrega não dispensa o motivo do atraso.
         prazos = [
@@ -389,10 +409,18 @@ def update_tarefa(
             if raw
         ]
         prazo = min(prazos) if prazos else None
-        late = _is_late_entrega(
-            current_status=str(current.get("status") or "PENDENTE"),
-            prazo=prazo,
-        )
+        if entrega_original:
+            patch["entregue_em"] = entrega_original
+            patch["entrega_original"] = None
+        # Já entregue (parcial -> entregue) ou reaberta: vale a data da entrega.
+        dia_entrega = as_br_date(entrega_original or current.get("entregue_em"))
+        if dia_entrega:
+            late = bool(prazo and prazo < dia_entrega)
+        else:
+            late = _is_late_entrega(
+                current_status=str(current.get("status") or "PENDENTE"),
+                prazo=prazo,
+            )
         if late:
             motivo = patch.get("motivo_atraso") or current.get("motivo_atraso") or ""
             motivo = str(motivo).strip()
@@ -407,7 +435,7 @@ def update_tarefa(
             patch["motivo_atraso"] = motivo
         elif "motivo_atraso" in patch:
             patch.pop("motivo_atraso", None)
-        if not current.get("entregue_em"):
+        if not current.get("entregue_em") and not patch.get("entregue_em"):
             patch["entregue_em"] = datetime.now(timezone.utc).isoformat()
 
     if not patch:

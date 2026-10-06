@@ -2,6 +2,7 @@ export type StatusObrigacao =
   | 'PENDENTE'
   | 'EM_ANDAMENTO'
   | 'EM_REVISAO'
+  | 'ENTREGA_PARCIAL'
   | 'ENTREGUE'
   | 'ATRASADO'
 
@@ -90,6 +91,8 @@ export interface Obrigacao {
   /** Principal primeiro, depois os co-responsáveis. */
   responsaveis?: Responsavel[]
   urgencia: string | null
+  /** Data da entrega guardada ao reabrir; preenchida = reaberta. */
+  entrega_original?: string | null
   aprovado_por?: string | null
   aprovado_em?: string | null
   reprovado_motivo?: string | null
@@ -111,6 +114,7 @@ export interface Tarefa {
   solicitante_nome: string
   motivo_atraso: string | null
   entregue_em: string | null
+  entrega_original?: string | null
   created_by: string | null
   created_at?: string | null
   updated_at?: string | null
@@ -164,6 +168,8 @@ export interface WorkItem {
   horaFim?: string | null
   status: StatusObrigacao
   urgencia: string | null
+  /** Data da entrega anterior quando o item foi reaberto. */
+  entregaOriginal?: string | null
   categoria: TarefaCategoria
   obrigacao?: Obrigacao
   tarefa?: Tarefa
@@ -275,6 +281,7 @@ export const KANBAN_COLUMNS: { id: StatusObrigacao; label: string }[] = [
   { id: 'PENDENTE', label: 'Pendente' },
   { id: 'EM_ANDAMENTO', label: 'Em andamento' },
   { id: 'EM_REVISAO', label: 'Em revisão' },
+  { id: 'ENTREGA_PARCIAL', label: 'Entrega parcial' },
   { id: 'ENTREGUE', label: 'Entregue' },
 ]
 

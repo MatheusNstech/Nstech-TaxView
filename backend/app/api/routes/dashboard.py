@@ -16,7 +16,7 @@ from app.services.obrigacao_responsaveis import (
     select_with_responsavel_filter,
 )
 from app.services.scope import effective_responsavel_id
-from app.services.status_engine import normalize_status
+from app.services.status_engine import as_br_date, is_delivered, normalize_status
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -39,10 +39,10 @@ def _empty_summary() -> DashboardSummary:
 
 def _normalize_tarefa_status(row: dict[str, Any], today: date) -> str:
     st = row.get("status") or "PENDENTE"
-    if st == "ENTREGUE":
-        return st
+    if is_delivered(st):
+        return "ENTREGUE"
     prazo = date.fromisoformat(row["prazo"]) if row.get("prazo") else None
-    if prazo and prazo < today:
+    if prazo and prazo < (as_br_date(row.get("entrega_original")) or today):
         return "ATRASADO"
     return st
 
@@ -88,19 +88,18 @@ def summary(
     obr_rows = fetch_all(
         build(
             "obrigacoes",
-            "id,status,prazo_legal,prazo_fiscal,data_entrega,responsavel_id,"
+            "id,status,prazo_legal,prazo_fiscal,data_entrega,entrega_original,responsavel_id,"
             "empresas(bu,razao_social),responsaveis(id,nome,capacidade_max),"
             "obrigacao_responsaveis(responsavel_id,responsaveis(id,nome,capacidade_max))",
         )
     )
-    # Tarefas avulsas não têm tipo de serviço: somem quando o filtro está ativo.
     tar_rows = (
         []
         if atividade_id
         else fetch_all(
             build(
                 "tarefas",
-                "id,status,prazo,responsavel_id,"
+                "id,status,prazo,entrega_original,responsavel_id,"
                 "empresas(bu,razao_social),responsaveis(nome,capacidade_max)",
             )
         )
@@ -129,7 +128,10 @@ def summary(
             date.fromisoformat(row["prazo_fiscal"]) if row.get("prazo_fiscal") else None,
             date.fromisoformat(row["data_entrega"]) if row.get("data_entrega") else None,
             today=today,
+            entrega_original=as_br_date(row.get("entrega_original")),
         )
+        if is_delivered(st):
+            st = "ENTREGUE"
         status_counter[st] += 1
         bu_counter[(row.get("empresas") or {}).get("bu") or "N/A"] += 1
         # Cada responsável (principal ou co-responsável) carrega a obrigação.
@@ -142,7 +144,7 @@ def summary(
             if nome not in capacidade:
                 capacidade[nome] = resp.get("capacidade_max")
         ref = row.get("prazo_fiscal") or row.get("prazo_legal")
-        if st != "ENTREGUE" and ref:
+        if st != "ENTREGUE" and ref and not row.get("entrega_original"):
             ref_date = date.fromisoformat(ref)
             if today <= ref_date <= limit:
                 vence_7 += 1
@@ -155,7 +157,7 @@ def summary(
         resp_counter[nome] += 1
         if nome not in capacidade:
             capacidade[nome] = (row.get("responsaveis") or {}).get("capacidade_max")
-        if st != "ENTREGUE" and row.get("prazo"):
+        if st != "ENTREGUE" and row.get("prazo") and not row.get("entrega_original"):
             ref_date = date.fromisoformat(row["prazo"])
             if today <= ref_date <= limit:
                 vence_7 += 1

@@ -2,7 +2,13 @@ import { Trash2, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { apiFetch } from '../lib/api'
-import { formatDate, formatHorario, formatTime, statusLabel } from '../lib/format'
+import {
+  formatDate,
+  formatHorario,
+  formatTime,
+  isEntregue,
+  statusLabel,
+} from '../lib/format'
 import type { StatusObrigacao, Tarefa, TarefaAudit, TarefaUpdate } from '../types'
 import { tarefaCategoriaLabel } from '../types'
 import GlassDatePicker from './GlassDatePicker'
@@ -12,6 +18,7 @@ const STATUS_OPTS: StatusObrigacao[] = [
   'PENDENTE',
   'EM_ANDAMENTO',
   'EM_REVISAO',
+  'ENTREGA_PARCIAL',
   'ENTREGUE',
   'ATRASADO',
 ]
@@ -30,12 +37,16 @@ interface TarefaDrawerProps {
 function isLateEntrega(
   status: StatusObrigacao,
   prazoIso: string | null | undefined,
-  tarefaStatus: StatusObrigacao,
+  tarefa: Tarefa,
 ): boolean {
-  if (status !== 'ENTREGUE') return false
-  if (tarefaStatus === 'ATRASADO') return true
-  if (!prazoIso) return false
-  const prazo = prazoIso.slice(0, 10)
+  if (!isEntregue(status)) return false
+  const prazo = prazoIso?.slice(0, 10)
+  // Reaberta ou já entregue (parcial -> entregue): vale a data da entrega.
+  const entrega =
+    tarefa.entrega_original ?? (isEntregue(tarefa.status) ? tarefa.entregue_em : null)
+  if (entrega) return Boolean(prazo && prazo < entrega.slice(0, 10))
+  if (tarefa.status === 'ATRASADO') return true
+  if (!prazo) return false
   const today = new Date()
   const todayIso = [
     today.getFullYear(),
@@ -111,7 +122,7 @@ export default function TarefaDrawer({
   }, [open])
 
   const needsMotivo = useMemo(
-    () => (tarefa ? isLateEntrega(status, prazo || tarefa.prazo, tarefa.status) : false),
+    () => (tarefa ? isLateEntrega(status, prazo || tarefa.prazo, tarefa) : false),
     [tarefa, status, prazo],
   )
 

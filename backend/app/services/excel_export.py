@@ -9,6 +9,8 @@ from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
+from app.services.status_engine import is_delivered
+
 BRAND = "FF3D03"
 INK = "1F2937"
 MUTED = "6B7280"
@@ -28,6 +30,7 @@ STATUS_LABELS = {
     "PENDENTE": "Pendente",
     "EM_ANDAMENTO": "Em andamento",
     "EM_REVISAO": "Em revisão",
+    "ENTREGA_PARCIAL": "Entrega parcial",
     "ENTREGUE": "Entregue",
     "ATRASADO": "Atrasado",
 }
@@ -35,6 +38,7 @@ STATUS_FILL = {
     "PENDENTE": PatternFill("solid", fgColor="F3F4F6"),
     "EM_ANDAMENTO": PatternFill("solid", fgColor="DBEAFE"),
     "EM_REVISAO": PatternFill("solid", fgColor="FEF3C7"),
+    "ENTREGA_PARCIAL": PatternFill("solid", fgColor="CCFBF1"),
     "ENTREGUE": PatternFill("solid", fgColor="D1FAE5"),
     "ATRASADO": PatternFill("solid", fgColor="FEE2E2"),
 }
@@ -42,6 +46,7 @@ STATUS_FONT = {
     "PENDENTE": Font(color="374151", bold=True, size=10),
     "EM_ANDAMENTO": Font(color="1D4ED8", bold=True, size=10),
     "EM_REVISAO": Font(color="B45309", bold=True, size=10),
+    "ENTREGA_PARCIAL": Font(color="0F766E", bold=True, size=10),
     "ENTREGUE": Font(color="047857", bold=True, size=10),
     "ATRASADO": Font(color="B91C1C", bold=True, size=10),
 }
@@ -200,6 +205,8 @@ def build_obrigacoes_xlsx(
     counts: dict[str, int] = {key: 0 for key in STATUS_LABELS}
     for _, row in combined:
         status = str(row.get("status") or "PENDENTE")
+        if is_delivered(status):
+            status = "ENTREGUE"
         counts[status] = counts.get(status, 0) + 1
 
     ws.merge_cells(f"A1:{LAST_COL}1")

@@ -42,6 +42,7 @@ export default function KanbanBoard({
       PENDENTE: [],
       EM_ANDAMENTO: [],
       EM_REVISAO: [],
+      ENTREGA_PARCIAL: [],
       ENTREGUE: [],
     }
     for (const item of items) {

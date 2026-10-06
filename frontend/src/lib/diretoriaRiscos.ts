@@ -1,5 +1,6 @@
 import type { DashboardSummary, Obrigacao, Tarefa } from '../types'
 import { tarefaCategoriaLabel } from '../types'
+import { isEntregue } from './format'
 import { obrigacaoResponsaveisLabel } from './responsaveis'
 
 export type DiretoriaRiscoTipo = 'atrasado' | 'vence_7d' | 'sobrecarga'
@@ -78,7 +79,7 @@ export function buildDiretoriaRiscos(
 
   const vence7 = obrigacoes
     .filter((o) => {
-      if (o.status === 'ENTREGUE' || o.status === 'ATRASADO') return false
+      if (isEntregue(o.status) || o.status === 'ATRASADO' || o.entrega_original) return false
       const ref = o.prazo_fiscal ?? o.prazo_legal
       const days = daysUntil(ref, today)
       return days != null && days >= 0 && days <= 7
@@ -99,7 +100,7 @@ export function buildDiretoriaRiscos(
 
   const tarVence7 = tarefas
     .filter((t) => {
-      if (t.status === 'ENTREGUE' || t.status === 'ATRASADO') return false
+      if (isEntregue(t.status) || t.status === 'ATRASADO' || t.entrega_original) return false
       const days = daysUntil(t.prazo, today)
       return days != null && days >= 0 && days <= 7
     })

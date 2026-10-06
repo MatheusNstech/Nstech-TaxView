@@ -9,6 +9,7 @@ class StatusObrigacao(str, Enum):
     PENDENTE = "PENDENTE"
     EM_ANDAMENTO = "EM_ANDAMENTO"
     EM_REVISAO = "EM_REVISAO"
+    ENTREGA_PARCIAL = "ENTREGA_PARCIAL"
     ENTREGUE = "ENTREGUE"
     ATRASADO = "ATRASADO"
 
@@ -170,6 +171,7 @@ class ObrigacaoOut(ObrigacaoBase):
     responsavel: ResponsavelOut | None = None
     responsaveis: list[ResponsavelOut] = Field(default_factory=list)
     urgencia: str | None = None
+    entrega_original: date | None = None
     aprovado_por: UUID | None = None
     aprovado_em: datetime | None = None
     reprovado_motivo: str | None = None
@@ -367,6 +369,7 @@ class TarefaOut(BaseModel):
     solicitante_nome: str
     motivo_atraso: str | None = None
     entregue_em: datetime | None = None
+    entrega_original: datetime | None = None
     created_by: UUID | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None

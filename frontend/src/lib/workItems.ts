@@ -15,6 +15,7 @@ export function workItemFromObrigacao(o: Obrigacao): WorkItem {
     prazo: o.prazo_fiscal || o.prazo_legal,
     status: o.status,
     urgencia: o.urgencia,
+    entregaOriginal: o.entrega_original ?? null,
     categoria,
     obrigacao: o,
   }
@@ -37,6 +38,7 @@ export function workItemFromTarefa(t: Tarefa): WorkItem {
     horaFim: t.hora_fim,
     status: t.status,
     urgencia: t.urgencia,
+    entregaOriginal: t.entrega_original ?? null,
     categoria: t.categoria,
     tarefa: t,
   }

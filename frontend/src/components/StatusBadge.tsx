@@ -8,6 +8,8 @@ const statusStyles: Record<StatusObrigacao, string> = {
     'bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-500/20 dark:text-sky-200 dark:ring-sky-500/30',
   EM_REVISAO:
     'bg-amber-50 text-amber-800 ring-amber-200 dark:bg-amber-500/20 dark:text-amber-200 dark:ring-amber-500/30',
+  ENTREGA_PARCIAL:
+    'bg-teal-50 text-teal-700 ring-teal-200 dark:bg-teal-500/20 dark:text-teal-200 dark:ring-teal-500/30',
   ENTREGUE:
     'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-200 dark:ring-emerald-500/30',
   ATRASADO:

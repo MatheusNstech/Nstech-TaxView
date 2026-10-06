@@ -20,6 +20,7 @@ import {
   currentCompetenciaMonth,
   formatDate,
   formatHorario,
+  isEntregue,
   monthToCompetencia,
 } from '../lib/format'
 import { obrigacaoTemResponsavel } from '../lib/responsaveis'
@@ -47,8 +48,15 @@ function todayIsoLocal(): string {
 }
 
 function isLateWorkItem(item: WorkItem): boolean {
-  if (item.status === 'ATRASADO' || item.urgencia === 'atrasado') return true
   const prazo = item.prazo?.slice(0, 10)
+  // Reaberta ou já entregue (parcial -> entregue): vale a data da entrega.
+  const entrega =
+    item.entregaOriginal ??
+    (isEntregue(item.status)
+      ? (item.obrigacao?.data_entrega ?? item.tarefa?.entregue_em)
+      : null)
+  if (entrega) return Boolean(prazo && prazo < entrega.slice(0, 10))
+  if (item.status === 'ATRASADO' || item.urgencia === 'atrasado') return true
   if (!prazo) return false
   return prazo < todayIsoLocal()
 }
@@ -84,9 +92,10 @@ export default function MinhasTarefas() {
     null,
   )
   const [selectedTarefa, setSelectedTarefa] = useState<Tarefa | null>(null)
-  const [pendingLateDelivery, setPendingLateDelivery] = useState<WorkItem | null>(
-    null,
-  )
+  const [pendingLateDelivery, setPendingLateDelivery] = useState<{
+    item: WorkItem
+    status: StatusObrigacao
+  } | null>(null)
   const [lateSubmitting, setLateSubmitting] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [error, setError] = useState('')
@@ -279,8 +288,9 @@ export default function MinhasTarefas() {
       return
     }
 
-    if (status === 'ENTREGUE' && isLateWorkItem(item)) {
-      setPendingLateDelivery(item)
+    const motivoGravado = item.obrigacao?.motivo_atraso ?? item.tarefa?.motivo_atraso
+    if (isEntregue(status) && isLateWorkItem(item) && !motivoGravado?.trim()) {
+      setPendingLateDelivery({ item, status })
       return
     }
 
@@ -321,8 +331,8 @@ export default function MinhasTarefas() {
   }
 
   const confirmLateDelivery = async (motivo: string) => {
-    const item = pendingLateDelivery
-    if (!item) return
+    if (!pendingLateDelivery) return
+    const { item, status } = pendingLateDelivery
     setLateSubmitting(true)
     setError('')
     try {
@@ -330,9 +340,9 @@ export default function MinhasTarefas() {
         const updated = await apiFetch<Obrigacao>(`/api/obrigacoes/${item.id}`, {
           method: 'PATCH',
           body: JSON.stringify({
-            status: 'ENTREGUE',
+            status,
             motivo_atraso: motivo,
-            data_entrega: todayIsoLocal(),
+            data_entrega: item.obrigacao?.data_entrega ?? todayIsoLocal(),
           }),
         })
         setObrigacoes((curr) =>
@@ -342,7 +352,7 @@ export default function MinhasTarefas() {
         const updated = await apiFetch<Tarefa>(`/api/tarefas/${item.id}`, {
           method: 'PATCH',
           body: JSON.stringify({
-            status: 'ENTREGUE',
+            status,
             motivo_atraso: motivo,
           }),
         })
@@ -588,8 +598,8 @@ export default function MinhasTarefas() {
 
       <MotivoAtrasoModal
         open={Boolean(pendingLateDelivery)}
-        title={pendingLateDelivery?.title ?? ''}
-        subtitle={pendingLateDelivery?.subtitle}
+        title={pendingLateDelivery?.item.title ?? ''}
+        subtitle={pendingLateDelivery?.item.subtitle}
         submitting={lateSubmitting}
         onCancel={() => {
           if (lateSubmitting) return

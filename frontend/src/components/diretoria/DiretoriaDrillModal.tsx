@@ -1,7 +1,7 @@
 import { Search, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import type { StatusObrigacao, WorkItem } from '../../types'
-import { formatDate, statusLabel } from '../../lib/format'
+import { formatDate, statusLabel, statusParaContagem } from '../../lib/format'
 import { workItemServicoNome } from '../../lib/diretoriaAggregates'
 import { obrigacaoResponsaveis } from '../../lib/responsaveis'
 import PersonAvatar from '../PersonAvatar'
@@ -20,6 +20,7 @@ const STATUS_OPTS: StatusObrigacao[] = [
   'PENDENTE',
   'EM_ANDAMENTO',
   'EM_REVISAO',
+  'ENTREGA_PARCIAL',
   'ENTREGUE',
   'ATRASADO',
 ]
@@ -123,7 +124,11 @@ export default function DiretoriaDrillModal({
     return items.filter((item) => {
       if (bu && itemBu(item) !== bu) return false
       if (responsavel && !itemResponsavelNomes(item).includes(responsavel)) return false
-      if (status && item.status !== status) return false
+      if (status) {
+        const atual =
+          status === 'ENTREGA_PARCIAL' ? item.status : statusParaContagem(item.status)
+        if (atual !== status) return false
+      }
       if (!q) return true
       const hay = [
         item.title,

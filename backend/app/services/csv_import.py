@@ -14,7 +14,14 @@ from app.services.obrigacao_responsaveis import add_responsaveis_bulk, links_by_
 from app.services.status_engine import compute_prazo
 
 COMPETENCIA_SUFFIX_RE = re.compile(r"\s*\((\d{2})/(\d{4})\)\s*$")
-VALID_STATUS = {"PENDENTE", "EM_ANDAMENTO", "EM_REVISAO", "ENTREGUE", "ATRASADO"}
+VALID_STATUS = {
+    "PENDENTE",
+    "EM_ANDAMENTO",
+    "EM_REVISAO",
+    "ENTREGA_PARCIAL",
+    "ENTREGUE",
+    "ATRASADO",
+}
 
 IMPORT_HEADERS = [
     "Tipo",
@@ -135,7 +142,7 @@ def build_import_template_xlsx() -> bytes:
     last_col = get_column_letter(len(IMPORT_HEADERS))
     status_validation = DataValidation(
         type="list",
-        formula1='"PENDENTE,EM_ANDAMENTO,EM_REVISAO,ENTREGUE,ATRASADO"',
+        formula1='"PENDENTE,EM_ANDAMENTO,EM_REVISAO,ENTREGA_PARCIAL,ENTREGUE,ATRASADO"',
         allow_blank=True,
     )
     apuracao_validation = DataValidation(
@@ -172,7 +179,9 @@ def build_import_template_xlsx() -> bytes:
     notes["A5"] = "Tipo Tarefa: Título, Solicitante, Responsável, Prazo fiscal (ou Prazo legal), Hora início e Hora fim."
     notes["A6"] = "Tarefa pode ficar sem CNPJ. Competência vazia usa o mês escolhido na tela."
     notes["A7"] = "Categoria: fechamento ou outras. Horário no formato HH:MM. Datas AAAA-MM-DD."
-    notes["A8"] = "Status: PENDENTE, EM_ANDAMENTO, EM_REVISAO, ENTREGUE ou ATRASADO."
+    notes["A8"] = (
+        "Status: PENDENTE, EM_ANDAMENTO, EM_REVISAO, ENTREGA_PARCIAL, ENTREGUE ou ATRASADO."
+    )
     notes["A9"] = "Data entrega, número do recibo, observação e motivo do atraso são opcionais (úteis no legado)."
     notes.column_dimensions["A"].width = 110
 
@@ -363,6 +372,8 @@ def _parse_status(value: str) -> str | None:
         "CONCLUIDO": "ENTREGUE",
         "CONCLUÍDA": "ENTREGUE",
         "CONCLUIDA": "ENTREGUE",
+        "ENTREGA_PARCIAL": "ENTREGA_PARCIAL",
+        "PARCIAL": "ENTREGA_PARCIAL",
     }
     text = aliases.get(text, text)
     return text if text in VALID_STATUS else None
@@ -564,7 +575,7 @@ def _import_table_rows(
                     "hora_fim": hora_fim,
                     "status": status_value or "PENDENTE",
                     "motivo_atraso": motivo_atraso[:2000] if motivo_atraso else None,
-                    "entregue": status_value == "ENTREGUE",
+                    "entregue": status_value in {"ENTREGUE", "ENTREGA_PARCIAL"},
                 }
             )
             continue

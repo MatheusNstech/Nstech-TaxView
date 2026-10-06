@@ -1,4 +1,5 @@
 import type { Obrigacao } from '../types'
+import { isEntregue } from './format'
 
 export type FechamentoStatus =
   | 'no_prazo'
@@ -70,21 +71,22 @@ export function fechamentoStatus(o: Obrigacao, today: Date = new Date()): Fecham
   const prazo = prazoFechamento(o)
   const entrega = parseIsoDate(o.data_entrega)
   const todayStr = todayIso(today)
-  const aberto = o.status !== 'ENTREGUE'
 
-  if (o.status === 'ENTREGUE') {
+  if (isEntregue(o.status)) {
     if (entrega && prazo && entrega > prazo) return 'fora_prazo'
     return 'no_prazo'
   }
 
   if (o.status === 'ATRASADO') return 'atrasado'
-  if (prazo && prazo < todayStr && aberto) return 'atrasado'
+  // Reaberta mede o atraso pela entrega original, não por hoje.
+  const referencia = parseIsoDate(o.entrega_original) ?? todayStr
+  if (prazo && prazo < referencia) return 'atrasado'
   if (o.status === 'EM_REVISAO') return 'revisao'
   return 'aberto'
 }
 
 export function isVencendoHoje(o: Obrigacao, today: Date = new Date()): boolean {
-  if (o.status === 'ENTREGUE') return false
+  if (isEntregue(o.status) || o.entrega_original) return false
   const prazo = prazoFechamento(o)
   return prazo === todayIso(today)
 }
@@ -159,7 +161,7 @@ export function computeFechamentoKpis(
   let foraPrazo = 0
   for (const o of obrigacoes) {
     const st = fechamentoStatus(o, today)
-    if (o.status === 'ENTREGUE') entregues += 1
+    if (isEntregue(o.status)) entregues += 1
     if (st === 'atrasado') atrasadas += 1
     if (st === 'fora_prazo') foraPrazo += 1
     if (isVencendoHoje(o, today)) venceHoje += 1
@@ -185,25 +187,28 @@ export function tarefaPrazoIso(t: { prazo: string | null }): string | null {
 }
 
 export function tarefaIsAtrasada(
-  t: { status: string; prazo: string | null },
+  t: { status: string; prazo: string | null; entrega_original?: string | null },
   today: Date = new Date(),
 ): boolean {
-  if (t.status === 'ENTREGUE') return false
-  if (t.status === 'ATRASADO') return true
+  if (isEntregue(t.status)) return false
   const prazo = tarefaPrazoIso(t)
+  if (t.entrega_original) {
+    return Boolean(prazo && prazo < t.entrega_original.slice(0, 10))
+  }
+  if (t.status === 'ATRASADO') return true
   return Boolean(prazo && prazo < todayIso(today))
 }
 
 export function tarefaVenceHoje(
-  t: { status: string; prazo: string | null },
+  t: { status: string; prazo: string | null; entrega_original?: string | null },
   today: Date = new Date(),
 ): boolean {
-  if (t.status === 'ENTREGUE') return false
+  if (isEntregue(t.status) || t.entrega_original) return false
   return tarefaPrazoIso(t) === todayIso(today)
 }
 
 export function matchesTarefaFechamentoChip(
-  t: { status: string; prazo: string | null },
+  t: { status: string; prazo: string | null; entrega_original?: string | null },
   chip: FechamentoChip,
   today: Date = new Date(),
 ): boolean {

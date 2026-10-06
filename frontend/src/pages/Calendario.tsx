@@ -22,6 +22,7 @@ const STATUS_OPTS: StatusObrigacao[] = [
   'PENDENTE',
   'EM_ANDAMENTO',
   'EM_REVISAO',
+  'ENTREGA_PARCIAL',
   'ENTREGUE',
   'ATRASADO',
 ]

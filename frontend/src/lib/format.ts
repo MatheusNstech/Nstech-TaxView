@@ -87,10 +87,21 @@ export function statusLabel(status: string): string {
     PENDENTE: 'Pendente',
     EM_ANDAMENTO: 'Em andamento',
     EM_REVISAO: 'Em revisão',
+    ENTREGA_PARCIAL: 'Entrega parcial',
     ENTREGUE: 'Entregue',
     ATRASADO: 'Atrasado',
   }
   return labels[status] ?? status
+}
+
+/** Entrega parcial já conta como entregue (prazo e painéis). */
+export function isEntregue(status: string | null | undefined): boolean {
+  return status === 'ENTREGUE' || status === 'ENTREGA_PARCIAL'
+}
+
+/** Status para contagens: entrega parcial soma em Entregue. */
+export function statusParaContagem<T extends string>(status: T): T | 'ENTREGUE' {
+  return status === 'ENTREGA_PARCIAL' ? 'ENTREGUE' : status
 }
 
 export function urgenciaLabel(urgencia: string | null | undefined): string {

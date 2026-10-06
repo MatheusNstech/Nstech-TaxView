@@ -56,7 +56,13 @@ from app.services.scope import (
     effective_responsavel_id,
     list_scope_ids,
 )
-from app.services.status_engine import normalize_status, urgencia_label
+from app.services.status_engine import (
+    as_br_date,
+    is_delivered,
+    normalize_status,
+    status_filter_values,
+    urgencia_label,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -66,17 +72,20 @@ _FULL_SELECT = f"*, empresas(*), atividades_modelo(*), responsaveis(*), {RESPONS
 
 
 def _enrich(row: dict[str, Any]) -> dict[str, Any]:
+    entrega_original = as_br_date(row.get("entrega_original"))
     status_value = normalize_status(
         row.get("status") or "PENDENTE",
         date.fromisoformat(row["prazo_legal"]) if row.get("prazo_legal") else None,
         date.fromisoformat(row["prazo_fiscal"]) if row.get("prazo_fiscal") else None,
         date.fromisoformat(row["data_entrega"]) if row.get("data_entrega") else None,
+        entrega_original=entrega_original,
     )
     row = {**row, "status": status_value}
     row["urgencia"] = urgencia_label(
         status_value,
         date.fromisoformat(row["prazo_legal"]) if row.get("prazo_legal") else None,
         date.fromisoformat(row["prazo_fiscal"]) if row.get("prazo_fiscal") else None,
+        entrega_original=entrega_original,
     )
     if "empresas" in row:
         row["empresa"] = row.pop("empresas")
@@ -141,7 +150,7 @@ def query_obrigacoes(
             query = query.eq("competencia", competencia.isoformat())
         query = apply_responsavel_filter(query, rid)
         if status_filter:
-            query = query.eq("status", status_filter.value)
+            query = query.in_("status", status_filter_values(status_filter.value))
         if atividade_id:
             query = query.eq("atividade_id", str(atividade_id))
         return query.order("competencia", desc=True).order("id")
@@ -459,20 +468,31 @@ def update_obrigacao(
         body["status"] = "ENTREGUE"
 
     new_status = body.get("status")
-    if new_status and new_status != "ENTREGUE":
+    entrega_original = as_br_date(before.get("entrega_original"))
+    if new_status and not is_delivered(new_status):
         # normalize_status trata data_entrega preenchida como ENTREGUE; sem limpar,
         # a obrigação nunca sai da coluna Entregue.
         body["data_entrega"] = None
-    if new_status == "ENTREGUE":
+        if before.get("data_entrega") or is_delivered(before.get("status")):
+            # Reabertura: a data guardada evita que o item volte como atrasado.
+            original = entrega_original or as_br_date(before.get("data_entrega")) or today_br()
+            body["entrega_original"] = original.isoformat()
+    if is_delivered(new_status):
         # Atraso usa o prazo já gravado, não o prazo enviado neste PATCH.
         prazo_fiscal = before.get("prazo_fiscal")
         prazo_legal = before.get("prazo_legal")
         ref = prazo_fiscal or prazo_legal
         today = today_br()
-        late = before.get("status") == "ATRASADO"
+        if entrega_original:
+            body["data_entrega"] = entrega_original.isoformat()
+            body["entrega_original"] = None
+        # Já entregue (parcial -> entregue) ou reaberta: vale a data da entrega.
+        ja_entregue = entrega_original or as_br_date(before.get("data_entrega"))
+        dia_entrega = ja_entregue or today
+        late = before.get("status") == "ATRASADO" and not ja_entregue
         if not late and ref:
             try:
-                late = date.fromisoformat(str(ref)[:10]) < today
+                late = date.fromisoformat(str(ref)[:10]) < dia_entrega
             except ValueError:
                 late = False
         if late:
@@ -583,7 +603,9 @@ def aprovar_obrigacao(
         "updated_by": user.id,
     }
     if not before.get("data_entrega"):
-        body["data_entrega"] = today_br().isoformat()
+        original = as_br_date(before.get("entrega_original"))
+        body["data_entrega"] = (original or today_br()).isoformat()
+        body["entrega_original"] = None
 
     data = (
         client.table("obrigacoes").update(body).eq("id", str(obrigacao_id)).execute().data

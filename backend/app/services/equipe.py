@@ -13,6 +13,7 @@ from app.services.notifications import (
     write_audit,
 )
 from app.services.scope import resolve_responsavel
+from app.services.status_engine import is_delivered
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,7 @@ _STATUS_LABELS = {
     "PENDENTE": "Pendente",
     "EM_ANDAMENTO": "Em andamento",
     "EM_REVISAO": "Em revisão",
+    "ENTREGA_PARCIAL": "Entrega parcial",
     "ENTREGUE": "Entregue",
     "ATRASADO": "Atrasado",
 }
@@ -34,6 +36,10 @@ def frase_acao_equipe(
     dono = " / ".join(donos)
     if status_depois == "ENTREGUE" and status_antes != "ENTREGUE":
         return f"{ator} entregou a tarefa de {dono}"
+    if status_depois == "ENTREGA_PARCIAL" and status_antes != "ENTREGA_PARCIAL":
+        return f"{ator} fez entrega parcial da tarefa de {dono}"
+    if is_delivered(status_antes) and status_depois and not is_delivered(status_depois):
+        return f"{ator} reabriu a tarefa de {dono}"
     if status_depois and status_depois != status_antes:
         label = _STATUS_LABELS.get(status_depois, status_depois)
         return f"{ator} moveu a tarefa de {dono} para {label}"

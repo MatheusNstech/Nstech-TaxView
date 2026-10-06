@@ -29,6 +29,7 @@ const statusOptions: { value: StatusObrigacao | ''; label: string }[] = [
   { value: 'PENDENTE', label: 'Pendente' },
   { value: 'EM_ANDAMENTO', label: 'Em andamento' },
   { value: 'EM_REVISAO', label: 'Em revisão' },
+  { value: 'ENTREGA_PARCIAL', label: 'Entrega parcial' },
   { value: 'ENTREGUE', label: 'Entregue' },
   { value: 'ATRASADO', label: 'Atrasado' },
 ]

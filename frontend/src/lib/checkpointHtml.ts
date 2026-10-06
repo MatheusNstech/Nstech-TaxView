@@ -1,4 +1,4 @@
-import { formatDate, formatHorario, statusLabel } from './format'
+import { formatDate, formatHorario, isEntregue, statusLabel } from './format'
 import type { StatusObrigacao, WorkItem } from '../types'
 
 export interface CheckpointHtmlInput {
@@ -61,7 +61,7 @@ function formatCompetenciaLabel(month: string): string {
 }
 
 function progressPct(status: StatusObrigacao): number {
-  if (status === 'ENTREGUE') return 100
+  if (isEntregue(status)) return 100
   if (status === 'EM_REVISAO') return 80
   if (status === 'EM_ANDAMENTO') return 50
   return 0
@@ -72,6 +72,7 @@ function statusChipLabel(status: StatusObrigacao): string {
     PENDENTE: 'PENDENTE',
     EM_ANDAMENTO: 'EM ANDAMENTO',
     EM_REVISAO: 'EM REVISÃO',
+    ENTREGA_PARCIAL: 'ENTREGA PARCIAL',
     ENTREGUE: 'ENTREGUE',
     ATRASADO: 'ATRASADO',
   }
@@ -79,7 +80,7 @@ function statusChipLabel(status: StatusObrigacao): string {
 }
 
 function statusChipClass(item: WorkItem): string {
-  if (item.status === 'ENTREGUE') return 'st-ok'
+  if (isEntregue(item.status)) return 'st-ok'
   if (item.status === 'ATRASADO' || item.urgencia === 'atrasado') return 'st-late'
   if (item.status === 'EM_ANDAMENTO') return 'st-run'
   if (item.status === 'EM_REVISAO') return 'st-rev'
@@ -380,7 +381,7 @@ export function checkpointFilename(
 export function buildCheckpointHtml(input: CheckpointHtmlInput): string {
   const person = input.personName.trim() || 'Responsável'
   const items = [...input.items].sort(sortByPrazo)
-  const entregue = items.filter((i) => i.status === 'ENTREGUE')
+  const entregue = items.filter((i) => isEntregue(i.status))
   const emCurso = items.filter(
     (i) => i.status === 'EM_ANDAMENTO' || i.status === 'EM_REVISAO',
   )
@@ -388,7 +389,7 @@ export function buildCheckpointHtml(input: CheckpointHtmlInput): string {
     (i) =>
       i.status === 'PENDENTE' ||
       i.status === 'ATRASADO' ||
-      (i.status !== 'ENTREGUE' &&
+      (!isEntregue(i.status) &&
         i.status !== 'EM_ANDAMENTO' &&
         i.status !== 'EM_REVISAO'),
   )
@@ -403,7 +404,7 @@ export function buildCheckpointHtml(input: CheckpointHtmlInput): string {
 
   const highlights = entregue.slice(0, 5)
   const proximos = items
-    .filter((i) => i.status !== 'ENTREGUE')
+    .filter((i) => !isEntregue(i.status))
     .sort(sortByPrazo)
     .slice(0, 5)
 

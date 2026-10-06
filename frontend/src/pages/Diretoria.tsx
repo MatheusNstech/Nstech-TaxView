@@ -21,6 +21,7 @@ import { mergeWorkItems } from '../lib/workItems'
 import {
   currentCompetenciaMonth,
   monthToCompetencia,
+  statusParaContagem,
 } from '../lib/format'
 import type {
   DashboardSummary,
@@ -106,7 +107,8 @@ export default function Diretoria() {
     for (const item of workItems) {
       const bu = itemBu(item)
       if (!counts[bu]) counts[bu] = {}
-      counts[bu][item.status] = (counts[bu][item.status] ?? 0) + 1
+      const st = statusParaContagem(item.status)
+      counts[bu][st] = (counts[bu][st] ?? 0) + 1
     }
     if (summary) {
       for (const bu of Object.keys(summary.por_bu)) {
@@ -135,7 +137,7 @@ export default function Diretoria() {
       const bu = itemBu(item)
       const atividade = workItemServicoNome(item)
       if (drill.bu && bu !== drill.bu) return false
-      if (drill.status && item.status !== drill.status) return false
+      if (drill.status && statusParaContagem(item.status) !== drill.status) return false
       if (
         drill.responsavelNome &&
         (item.responsavelNome ?? '') !== drill.responsavelNome
