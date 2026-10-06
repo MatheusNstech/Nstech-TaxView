@@ -274,6 +274,7 @@ export interface FilterValues {
   status: string
   search: string
   responsavel_id?: string
+  responsavel_ids?: string[]
   atividade_id?: string
 }
 

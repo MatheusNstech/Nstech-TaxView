@@ -6,6 +6,7 @@ import {
   UserRound,
 } from 'lucide-react'
 import GlassMonthPicker from './GlassMonthPicker'
+import GlassMultiSelect from './GlassMultiSelect'
 import GlassSelect from './GlassSelect'
 import type {
   Atividade,
@@ -22,6 +23,8 @@ interface FiltersBarProps {
   atividades?: Atividade[]
   showStatus?: boolean
   showSearch?: boolean
+  /** Filtro de responsável com checkboxes, gravado em `responsavel_ids`. */
+  multiResponsavel?: boolean
 }
 
 const statusOptions: { value: StatusObrigacao | ''; label: string }[] = [
@@ -44,6 +47,7 @@ export default function FiltersBar({
   atividades,
   showStatus = true,
   showSearch = true,
+  multiResponsavel = false,
 }: FiltersBarProps) {
   const update = (patch: Partial<FilterValues>) =>
     onChange({ ...filters, ...patch })
@@ -95,7 +99,19 @@ export default function FiltersBar({
         />
       )}
 
-      {responsaveis.length > 0 && (
+      {responsaveis.length > 0 && multiResponsavel && (
+        <GlassMultiSelect
+          className="min-w-[9rem] flex-1 basis-[9rem]"
+          icon={UserRound}
+          ariaLabel="Responsável"
+          placeholder="Responsável"
+          values={filters.responsavel_ids ?? []}
+          onChange={(responsavel_ids) => update({ responsavel_ids })}
+          options={responsaveis.map((r) => ({ value: r.id, label: r.nome }))}
+        />
+      )}
+
+      {responsaveis.length > 0 && !multiResponsavel && (
         <GlassSelect
           className="min-w-[9rem] flex-1 basis-[9rem]"
           icon={UserRound}

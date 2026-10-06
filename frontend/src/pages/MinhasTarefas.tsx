@@ -78,7 +78,7 @@ export default function MinhasTarefas() {
     bu: '',
     status: '',
     search: '',
-    responsavel_id: '',
+    responsavel_ids: [],
     atividade_id: '',
   })
   const [atividades, setAtividades] = useState<Atividade[]>([])
@@ -105,6 +105,15 @@ export default function MinhasTarefas() {
 
   const competenciaIso = monthToCompetencia(filters.competencia)
   const podeFiltrarResp = isAdmin || equipe.length > 1
+  const selectedRespIds = useMemo(
+    () =>
+      podeFiltrarResp
+        ? (filters.responsavel_ids ?? [])
+        : responsavelId
+          ? [responsavelId]
+          : [],
+    [podeFiltrarResp, filters.responsavel_ids, responsavelId],
+  )
 
   useEffect(() => {
     if (profileLoading || isAdmin || !hasResponsavel) {
@@ -122,11 +131,7 @@ export default function MinhasTarefas() {
       setDefaultedOwnResponsavel(true)
       return
     }
-    setFilters((prev) =>
-      prev.responsavel_id === responsavelId
-        ? prev
-        : { ...prev, responsavel_id: responsavelId },
-    )
+    setFilters((prev) => ({ ...prev, responsavel_ids: [responsavelId] }))
     setDefaultedOwnResponsavel(true)
   }, [defaultedOwnResponsavel, profileLoading, responsavelId])
 
@@ -136,14 +141,15 @@ export default function MinhasTarefas() {
       setError('')
     }
     try {
-      const scopedResponsavel =
-        (podeFiltrarResp ? filters.responsavel_id : responsavelId) || undefined
+      // Com várias pessoas marcadas busca o escopo inteiro e filtra aqui.
+      const singleResponsavel =
+        selectedRespIds.length === 1 ? selectedRespIds[0] : undefined
       const params = {
         competencia: competenciaIso,
         bu: filters.bu || undefined,
         status: filters.status || undefined,
-        responsavel_id: scopedResponsavel,
-        equipe: !isAdmin && !scopedResponsavel ? 'true' : undefined,
+        responsavel_id: singleResponsavel,
+        equipe: !isAdmin && !singleResponsavel ? 'true' : undefined,
         q: filters.search || undefined,
       }
       const atividadeId = filters.atividade_id || undefined
@@ -156,15 +162,19 @@ export default function MinhasTarefas() {
           ? Promise.resolve<Tarefa[]>([])
           : apiFetch<Tarefa[]>(`/api/tarefas${buildQuery(params)}`),
       ])
-      const onlyMine = (rid: string | null | undefined) =>
-        !scopedResponsavel || rid === scopedResponsavel
+      const anySelected = selectedRespIds.length > 0
       setObrigacoes(
         obrData.filter(
-          (o) => !scopedResponsavel || obrigacaoTemResponsavel(o, scopedResponsavel),
+          (o) =>
+            !anySelected ||
+            selectedRespIds.some((id) => obrigacaoTemResponsavel(o, id)),
         ),
       )
       setTarefas(
-        tarData.filter((t) => onlyMine(t.responsavel_id ?? t.responsavel?.id)),
+        tarData.filter((t) => {
+          const rid = t.responsavel_id ?? t.responsavel?.id
+          return !anySelected || (!!rid && selectedRespIds.includes(rid))
+        }),
       )
       if (isAdmin) {
         const resps = await apiFetch<Responsavel[]>('/api/responsaveis')
@@ -186,12 +196,10 @@ export default function MinhasTarefas() {
     filters.bu,
     filters.status,
     filters.search,
-    filters.responsavel_id,
     filters.atividade_id,
+    selectedRespIds,
     isAdmin,
-    podeFiltrarResp,
     canWrite,
-    responsavelId,
   ])
 
   useEffect(() => {
@@ -222,16 +230,18 @@ export default function MinhasTarefas() {
 
   const workItems = useMemo(() => {
     const items = mergeWorkItems(obrigacoes, tarefas)
-    const scoped = (podeFiltrarResp ? filters.responsavel_id : responsavelId) || ''
-    if (!scoped) return items
+    if (selectedRespIds.length === 0) return items
     return items.filter((item) => {
       if (item.origem === 'obrigacao') {
-        return item.obrigacao ? obrigacaoTemResponsavel(item.obrigacao, scoped) : false
+        const obrigacao = item.obrigacao
+        return obrigacao
+          ? selectedRespIds.some((id) => obrigacaoTemResponsavel(obrigacao, id))
+          : false
       }
       const rid = item.tarefa?.responsavel_id ?? item.tarefa?.responsavel?.id
-      return rid === scoped
+      return !!rid && selectedRespIds.includes(rid)
     })
-  }, [obrigacoes, tarefas, filters.responsavel_id, podeFiltrarResp, responsavelId])
+  }, [obrigacoes, tarefas, selectedRespIds])
 
   const exportHtml = () => {
     if (exporting) return
@@ -242,11 +252,12 @@ export default function MinhasTarefas() {
     setExporting(true)
     setError('')
     try {
-      const filtrado = (isAdmin ? responsaveis : equipe).find(
-        (r) => r.id === filters.responsavel_id,
-      )
+      const filtrados = (isAdmin ? responsaveis : equipe)
+        .filter((r) => (filters.responsavel_ids ?? []).includes(r.id))
+        .map((r) => r.nome.trim())
+        .filter(Boolean)
       const personName =
-        filtrado?.nome?.trim() ||
+        filtrados.join(', ') ||
         responsavelNome?.trim() ||
         session?.user?.email?.split('@')[0] ||
         'Responsável'
@@ -469,6 +480,7 @@ export default function MinhasTarefas() {
         bus={bus}
         responsaveis={isAdmin ? responsaveis : podeFiltrarResp ? equipe : undefined}
         atividades={atividades}
+        multiResponsavel
       />
 
       {error && (
