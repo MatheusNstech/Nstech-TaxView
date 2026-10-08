@@ -45,8 +45,11 @@ export function buildDiretoriaRiscos(
 ): DiretoriaRisco[] {
   const risks: DiretoriaRisco[] = []
 
+  // Em andamento / Em revisão com prazo vencido seguem na coluna, mas contam como atraso.
   const atrasados = obrigacoes
-    .filter((o) => o.status === 'ATRASADO')
+    .filter(
+      (o) => o.status === 'ATRASADO' || (!isEntregue(o.status) && o.urgencia === 'atrasado'),
+    )
     .sort((a, b) => prazoRef(a).localeCompare(prazoRef(b)))
 
   for (const o of atrasados) {
@@ -62,7 +65,9 @@ export function buildDiretoriaRiscos(
   }
 
   const tarAtrasadas = tarefas
-    .filter((t) => t.status === 'ATRASADO')
+    .filter(
+      (t) => t.status === 'ATRASADO' || (!isEntregue(t.status) && t.urgencia === 'atrasado'),
+    )
     .sort((a, b) => (a.prazo ?? '').localeCompare(b.prazo ?? ''))
 
   for (const t of tarAtrasadas) {

@@ -35,7 +35,9 @@ export default function GlassMultiSelect({
       ? placeholder
       : selected.length === 1
         ? selected[0].label
-        : `${selected[0].label} +${selected.length - 1}`
+        : selected.length === options.length
+          ? 'Todos'
+          : `${selected[0].label} +${selected.length - 1}`
 
   useEffect(() => {
     if (!open) return
@@ -56,6 +58,14 @@ export default function GlassMultiSelect({
       document.removeEventListener('keydown', onKeyDown)
     }
   }, [open])
+
+  const allSelected =
+    options.length > 0 && options.every((o) => values.includes(o.value))
+  const someSelected = !allSelected && selected.length > 0
+
+  const toggleAll = () => {
+    onChange(allSelected ? [] : options.map((o) => o.value))
+  }
 
   const toggle = (value: string) => {
     onChange(
@@ -109,8 +119,42 @@ export default function GlassMultiSelect({
             role="listbox"
             aria-label={ariaLabel}
             aria-multiselectable="true"
-            className="max-h-56 overflow-auto py-1.5"
+            className="max-h-80 overflow-auto py-1.5"
           >
+            {options.length > 1 && (
+              <li
+                role="option"
+                aria-selected={allSelected}
+                className="mb-1 border-b border-[color:var(--color-line)] pb-1"
+              >
+                <button
+                  type="button"
+                  onClick={toggleAll}
+                  className={[
+                    'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm font-medium transition duration-150',
+                    allSelected
+                      ? 'text-brand-600 dark:text-brand-400'
+                      : 'text-[color:var(--color-ink)] hover:bg-brand-500/10',
+                  ].join(' ')}
+                >
+                  <span
+                    className={[
+                      'flex h-4 w-4 shrink-0 items-center justify-center rounded border transition',
+                      allSelected || someSelected
+                        ? 'border-brand-500 bg-brand-500 text-white'
+                        : 'border-slate-300 dark:border-white/25',
+                    ].join(' ')}
+                    aria-hidden
+                  >
+                    {allSelected && <Check className="h-3 w-3" strokeWidth={3} />}
+                    {someSelected && <span className="h-0.5 w-2 rounded-full bg-white" />}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate leading-snug">
+                    Selecionar todos
+                  </span>
+                </button>
+              </li>
+            )}
             {options.map((option) => {
               const isActive = values.includes(option.value)
               return (
@@ -144,17 +188,6 @@ export default function GlassMultiSelect({
               )
             })}
           </ul>
-          {values.length > 0 && (
-            <div className="border-t border-[color:var(--color-line)] px-1.5 py-1.5">
-              <button
-                type="button"
-                onClick={() => onChange([])}
-                className="w-full rounded-lg px-3 py-1.5 text-left text-xs font-medium text-[color:var(--color-muted)] transition hover:bg-brand-500/10 hover:text-brand-600"
-              >
-                Limpar seleção (todos)
-              </button>
-            </div>
-          )}
         </div>
       )}
     </div>

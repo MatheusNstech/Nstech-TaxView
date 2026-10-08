@@ -3,8 +3,10 @@ import {
   DragOverlay,
   PointerSensor,
   closestCorners,
+  pointerWithin,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
   type DragStartEvent,
 } from '@dnd-kit/core'
@@ -19,6 +21,12 @@ interface KanbanBoardProps {
   onStatusChange: (item: WorkItem, status: StatusObrigacao) => Promise<void>
   onCardClick: (item: WorkItem) => void
   readOnly?: boolean
+}
+
+// A coluna sob o ponteiro vence; closestCorners só quando o ponteiro sai das colunas.
+const collisionDetection: CollisionDetection = (args) => {
+  const hits = pointerWithin(args)
+  return hits.length > 0 ? hits : closestCorners(args)
 }
 
 function columnFor(status: StatusObrigacao): StatusObrigacao {
@@ -84,7 +92,7 @@ export default function KanbanBoard({
   }
 
   const board = (
-    <div className="flex h-[calc(100dvh-11.5rem)] min-h-[22rem] gap-4 overflow-x-auto overflow-y-hidden pb-1">
+    <div className="flex h-[calc(100dvh-11.5rem)] min-h-[22rem] gap-3 overflow-x-auto overflow-y-hidden pb-1">
       {KANBAN_COLUMNS.map((col) => (
         <KanbanColumn
           key={col.id}
@@ -105,14 +113,14 @@ export default function KanbanBoard({
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCorners}
+      collisionDetection={collisionDetection}
       onDragStart={handleDragStart}
       onDragEnd={(e) => void handleDragEnd(e)}
     >
       {board}
       <DragOverlay>
         {activeItem ? (
-          <div className="w-80">
+          <div className="w-full">
             <KanbanCard item={activeItem} onClick={() => undefined} />
           </div>
         ) : null}

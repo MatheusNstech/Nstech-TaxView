@@ -248,7 +248,7 @@ def calendario(
         atrasadas = 0
         for item in items:
             por_status[item["status"]] += 1
-            if item["status"] == "ATRASADO":
+            if item["status"] == "ATRASADO" or item.get("urgencia") == "atrasado":
                 atrasadas += 1
         dias.append(
             CalendarioDia(

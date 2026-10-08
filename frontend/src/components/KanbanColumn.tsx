@@ -32,7 +32,7 @@ export default function KanbanColumn({
     <div
       ref={setNodeRef}
       className={[
-        'glass-panel flex h-full min-h-0 min-w-64 flex-1 shrink-0 flex-col overflow-hidden',
+        'glass-panel flex h-full min-h-0 min-w-52 flex-1 basis-0 flex-col overflow-hidden',
         isOver ? 'ring-2 ring-brand-500/30' : '',
       ].join(' ')}
     >
