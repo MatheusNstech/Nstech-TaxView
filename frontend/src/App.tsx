@@ -14,6 +14,7 @@ import DiretoriaPendenciasRfb from './pages/DiretoriaPendenciasRfb'
 import DiretoriaPerdcomp from './pages/DiretoriaPerdcomp'
 import DiretoriaValores from './pages/DiretoriaValores'
 import Empresas from './pages/Empresas'
+import EmpresasPainel from './pages/EmpresasPainel'
 import Importacao from './pages/Importacao'
 import Login from './pages/Login'
 import MinhasTarefas from './pages/MinhasTarefas'
@@ -160,7 +161,8 @@ export default function App() {
         <Route path="kanban" element={<Navigate to="/minhas-tarefas" replace />} />
         <Route path="calendario" element={<Calendario />} />
         <Route path="obrigacoes" element={<Obrigacoes />} />
-        <Route path="empresas" element={<AdminRoute><Empresas /></AdminRoute>} />
+        <Route path="empresas" element={<EmpresasPainel />} />
+        <Route path="cadastro-empresas" element={<AdminRoute><Empresas /></AdminRoute>} />
         <Route path="atividades" element={<AdminRoute><Atividades /></AdminRoute>} />
         <Route path="responsaveis" element={<AdminRoute><Responsaveis /></AdminRoute>} />
         <Route path="importacao" element={<AdminRoute><Importacao /></AdminRoute>} />

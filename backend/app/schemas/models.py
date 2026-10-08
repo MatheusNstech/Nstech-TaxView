@@ -1,5 +1,7 @@
+import re
 from datetime import date, datetime, time
 from enum import Enum
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -14,11 +16,17 @@ class StatusObrigacao(str, Enum):
     ATRASADO = "ATRASADO"
 
 
+PorteEmpresa = Literal["Pequeno", "Médio", "Grande"]
+AreaContato = Literal["contabil", "contas_pagar"]
+
+
 class EmpresaBase(BaseModel):
     cnpj: str
     razao_social: str
     bu: str
     ativa: bool = True
+    nome_fantasia: str | None = None
+    porte: PorteEmpresa | None = None
 
 
 class EmpresaCreate(EmpresaBase):
@@ -30,11 +38,77 @@ class EmpresaUpdate(BaseModel):
     razao_social: str | None = None
     bu: str | None = None
     ativa: bool | None = None
+    nome_fantasia: str | None = None
+    porte: PorteEmpresa | None = None
 
 
 class EmpresaOut(EmpresaBase):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
+    logo_url: str | None = None
+
+
+class EmpresaContatoIn(BaseModel):
+    nome: str | None = Field(default=None, max_length=120)
+    email: str | None = Field(default=None, max_length=200)
+
+    @model_validator(mode="after")
+    def _nome_ou_email(self):
+        self.nome = (self.nome or "").strip() or None
+        self.email = (self.email or "").strip().lower() or None
+        if not self.nome and not self.email:
+            raise ValueError("Informe nome ou e-mail do contato")
+        if self.email and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", self.email):
+            raise ValueError(f"E-mail inválido: {self.email}")
+        return self
+
+
+class EmpresaContatosPut(BaseModel):
+    area: AreaContato
+    contatos: list[EmpresaContatoIn] = Field(default_factory=list, max_length=20)
+
+
+class EmpresaContatoOut(BaseModel):
+    id: UUID
+    empresa_id: UUID
+    area: AreaContato
+    nome: str | None = None
+    email: str | None = None
+    ordem: int = 0
+
+
+class EmpresaUnidadeOut(BaseModel):
+    id: UUID
+    cnpj: str
+    razao_social: str
+    nome_fantasia: str | None = None
+    bu: str
+    porte: str | None = None
+    ativa: bool
+    matriz: bool
+    contatos: list[EmpresaContatoOut]
+    contatos_diferentes: bool
+
+
+class ResponsavelFiscalResumo(BaseModel):
+    id: UUID
+    nome: str
+    total: int
+
+
+class EmpresaGrupoOut(BaseModel):
+    raiz: str
+    nome: str
+    porte: str | None = None
+    logo_url: str | None = None
+    bus: list[str]
+    matriz: EmpresaUnidadeOut
+    filiais: list[EmpresaUnidadeOut]
+    contatos: dict[AreaContato, list[EmpresaContatoOut]]
+    responsaveis_fiscais: list[ResponsavelFiscalResumo]
+    obrigacoes_total: int
+    obrigacoes_entregues: int
+    obrigacoes_atrasadas: int
 
 
 class AtividadeBase(BaseModel):

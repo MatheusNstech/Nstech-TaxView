@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   BriefcaseBusiness,
+  Building,
   Building2,
   CalendarCheck,
   CalendarDays,
@@ -50,11 +51,12 @@ const adminMainNav: NavItem[] = [
   { to: '/diretoria/valores', label: 'Valores', end: false, icon: CircleDollarSign },
   { to: '/minhas-tarefas', label: 'Minhas tarefas', end: false, icon: ListTodo },
   { to: '/calendario', label: 'Calendário', end: false, icon: CalendarDays },
+  { to: '/empresas', label: 'Empresas', end: false, icon: Building2 },
 ]
 
 const adminConfigNav: NavItem[] = [
   { to: '/obrigacoes', label: 'Obrigações', end: false, icon: ListChecks },
-  { to: '/empresas', label: 'Empresas', end: false, icon: Building2 },
+  { to: '/cadastro-empresas', label: 'Cadastro de empresas', end: false, icon: Building },
   { to: '/atividades', label: 'Atividades', end: false, icon: ClipboardList },
   { to: '/responsaveis', label: 'Responsáveis', end: false, icon: Users },
   { to: '/usuarios', label: 'Usuários', end: false, icon: UserCog },
@@ -90,6 +92,7 @@ const otherNav: NavItem[] = [
   { to: '/minhas-tarefas', label: 'Minhas tarefas', end: false, icon: ListTodo, hideForDiretor: true },
   { to: '/calendario', label: 'Calendário', end: false, icon: CalendarDays },
   { to: '/obrigacoes', label: 'Obrigações', end: false, icon: ListChecks, hideForDiretor: true },
+  { to: '/empresas', label: 'Empresas', end: false, icon: Building2 },
 ]
 
 function useIsNarrow() {

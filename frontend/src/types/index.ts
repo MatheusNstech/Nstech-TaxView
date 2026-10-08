@@ -12,6 +12,49 @@ export interface Empresa {
   razao_social: string
   bu: string
   ativa: boolean
+  nome_fantasia?: string | null
+  porte?: PorteEmpresa | null
+  logo_url?: string | null
+}
+
+export type PorteEmpresa = 'Pequeno' | 'Médio' | 'Grande'
+export type AreaContato = 'contabil' | 'contas_pagar'
+
+export interface EmpresaContato {
+  id: string
+  empresa_id: string
+  area: AreaContato
+  nome: string | null
+  email: string | null
+  ordem: number
+}
+
+export interface EmpresaUnidade {
+  id: string
+  cnpj: string
+  razao_social: string
+  nome_fantasia: string | null
+  bu: string
+  porte: string | null
+  ativa: boolean
+  matriz: boolean
+  contatos: EmpresaContato[]
+  contatos_diferentes: boolean
+}
+
+export interface EmpresaGrupo {
+  raiz: string
+  nome: string
+  porte: PorteEmpresa | null
+  logo_url: string | null
+  bus: string[]
+  matriz: EmpresaUnidade
+  filiais: EmpresaUnidade[]
+  contatos: Record<AreaContato, EmpresaContato[]>
+  responsaveis_fiscais: { id: string; nome: string; total: number }[]
+  obrigacoes_total: number
+  obrigacoes_entregues: number
+  obrigacoes_atrasadas: number
 }
 
 export interface Atividade {

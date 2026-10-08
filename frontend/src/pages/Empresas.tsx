@@ -84,10 +84,10 @@ export default function Empresas() {
         </div>
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-[color:var(--color-ink)]">
-            Empresas
+            Cadastro de empresas
           </h1>
           <p className="text-sm text-[color:var(--color-muted)]">
-            Cadastro de empresas do grupo
+            CNPJs, razão social, BU e status das empresas do grupo
           </p>
         </div>
       </div>
