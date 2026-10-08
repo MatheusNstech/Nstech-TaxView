@@ -10,6 +10,8 @@ from supabase import Client
 from app.core.auth import AuthUser, get_current_user, get_db_client, require_not_viewer
 from app.core.clock import today_br
 from app.schemas.models import (
+    CopiarRequest,
+    CopiarResponse,
     StatusObrigacao,
     TarefaAuditOut,
     TarefaCategoria,
@@ -17,6 +19,7 @@ from app.schemas.models import (
     TarefaOut,
     TarefaUpdate,
 )
+from app.services.copia import carregar_destinos, trocar_nome_empresa
 from app.services.db import fetch_all, reject_nulls
 from app.services.equipe import registrar_acao_equipe_tarefa
 from app.services.notifications import create_notification
@@ -464,6 +467,83 @@ def update_tarefa(
     full = _fetch_full(client, str(tarefa_id))
     registrar_acao_equipe_tarefa(client, user, full, status_antes=current.get("status"))
     return full
+
+
+@router.post("/{tarefa_id}/copiar", response_model=CopiarResponse)
+def copiar_tarefa(
+    tarefa_id: UUID,
+    body: CopiarRequest,
+    user: Annotated[AuthUser, Depends(require_not_viewer)],
+    client: Annotated[Client, Depends(get_db_client)],
+):
+    assert_tarefa_in_scope(user, client, str(tarefa_id))
+    origem = _fetch_full(client, str(tarefa_id))
+    destinos, ignoradas = carregar_destinos(
+        client,
+        [str(e) for e in body.empresa_ids],
+        str(origem["empresa_id"]) if origem.get("empresa_id") else None,
+    )
+    titulo_manual = (body.titulo or "").strip()
+    if titulo_manual and len(body.empresa_ids) > 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Título personalizado só vale para uma empresa por vez",
+        )
+
+    titulos = {
+        eid: (
+            titulo_manual or trocar_nome_empresa(origem["titulo"], origem.get("empresa"), emp)
+        )[:200]
+        for eid, emp in destinos.items()
+    }
+    existentes: set[tuple[str, str]] = set()
+    if destinos and origem.get("prazo"):
+        rows = (
+            client.table("tarefas")
+            .select("empresa_id, titulo")
+            .eq("prazo", str(origem["prazo"]))
+            .eq("responsavel_id", str(origem["responsavel_id"]))
+            .in_("empresa_id", list(destinos))
+            .execute()
+            .data
+            or []
+        )
+        existentes = {(str(r["empresa_id"]), (r["titulo"] or "").strip().lower()) for r in rows}
+
+    payloads = []
+    for eid in destinos:
+        if (eid, titulos[eid].lower()) in existentes:
+            ignoradas.append({"empresa_id": eid, "motivo": "Já existe essa tarefa nesta empresa e prazo"})
+            continue
+        payloads.append(
+            {
+                "titulo": titulos[eid],
+                "solicitante_nome": origem["solicitante_nome"],
+                "descricao": origem.get("descricao"),
+                "categoria": origem["categoria"],
+                "status": "PENDENTE",
+                "competencia": origem.get("competencia"),
+                "prazo": origem.get("prazo"),
+                "hora_inicio": origem.get("hora_inicio"),
+                "hora_fim": origem.get("hora_fim"),
+                "empresa_id": eid,
+                "obrigacao_id": None,
+                "responsavel_id": str(origem["responsavel_id"]),
+                "created_by": user.id,
+            }
+        )
+
+    if payloads:
+        client.table("tarefas").insert(payloads).execute()
+        n = len(payloads)
+        _notify_assignee(
+            client,
+            responsavel_id=str(origem["responsavel_id"]),
+            titulo=f"{n} nova(s) tarefa(s): {origem['titulo']}",
+            corpo="Tarefas copiadas para outras empresas foram atribuídas a você.",
+            actor_user_id=user.id,
+        )
+    return CopiarResponse(criadas=len(payloads), ignoradas=ignoradas)
 
 
 @router.get("/{tarefa_id}/audit", response_model=list[TarefaAuditOut])

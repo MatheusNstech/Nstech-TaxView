@@ -15,6 +15,7 @@ export interface Empresa {
   nome_fantasia?: string | null
   porte?: PorteEmpresa | null
   logo_url?: string | null
+  logo_url_escuro?: string | null
 }
 
 export type PorteEmpresa = 'Pequeno' | 'Médio' | 'Grande'
@@ -47,6 +48,7 @@ export interface EmpresaGrupo {
   nome: string
   porte: PorteEmpresa | null
   logo_url: string | null
+  logo_url_escuro: string | null
   bus: string[]
   matriz: EmpresaUnidade
   filiais: EmpresaUnidade[]
@@ -268,11 +270,23 @@ export interface Notificacao {
   created_at: string
 }
 
+export interface CalendarioEmpresa {
+  id: string
+  nome: string
+  logo_url?: string | null
+  logo_url_escuro?: string | null
+  bu?: string | null
+}
+
 export interface CalendarioDia {
   data: string
   total: number
   atrasadas: number
   por_status: Record<string, number>
+  reabertas: number
+  tarefas: number
+  empresas: CalendarioEmpresa[]
+  mais_empresas: number
 }
 
 export interface CalendarioResponse {

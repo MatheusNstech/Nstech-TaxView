@@ -26,6 +26,8 @@ def _empresas() -> list[dict]:
             "bu": "Corporativo",
             "nome_fantasia": "Nstech GR",
             "porte": "Grande",
+            "logo_url": "/logos/nstech.png",
+            "logo_url_escuro": "/logos/nstech-escuro.png",
         },
         {"id": OUTRA, "cnpj": "LRI190208D94", "razao_social": "Log Risk", "bu": "V&RM"},
     ]
@@ -78,6 +80,7 @@ def test_agrupa_matriz_e_filial_pela_raiz_do_cnpj():
     assert [f["id"] for f in gr["filiais"]] == [FILIAL]
     assert gr["bus"] == ["Corporativo", "Embarcador"]
     assert gr["porte"] == "Grande"
+    assert (gr["logo_url"], gr["logo_url_escuro"]) == ("/logos/nstech.png", "/logos/nstech-escuro.png")
     assert [c["email"] for c in gr["contatos"]["contas_pagar"]] == ["a@x.com", "b@x.com"]
     assert [c["nome"] for c in gr["contatos"]["contabil"]] == ["Camila"]
     assert gr["filiais"][0]["contatos_diferentes"] is True
@@ -88,6 +91,7 @@ def test_agrupa_matriz_e_filial_pela_raiz_do_cnpj():
     log_risk = grupos[0]
     assert log_risk["raiz"] == f"id:{OUTRA}"
     assert log_risk["filiais"] == []
+    assert (log_risk["logo_url"], log_risk["logo_url_escuro"]) == (None, None)
     assert log_risk["contatos"] == {"contabil": [], "contas_pagar": []}
 
 

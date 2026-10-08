@@ -131,12 +131,14 @@ def montar_grupos(
             (e["nome_fantasia"] for e in membros if e.get("nome_fantasia")), None
         ) or matriz.get("razao_social") or ""
 
+        com_logo = next((e for e in membros if e.get("logo_url")), None)
         out.append(
             {
                 "raiz": raiz,
                 "nome": nome,
                 "porte": matriz.get("porte") or next((e["porte"] for e in membros if e.get("porte")), None),
-                "logo_url": next((e["logo_url"] for e in membros if e.get("logo_url")), None),
+                "logo_url": com_logo["logo_url"] if com_logo else None,
+                "logo_url_escuro": com_logo.get("logo_url_escuro") if com_logo else None,
                 "bus": [b for b in bus if b],
                 "matriz": _unidade(matriz),
                 "filiais": [_unidade(e) for e in membros[1:]],

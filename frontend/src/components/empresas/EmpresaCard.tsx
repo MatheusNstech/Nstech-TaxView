@@ -1,18 +1,15 @@
 import {
   AlertTriangle,
+  ArrowUpRight,
   Building,
-  Calculator,
   Check,
-  ChevronDown,
   ClipboardCheck,
   Copy,
   Pencil,
-  Wallet,
   type LucideIcon,
 } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
-import type { EmpresaContato, EmpresaGrupo, EmpresaUnidade } from '../../types'
-
+import type { EmpresaContato, EmpresaGrupo } from '../../types'
 const BU_THEME: Record<string, { from: string; to: string; ink: string }> = {
   TMS: { from: '#FF6B2C', to: '#B7380C', ink: '#B7380C' },
   Embarcador: { from: '#1D7BF2', to: '#0B3F8F', ink: '#0B4FB3' },
@@ -27,7 +24,7 @@ export function buTheme(bu: string | undefined) {
   return (bu && BU_THEME[bu]) || FALLBACK_THEME
 }
 
-function iniciais(nome: string): string {
+export function iniciais(nome: string): string {
   const partes = nome
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .split(/\s+/)
@@ -43,7 +40,7 @@ function CopyEmail({ email }: { email: string }) {
     <li className="group flex min-w-0 items-center gap-1.5">
       <a
         href={`mailto:${email}`}
-        className="min-w-0 flex-1 truncate text-xs text-[color:var(--color-ink)] hover:text-brand-600 hover:underline"
+        className="min-w-0 flex-1 truncate text-sm text-[color:var(--color-ink)] hover:text-brand-600 hover:underline"
         title={email}
       >
         {email}
@@ -70,35 +67,11 @@ function CopyEmail({ email }: { email: string }) {
   )
 }
 
-function Secao({
-  icon: Icon,
-  titulo,
-  children,
-}: {
-  icon: LucideIcon
-  titulo: string
-  children: ReactNode
-}) {
-  return (
-    <div className="flex gap-3">
-      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[color:var(--color-surface)] text-[color:var(--color-muted)]">
-        <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-[color:var(--color-muted)]">
-          {titulo}
-        </p>
-        <div className="mt-1">{children}</div>
-      </div>
-    </div>
-  )
-}
-
-function Vazio({ texto = 'Não informado' }: { texto?: string }) {
+export function Vazio({ texto = 'Não informado' }: { texto?: string }) {
   return <p className="text-xs italic text-[color:var(--color-muted)]">{texto}</p>
 }
 
-function NomesContabil({ contatos }: { contatos: EmpresaContato[] }) {
+export function NomesContabil({ contatos }: { contatos: EmpresaContato[] }) {
   const nomes = contatos.filter((c) => c.nome)
   if (nomes.length === 0) return <Vazio />
   return (
@@ -106,7 +79,7 @@ function NomesContabil({ contatos }: { contatos: EmpresaContato[] }) {
       {nomes.map((c) => (
         <span
           key={c.id}
-          className="rounded-full bg-[color:var(--color-surface)] px-2.5 py-0.5 text-xs font-medium text-[color:var(--color-ink)]"
+          className="rounded-full bg-[color:var(--color-surface)] px-3 py-1 text-sm font-semibold text-[color:var(--color-ink)]"
         >
           {c.nome}
         </span>
@@ -115,11 +88,11 @@ function NomesContabil({ contatos }: { contatos: EmpresaContato[] }) {
   )
 }
 
-function EmailsContasPagar({ contatos }: { contatos: EmpresaContato[] }) {
+export function EmailsContasPagar({ contatos }: { contatos: EmpresaContato[] }) {
   const emails = contatos.filter((c) => c.email)
   if (emails.length === 0) return <Vazio />
   return (
-    <ul className="space-y-0.5">
+    <ul className="space-y-1">
       {emails.map((c) => (
         <CopyEmail key={c.id} email={c.email!} />
       ))}
@@ -127,200 +100,199 @@ function EmailsContasPagar({ contatos }: { contatos: EmpresaContato[] }) {
   )
 }
 
-function Filial({ unidade }: { unidade: EmpresaUnidade }) {
-  const contabil = unidade.contatos.filter((c) => c.area === 'contabil')
-  const pagar = unidade.contatos.filter((c) => c.area === 'contas_pagar')
-  return (
-    <li className="rounded-xl border border-[color:var(--color-line)] px-3 py-2">
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-mono text-[11px] text-[color:var(--color-muted)]">{unidade.cnpj}</span>
-        <span className="rounded-full bg-[color:var(--color-surface)] px-2 py-0.5 text-[10px] font-medium text-[color:var(--color-muted)]">
-          {unidade.bu}
-        </span>
-      </div>
-      <p className="mt-0.5 truncate text-xs text-[color:var(--color-ink)]" title={unidade.razao_social}>
-        {unidade.nome_fantasia || unidade.razao_social}
-      </p>
-      {unidade.contatos_diferentes && (
-        <div className="mt-1.5 space-y-1 border-t border-dashed border-[color:var(--color-line)] pt-1.5">
-          {contabil.length > 0 && (
-            <p className="text-[11px] text-[color:var(--color-muted)]">
-              Contábil: <span className="text-[color:var(--color-ink)]">{contabil.map((c) => c.nome).join(', ')}</span>
-            </p>
-          )}
-          {pagar.length > 0 && <EmailsContasPagar contatos={pagar} />}
-        </div>
-      )}
-    </li>
+export function Chip({ icon: Icon, children, tone = 'neutro', title, onClick }: {
+  icon: LucideIcon
+  children: ReactNode
+  tone?: 'neutro' | 'alerta'
+  title?: string
+  onClick?: () => void
+}) {
+  const className = [
+    'inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium',
+    tone === 'alerta'
+      ? 'bg-[#FF5630]/12 text-[#B71D18] dark:text-[#FF8A75]'
+      : 'bg-[color:var(--color-surface)] text-[color:var(--color-ink)]',
+    onClick ? 'cursor-pointer transition hover:ring-1 hover:ring-current' : '',
+  ].join(' ')
+  const conteudo = (
+    <>
+      <Icon className="h-3.5 w-3.5 opacity-70" strokeWidth={1.75} />
+      {children}
+    </>
   )
+  if (onClick) {
+    return (
+      <button type="button" title={title} onClick={onClick} className={className}>
+        {conteudo}
+      </button>
+    )
+  }
+  return (
+    <span title={title} className={className}>
+      {conteudo}
+    </span>
+  )
+}
+
+export function CapaFundo({
+  grupo,
+  className = '',
+  logoClassName = 'p-[14%]',
+  iniciaisClassName = 'text-5xl',
+}: {
+  grupo: EmpresaGrupo
+  className?: string
+  logoClassName?: string
+  iniciaisClassName?: string
+}) {
+  const theme = buTheme(grupo.bus[0])
+  if (grupo.logo_url) {
+    const temEscuro = Boolean(grupo.logo_url_escuro)
+    const img = `absolute inset-0 h-full w-full object-contain ${logoClassName}`
+    return (
+      <div
+        className={`relative h-full w-full ${
+          temEscuro ? 'bg-white dark:bg-[color:var(--color-panel)]' : 'bg-white'
+        } ${className}`}
+      >
+        <div
+          className="absolute inset-0 opacity-[0.07] dark:opacity-[0.14]"
+          style={{ background: `linear-gradient(135deg, ${theme.from} 0%, ${theme.to} 100%)` }}
+        />
+        <img
+          src={grupo.logo_url}
+          alt={grupo.nome}
+          className={`${img} ${temEscuro ? 'dark:hidden' : ''}`}
+          loading="lazy"
+        />
+        {temEscuro && (
+          <img
+            src={grupo.logo_url_escuro!}
+            alt={grupo.nome}
+            className={`${img} hidden dark:block`}
+            loading="lazy"
+          />
+        )}
+      </div>
+    )
+  }
+  return (
+    <div
+      className={`relative h-full w-full ${className}`}
+      style={{ background: `linear-gradient(135deg, ${theme.from} 0%, ${theme.to} 100%)` }}
+    >
+      <div
+        className="absolute inset-0 opacity-40"
+        style={{
+          backgroundImage:
+            'radial-gradient(circle at 15% 115%, rgba(255,255,255,0.5) 0, transparent 45%), radial-gradient(circle at 90% -10%, rgba(255,255,255,0.35) 0, transparent 40%)',
+        }}
+      />
+      <span
+        className={`absolute inset-0 flex items-center justify-center font-bold tracking-tight text-white/90 drop-shadow-sm ${iniciaisClassName}`}
+      >
+        {iniciais(grupo.nome)}
+      </span>
+    </div>
+  )
+}
+
+/** Estilo dos controles sobre a capa: claro quando há logo, escuro sobre o degradê. */
+export function estiloSobreCapa(temLogo: boolean): string {
+  return temLogo
+    ? 'bg-white/85 text-slate-700 ring-1 ring-black/5 hover:bg-white dark:bg-white/10 dark:text-white/90 dark:ring-white/10 dark:hover:bg-white/20'
+    : 'bg-black/25 text-white hover:bg-black/40'
 }
 
 interface EmpresaCardProps {
   grupo: EmpresaGrupo
   canEdit: boolean
   onEdit: (grupo: EmpresaGrupo) => void
+  onOpen: (grupo: EmpresaGrupo) => void
+  onVerObrigacoes: (grupo: EmpresaGrupo, apenasAtrasadas: boolean) => void
 }
 
-export default function EmpresaCard({ grupo, canEdit, onEdit }: EmpresaCardProps) {
-  const [filiaisOpen, setFiliaisOpen] = useState(false)
-  const theme = buTheme(grupo.bus[0])
-  const fiscais = grupo.responsaveis_fiscais
-  const filiaisDiferentes = grupo.filiais.filter((f) => f.contatos_diferentes).length
+export default function EmpresaCard({ grupo, canEdit, onEdit, onOpen, onVerObrigacoes }: EmpresaCardProps) {
+  const cnpjs = 1 + grupo.filiais.length
+  const temLogo = Boolean(grupo.logo_url)
 
   return (
-    <article className="card-surface flex flex-col overflow-hidden transition-shadow hover:shadow-lg">
-      <div
-        className="relative h-24 shrink-0"
-        style={{ background: `linear-gradient(135deg, ${theme.from} 0%, ${theme.to} 100%)` }}
-      >
-        <div
-          className="absolute inset-0 opacity-30"
-          style={{
-            backgroundImage:
-              'radial-gradient(circle at 20% 120%, rgba(255,255,255,0.55) 0, transparent 45%), radial-gradient(circle at 85% -10%, rgba(255,255,255,0.4) 0, transparent 40%)',
-          }}
-        />
-        <div className="absolute left-3 top-3 flex flex-wrap gap-1">
-          {grupo.bus.map((bu) => (
-            <span
-              key={bu}
-              className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white backdrop-blur-sm"
-            >
-              {bu}
-            </span>
-          ))}
-        </div>
+    <article className="card-surface group flex h-full flex-col p-3 transition duration-300 hover:-translate-y-0.5 hover:shadow-lg">
+      <div className="relative aspect-[16/9] overflow-hidden rounded-xl ring-1 ring-inset ring-black/5 dark:ring-white/5">
+        <button
+          type="button"
+          onClick={() => onOpen(grupo)}
+          className="block h-full w-full"
+          aria-label={`Ver detalhes de ${grupo.nome}`}
+        >
+          <CapaFundo
+            grupo={grupo}
+            logoClassName="px-[18%] py-[14%]"
+            className="transition-transform duration-500 group-hover:scale-[1.04]"
+          />
+        </button>
         {canEdit && (
           <button
             type="button"
             onClick={() => onEdit(grupo)}
-            className="absolute right-3 top-3 rounded-lg bg-white/20 p-1.5 text-white backdrop-blur-sm transition hover:bg-white/35"
+            className={`absolute right-2.5 top-2.5 rounded-lg p-1.5 opacity-0 backdrop-blur-sm transition group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 ${estiloSobreCapa(temLogo)}`}
             aria-label={`Editar ${grupo.nome}`}
-            title="Editar responsáveis"
+            title="Editar"
           >
             <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
           </button>
         )}
       </div>
 
-      <div className="-mt-9 flex justify-center">
-        <div className="flex h-[4.5rem] w-[4.5rem] items-center justify-center overflow-hidden rounded-full border-4 border-[color:var(--color-panel)] bg-[color:var(--color-panel)] shadow-md">
-          {grupo.logo_url ? (
-            <img src={grupo.logo_url} alt="" className="h-full w-full object-contain p-1.5" />
-          ) : (
-            <span
-              className="flex h-full w-full items-center justify-center text-lg font-bold"
-              style={{ color: theme.ink, background: `${theme.from}1f` }}
-            >
-              {iniciais(grupo.nome)}
-            </span>
-          )}
-        </div>
+      <div className="mt-3 flex flex-nowrap gap-1.5 overflow-hidden px-1">
+        <Chip icon={Building} title={cnpjs === 1 ? 'Somente matriz' : `Matriz + ${grupo.filiais.length} filial(is)`}>
+          {cnpjs} {cnpjs === 1 ? 'CNPJ' : 'CNPJs'}
+        </Chip>
+        <Chip
+          icon={ClipboardCheck}
+          title="Ver obrigações do mês (entregues / total)"
+          onClick={() => onVerObrigacoes(grupo, false)}
+        >
+          {grupo.obrigacoes_entregues}/{grupo.obrigacoes_total}
+        </Chip>
+        {grupo.obrigacoes_atrasadas > 0 && (
+          <Chip
+            icon={AlertTriangle}
+            tone="alerta"
+            title="Ver obrigações atrasadas"
+            onClick={() => onVerObrigacoes(grupo, true)}
+          >
+            {grupo.obrigacoes_atrasadas}
+          </Chip>
+        )}
       </div>
 
-      <div className="px-5 pt-2 text-center">
-        <h3 className="truncate text-base font-semibold text-[color:var(--color-ink)]" title={grupo.nome}>
+      <div className="mb-3 mt-2.5 min-h-[2.75rem] px-1">
+        <h3 className="line-clamp-1 text-[15px] font-semibold text-[color:var(--color-ink)]" title={grupo.nome}>
           {grupo.nome}
         </h3>
         <p className="truncate text-xs text-[color:var(--color-muted)]" title={grupo.matriz.razao_social}>
           {grupo.matriz.razao_social}
         </p>
-        <p className="mt-0.5 font-mono text-[11px] text-[color:var(--color-muted)]">{grupo.matriz.cnpj}</p>
-        {grupo.filiais.length > 0 && (
-          <button
-            type="button"
-            onClick={() => setFiliaisOpen((v) => !v)}
-            className="mt-2 inline-flex items-center gap-1 rounded-full border border-[color:var(--color-line)] px-2.5 py-0.5 text-[11px] font-medium text-[color:var(--color-ink)] transition hover:bg-[color:var(--nav-hover)]"
-            aria-expanded={filiaisOpen}
-          >
-            <Building className="h-3 w-3" strokeWidth={1.75} />
-            +{grupo.filiais.length} {grupo.filiais.length === 1 ? 'filial' : 'filiais'}
-            {filiaisDiferentes > 0 && (
-              <span className="h-1.5 w-1.5 rounded-full bg-brand-500" title="Filial com contato próprio" />
-            )}
-            <ChevronDown
-              className={`h-3 w-3 transition-transform ${filiaisOpen ? 'rotate-180' : ''}`}
-              strokeWidth={2}
-            />
-          </button>
-        )}
       </div>
 
-      {filiaisOpen && (
-        <ul className="mx-5 mt-3 space-y-1.5">
-          {grupo.filiais.map((f) => (
-            <Filial key={f.id} unidade={f} />
-          ))}
-        </ul>
-      )}
-
-      <div className="mt-4 flex-1 space-y-3 border-t border-[color:var(--color-line)] px-5 py-4">
-        <Secao icon={Calculator} titulo="Contábil">
-          <NomesContabil contatos={grupo.contatos.contabil} />
-        </Secao>
-        <Secao icon={Wallet} titulo="Contas a pagar">
-          <EmailsContasPagar contatos={grupo.contatos.contas_pagar} />
-        </Secao>
-        <Secao icon={ClipboardCheck} titulo="Fiscal">
-          {fiscais.length === 0 ? (
-            <Vazio texto="Sem obrigações no mês" />
-          ) : (
-            <div className="flex flex-wrap gap-1.5">
-              {fiscais.slice(0, 4).map((r) => (
-                <span
-                  key={r.id}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-[color:var(--color-surface)] py-0.5 pl-0.5 pr-2.5 text-xs font-medium text-[color:var(--color-ink)]"
-                  title={`${r.nome}: ${r.total} obrigação(ões) no mês`}
-                >
-                  <span
-                    className="flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-bold text-white"
-                    style={{ background: theme.from }}
-                  >
-                    {iniciais(r.nome)}
-                  </span>
-                  {r.nome.split(' ')[0]}
-                </span>
-              ))}
-              {fiscais.length > 4 && (
-                <span
-                  className="rounded-full bg-[color:var(--color-surface)] px-2 py-0.5 text-xs text-[color:var(--color-muted)]"
-                  title={fiscais
-                    .slice(4)
-                    .map((r) => r.nome)
-                    .join(', ')}
-                >
-                  +{fiscais.length - 4}
-                </span>
-              )}
-            </div>
-          )}
-        </Secao>
-      </div>
-
-      <div className="grid grid-cols-3 divide-x divide-[color:var(--color-line)] border-t border-[color:var(--color-line)] py-3 text-center">
-        <div>
+      <div className="mt-auto flex items-center justify-between gap-2 border-t border-[color:var(--color-line)] px-1 pt-3">
+        <div className="min-w-0">
           <p className="text-[11px] text-[color:var(--color-muted)]">Porte</p>
-          <p className="mt-0.5 text-sm font-semibold text-[color:var(--color-ink)]">{grupo.porte ?? '—'}</p>
-        </div>
-        <div>
-          <p className="text-[11px] text-[color:var(--color-muted)]">Obrigações</p>
-          <p className="mt-0.5 text-sm font-semibold text-[color:var(--color-ink)]">
-            {grupo.obrigacoes_entregues}
-            <span className="font-normal text-[color:var(--color-muted)]">/{grupo.obrigacoes_total}</span>
+          <p className="text-base font-semibold leading-tight text-[color:var(--color-ink)]">
+            {grupo.porte ?? '—'}
           </p>
         </div>
-        <div>
-          <p className="text-[11px] text-[color:var(--color-muted)]">Atrasadas</p>
-          <p
-            className={`mt-0.5 inline-flex items-center gap-1 text-sm font-semibold ${
-              grupo.obrigacoes_atrasadas > 0 ? 'text-[#B71D18] dark:text-[#FF8A75]' : 'text-[color:var(--color-ink)]'
-            }`}
-          >
-            {grupo.obrigacoes_atrasadas > 0 && <AlertTriangle className="h-3.5 w-3.5" strokeWidth={2} />}
-            {grupo.obrigacoes_atrasadas}
-          </p>
-        </div>
+        <button
+          type="button"
+          onClick={() => onOpen(grupo)}
+          className="btn-responsaveis"
+        >
+          Responsáveis
+          <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2.25} />
+        </button>
       </div>
     </article>
   )
 }
+

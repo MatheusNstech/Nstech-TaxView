@@ -1,17 +1,24 @@
-import { Trash2, X } from 'lucide-react'
+import { ClipboardList, History, Trash2, Users } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { apiFetch } from '../lib/api'
 import {
+  formatCompetencia,
   formatDate,
   formatHorario,
   formatTime,
   isEntregue,
+  isItemAtrasado,
   statusLabel,
 } from '../lib/format'
 import type { StatusObrigacao, Tarefa, TarefaAudit, TarefaUpdate } from '../types'
 import { tarefaCategoriaLabel } from '../types'
+import { useAuth } from '../context/AuthContext'
+import { workItemFromTarefa } from '../lib/workItems'
+import CopiarModal from './CopiarModal'
+import DetalheModal, { Bloco, Campo, ChipBu, Indicador, ROTULO } from './DetalheModal'
+import AcoesEmpresa from './empresas/AcoesEmpresa'
 import GlassDatePicker from './GlassDatePicker'
+import PersonAvatar from './PersonAvatar'
 import StatusBadge from './StatusBadge'
 
 const STATUS_OPTS: StatusObrigacao[] = [
@@ -56,15 +63,6 @@ function isLateEntrega(
   return prazo < todayIso
 }
 
-const scrollClass = [
-  'min-h-0 flex-1 overflow-y-auto overscroll-contain',
-  '[scrollbar-width:thin]',
-  '[scrollbar-color:#cbd5e1_transparent]',
-  '[&::-webkit-scrollbar]:w-1.5',
-  '[&::-webkit-scrollbar-track]:bg-transparent',
-  '[&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300',
-].join(' ')
-
 export default function TarefaDrawer({
   tarefa,
   open,
@@ -84,6 +82,8 @@ export default function TarefaDrawer({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [audit, setAudit] = useState<TarefaAudit[]>([])
+  const [copiando, setCopiando] = useState(false)
+  const { canWrite } = useAuth()
 
   const tarefaId = open ? tarefa?.id : undefined
   useEffect(() => {
@@ -110,16 +110,8 @@ export default function TarefaDrawer({
     setDescricao(tarefa.descricao ?? '')
     setMotivoAtraso(tarefa.motivo_atraso ?? '')
     setError('')
+    setCopiando(false)
   }, [tarefa, initialStatus])
-
-  useEffect(() => {
-    if (!open) return
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = prev
-    }
-  }, [open])
 
   const needsMotivo = useMemo(
     () => (tarefa ? isLateEntrega(status, prazo || tarefa.prazo, tarefa) : false),
@@ -210,310 +202,228 @@ export default function TarefaDrawer({
     }
   }
 
-  return createPortal(
+  const empresa = tarefa.empresa
+  const atrasada = isItemAtrasado(tarefa)
+  const horario = formatHorario(horaInicio, horaFim)
+
+  return (
     <>
-      <div
-        className="fixed inset-0 z-[80] bg-slate-900/45 backdrop-blur-sm"
-        onClick={onClose}
-        aria-hidden
-      />
-      <aside className="fixed inset-y-3 right-3 z-[90] flex w-[min(100%-1.5rem,26rem)] flex-col overflow-hidden rounded-2xl bg-white shadow-[0_24px_64px_rgb(15_23_42_/_0.28)] ring-1 ring-slate-200">
-        <header className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
-          <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-              {readOnly ? 'Somente leitura' : 'Edição'}
-            </p>
-            <h2 className="mt-0.5 text-base font-semibold text-slate-900">
-              {readOnly ? 'Detalhes da tarefa' : 'Editar tarefa'}
-            </h2>
-            <p className="mt-0.5 truncate text-sm text-slate-500">
-              {tarefa.empresa?.razao_social ??
-                tarefaCategoriaLabel(tarefa.categoria)}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="shrink-0 rounded-full p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
-            aria-label="Fechar"
-          >
-            <X className="h-4 w-4" strokeWidth={1.75} />
-          </button>
-        </header>
-
-        <div className={`${scrollClass} px-5 py-4`}>
-          <div className="space-y-4">
-            <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
-              <p className="text-sm font-semibold text-slate-900">{titulo || '—'}</p>
-              <p className="mt-1 text-xs text-slate-500">
-                Categoria: {tarefaCategoriaLabel(tarefa.categoria)}
-                {tarefa.competencia
-                  ? ` · Competência ${formatDate(tarefa.competencia)}`
-                  : ''}
-              </p>
-              <p className="mt-1 text-xs text-slate-500">
-                Solicitante: {tarefa.solicitante_nome || '—'}
-              </p>
-              <div className="mt-2.5">
-                <StatusBadge status={tarefa.status} urgencia={tarefa.urgencia} />
-              </div>
-            </div>
-
-            {readOnly ? (
-              <dl>
-                <div className="grid grid-cols-[7.5rem_1fr] gap-3 border-b border-slate-100 py-3">
-                  <dt className="text-xs font-medium text-slate-500">Status</dt>
-                  <dd className="text-sm text-slate-800">
-                    <StatusBadge status={status} urgencia={tarefa.urgencia} />
-                  </dd>
-                </div>
-                <div className="grid grid-cols-[7.5rem_1fr] gap-3 border-b border-slate-100 py-3">
-                  <dt className="text-xs font-medium text-slate-500">Prazo</dt>
-                  <dd className="text-sm text-slate-800">
-                    {formatDate(prazo)}
-                    {formatHorario(horaInicio, horaFim)
-                      ? ` · ${formatHorario(horaInicio, horaFim)}`
-                      : ''}
-                  </dd>
-                </div>
-                <div className="grid grid-cols-[7.5rem_1fr] gap-3 border-b border-slate-100 py-3">
-                  <dt className="text-xs font-medium text-slate-500">
-                    Solicitante
-                  </dt>
-                  <dd className="text-sm text-slate-800">
-                    {tarefa.solicitante_nome || '—'}
-                  </dd>
-                </div>
-                <div className="grid grid-cols-[7.5rem_1fr] gap-3 border-b border-slate-100 py-3">
-                  <dt className="text-xs font-medium text-slate-500">Empresa</dt>
-                  <dd className="min-w-0 text-sm text-slate-800">
-                    {tarefa.empresa?.razao_social ?? '—'}
-                  </dd>
-                </div>
-                <div className="grid grid-cols-[7.5rem_1fr] gap-3 border-b border-slate-100 py-3">
-                  <dt className="text-xs font-medium text-slate-500">
-                    Responsável
-                  </dt>
-                  <dd className="text-sm text-slate-800">
-                    {tarefa.responsavel?.nome ?? '—'}
-                  </dd>
-                </div>
-                <div className="grid grid-cols-[7.5rem_1fr] gap-3 border-b border-slate-100 py-3">
-                  <dt className="text-xs font-medium text-slate-500">
-                    Descrição
-                  </dt>
-                  <dd className="whitespace-pre-wrap text-sm text-slate-800">
-                    {descricao || '—'}
-                  </dd>
-                </div>
-                {tarefa.motivo_atraso ? (
-                  <div className="grid grid-cols-[7.5rem_1fr] gap-3 py-3">
-                    <dt className="text-xs font-medium text-slate-500">
-                      Motivo do atraso
-                    </dt>
-                    <dd className="whitespace-pre-wrap text-sm text-slate-800">
-                      {tarefa.motivo_atraso}
-                    </dd>
-                  </div>
-                ) : null}
-              </dl>
-            ) : (
-              <>
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-slate-500">
-                    Título
-                  </label>
-                  <input
-                    value={titulo}
-                    onChange={(e) => setTitulo(e.target.value)}
-                    className="glass-input"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-slate-500">
-                    Status
-                  </label>
-                  <select
-                    value={status}
-                    onChange={(e) =>
-                      setStatus(e.target.value as StatusObrigacao)
-                    }
-                    className="glass-input"
-                  >
-                    {STATUS_OPTS.map((s) => (
-                      <option key={s} value={s}>
-                        {statusLabel(s)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {needsMotivo ? (
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-rose-600">
-                      Motivo do atraso *
-                    </label>
-                    <textarea
-                      value={motivoAtraso}
-                      onChange={(e) => setMotivoAtraso(e.target.value)}
-                      rows={3}
-                      className="glass-input resize-none border-rose-200 focus:border-rose-400 focus:ring-rose-400/20"
-                      placeholder="Por que a entrega está fora do prazo?"
-                    />
-                    <p className="mt-1 text-[11px] text-slate-500">
-                      Obrigatório para entregar após o prazo (mín. 20 caracteres).
-                    </p>
-                  </div>
-                ) : null}
-
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-slate-500">
-                    Prazo
-                  </label>
-                  <GlassDatePicker
-                    ariaLabel="Prazo"
-                    value={prazo}
-                    onChange={setPrazo}
-                    placement="top"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-slate-500">
-                      Início
-                    </label>
-                    <input
-                      type="time"
-                      required
-                      value={horaInicio}
-                      onChange={(e) => setHoraInicio(e.target.value)}
-                      className="glass-input"
-                      aria-label="Horário de início"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-slate-500">
-                      Fim
-                    </label>
-                    <input
-                      type="time"
-                      required
-                      value={horaFim}
-                      onChange={(e) => setHoraFim(e.target.value)}
-                      className="glass-input"
-                      aria-label="Horário de fim"
-                    />
-                  </div>
-                </div>
-                <p className="-mt-2 text-[11px] text-slate-500">
-                  Obrigatório. O atraso continua só pelo dia do prazo, não pelo horário.
-                </p>
-
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-slate-500">
-                    Solicitante
-                  </label>
-                  <p className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5 text-sm text-slate-700">
-                    {tarefa.solicitante_nome || '—'}
-                  </p>
-                </div>
-
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-slate-500">
-                    Empresa
-                  </label>
-                  <p className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5 text-sm text-slate-700">
-                    {tarefa.empresa?.razao_social ?? '—'}
-                  </p>
-                </div>
-
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-slate-500">
-                    Responsável
-                  </label>
-                  <p className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5 text-sm text-slate-700">
-                    {tarefa.responsavel?.nome ?? '—'}
-                  </p>
-                </div>
-
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-slate-500">
-                    Descrição
-                  </label>
-                  <textarea
-                    value={descricao}
-                    onChange={(e) => setDescricao(e.target.value)}
-                    rows={3}
-                    className="glass-input resize-none"
-                    placeholder="Anotações..."
-                  />
-                </div>
-              </>
-            )}
-
-            {audit.length > 0 ? (
-              <div>
-                <p className="mb-1.5 text-xs font-medium text-slate-500">Histórico</p>
-                <div className="space-y-2">
-                  {audit.map((a) => (
-                    <div
-                      key={a.id}
-                      className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5 text-xs"
-                    >
-                      <p className="font-medium text-slate-800">{a.acao}</p>
-                      <p className="mt-1 text-[10px] text-slate-400">
-                        {new Date(a.created_at).toLocaleString('pt-BR')}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
-            {error ? (
-              <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                {error}
-              </p>
-            ) : null}
-          </div>
-        </div>
-
-        <footer className="flex shrink-0 flex-col gap-2 border-t border-slate-100 px-5 py-4">
-          {!readOnly ? (
-            <div className="flex items-center justify-end gap-2">
-              <button type="button" className="btn-ghost" onClick={onClose}>
-                Cancelar
-              </button>
+      <DetalheModal
+        aberto={open}
+        onClose={onClose}
+        escapeBloqueado={copiando}
+        empresa={empresa}
+        titulo={tarefa.titulo}
+        chips={
+          <>
+            <span className="rounded-full bg-brand-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-700 dark:text-brand-300">
+              Tarefa
+            </span>
+            {empresa?.bu && <ChipBu bu={empresa.bu} />}
+            <StatusBadge status={tarefa.status} urgencia={tarefa.urgencia} />
+          </>
+        }
+        subtitulo={
+          <>
+            {empresa?.razao_social ?? 'Tarefa interna'}
+            {` · ${tarefaCategoriaLabel(tarefa.categoria)}`}
+          </>
+        }
+        acoes={
+          <AcoesEmpresa
+            empresa={empresa}
+            onCopiar={canWrite && !readOnly ? () => setCopiando(true) : undefined}
+            onNavegar={onClose}
+          />
+        }
+        indicadores={
+          <>
+            <Indicador rotulo="Prazo" alerta={atrasada}>
+              {formatDate(tarefa.prazo)}
+            </Indicador>
+            <Indicador rotulo="Horário">{formatHorario(tarefa.hora_inicio, tarefa.hora_fim) ?? '—'}</Indicador>
+            <Indicador rotulo="Competência">{formatCompetencia(tarefa.competencia)}</Indicador>
+            <Indicador rotulo="Entrega">
+              {tarefa.entregue_em ? formatDate(tarefa.entregue_em.slice(0, 10)) : '—'}
+            </Indicador>
+          </>
+        }
+        rodape={
+          readOnly ? undefined : (
+            <>
               <button
                 type="button"
-                className="btn-primary"
+                className="btn-ghost text-rose-600"
                 disabled={saving}
-                onClick={() => void handleSave()}
+                onClick={() => void remove()}
               >
-                {saving ? 'Salvando...' : 'Salvar'}
+                <Trash2 className="h-4 w-4" />
+                Excluir tarefa
               </button>
+              <div className="ml-auto flex gap-2">
+                <button type="button" className="btn-ghost" onClick={onClose}>
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={saving}
+                  onClick={() => void handleSave()}
+                >
+                  {saving ? 'Salvando...' : 'Salvar'}
+                </button>
+              </div>
+            </>
+          )
+        }
+      >
+        {error && (
+          <p className="rounded-xl bg-rose-50/90 px-3 py-2 text-sm text-rose-700 lg:col-span-3">{error}</p>
+        )}
+
+        <Bloco icon={ClipboardList} titulo="Tarefa" className="lg:col-span-2">
+          {readOnly ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Campo rotulo="Status">{statusLabel(status)}</Campo>
+              <Campo rotulo="Prazo">
+                {formatDate(prazo)}
+                {horario ? ` · ${horario}` : ''}
+              </Campo>
+              <div className="sm:col-span-2">
+                <Campo rotulo="Descrição">
+                  {descricao ? <span className="whitespace-pre-wrap">{descricao}</span> : null}
+                </Campo>
+              </div>
+              {tarefa.motivo_atraso ? (
+                <div className="sm:col-span-2">
+                  <Campo rotulo="Motivo do atraso">
+                    <span className="whitespace-pre-wrap">{tarefa.motivo_atraso}</span>
+                  </Campo>
+                </div>
+              ) : null}
             </div>
           ) : (
-            <button type="button" className="btn-ghost w-full" onClick={onClose}>
-              Fechar
-            </button>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <label className={ROTULO}>Título</label>
+                <input value={titulo} onChange={(e) => setTitulo(e.target.value)} className="glass-input" />
+              </div>
+              <div>
+                <label className={ROTULO}>Status</label>
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value as StatusObrigacao)}
+                  className="glass-input"
+                >
+                  {STATUS_OPTS.map((s) => (
+                    <option key={s} value={s}>
+                      {statusLabel(s)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={ROTULO}>Prazo</label>
+                <GlassDatePicker ariaLabel="Prazo" value={prazo} onChange={setPrazo} />
+              </div>
+              <div>
+                <label className={ROTULO}>Início</label>
+                <input
+                  type="time"
+                  required
+                  value={horaInicio}
+                  onChange={(e) => setHoraInicio(e.target.value)}
+                  className="glass-input"
+                  aria-label="Horário de início"
+                />
+              </div>
+              <div>
+                <label className={ROTULO}>Fim</label>
+                <input
+                  type="time"
+                  required
+                  value={horaFim}
+                  onChange={(e) => setHoraFim(e.target.value)}
+                  className="glass-input"
+                  aria-label="Horário de fim"
+                />
+              </div>
+              <p className="-mt-1 text-[11px] text-[color:var(--color-muted)] sm:col-span-2">
+                Obrigatório. O atraso continua só pelo dia do prazo, não pelo horário.
+              </p>
+              {needsMotivo ? (
+                <div className="sm:col-span-2">
+                  <label className="mb-1.5 block text-xs font-medium text-rose-600">Motivo do atraso *</label>
+                  <textarea
+                    value={motivoAtraso}
+                    onChange={(e) => setMotivoAtraso(e.target.value)}
+                    rows={3}
+                    className="glass-input resize-none border-rose-200 focus:border-rose-400 focus:ring-rose-400/20"
+                    placeholder="Por que a entrega está fora do prazo?"
+                  />
+                  <p className="mt-1 text-[11px] text-[color:var(--color-muted)]">
+                    Obrigatório para entregar após o prazo (mín. 20 caracteres).
+                  </p>
+                </div>
+              ) : null}
+              <div className="sm:col-span-2">
+                <label className={ROTULO}>Descrição</label>
+                <textarea
+                  value={descricao}
+                  onChange={(e) => setDescricao(e.target.value)}
+                  rows={3}
+                  className="glass-input resize-none"
+                  placeholder="Anotações..."
+                />
+              </div>
+            </div>
           )}
-          {!readOnly ? (
-            <button
-              type="button"
-              className="btn-ghost w-full text-rose-600"
-              disabled={saving}
-              onClick={() => void remove()}
-            >
-              <Trash2 className="h-4 w-4" />
-              Excluir tarefa
-            </button>
-          ) : null}
-        </footer>
-      </aside>
-    </>,
-    document.body,
+        </Bloco>
+
+        <div className="flex min-w-0 flex-col gap-4">
+          <Bloco icon={Users} titulo="Pessoas">
+            <div className="space-y-3">
+              <div>
+                <p className="mb-1.5 text-[11px] font-medium text-[color:var(--color-muted)]">Responsável</p>
+                {tarefa.responsavel?.nome ? (
+                  <div className="flex items-center gap-2.5">
+                    <PersonAvatar nome={tarefa.responsavel.nome} fotoUrl={tarefa.responsavel.foto_url} size="lg" />
+                    <span className="truncate text-sm font-medium text-[color:var(--color-ink)]">
+                      {tarefa.responsavel.nome}
+                    </span>
+                  </div>
+                ) : (
+                  <p className="text-sm text-[color:var(--color-muted)]">—</p>
+                )}
+              </div>
+              <div className="border-t border-[color:var(--color-line)] pt-3">
+                <Campo rotulo="Solicitante">{tarefa.solicitante_nome}</Campo>
+              </div>
+            </div>
+          </Bloco>
+
+          <Bloco icon={History} titulo="Histórico">
+            {audit.length === 0 ? (
+              <p className="text-sm text-[color:var(--color-muted)]">Sem histórico registrado.</p>
+            ) : (
+              <div className="max-h-48 space-y-2 overflow-y-auto pr-1 [scrollbar-width:thin]">
+                {audit.map((a) => (
+                  <div key={a.id} className="rounded-xl bg-[color:var(--color-surface)] px-3 py-2 text-xs">
+                    <p className="font-medium text-[color:var(--color-ink)]">{a.acao}</p>
+                    <p className="mt-1 text-[10px] text-[color:var(--color-muted)]">
+                      {new Date(a.created_at).toLocaleString('pt-BR')}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Bloco>
+        </div>
+      </DetalheModal>
+      <CopiarModal
+        item={copiando ? workItemFromTarefa(tarefa) : null}
+        onClose={() => setCopiando(false)}
+      />
+    </>
   )
 }

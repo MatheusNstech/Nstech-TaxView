@@ -24,10 +24,11 @@ from app.services.excel_export import build_obrigacoes_xlsx
 from app.services.pptx_export import build_market_call_pptx, market_call_filename
 from app.schemas.models import (
     AuditLogOut,
-    CalendarioDia,
     CalendarioResponse,
     ComentarioCreate,
     ComentarioOut,
+    CopiarRequest,
+    CopiarResponse,
     GerarCompetenciaRequest,
     GerarCompetenciaResponse,
     ObrigacaoCreate,
@@ -36,6 +37,8 @@ from app.schemas.models import (
     ReprovarRequest,
     StatusObrigacao,
 )
+from app.services.calendario import resumo_dia
+from app.services.copia import carregar_destinos
 from app.services.competencia import gerar_competencia
 from app.services.equipe import registrar_acao_equipe_obrigacao
 from app.services.notifications import (
@@ -149,13 +152,18 @@ def query_obrigacoes(
         if competencia:
             query = query.eq("competencia", competencia.isoformat())
         query = apply_responsavel_filter(query, rid)
-        if status_filter:
+        # Atraso também é calculado pelo prazo, então "Atrasado" filtra depois do _enrich.
+        if status_filter and status_filter.value != "ATRASADO":
             query = query.in_("status", status_filter_values(status_filter.value))
         if atividade_id:
             query = query.eq("atividade_id", str(atividade_id))
         return query.order("competencia", desc=True).order("id")
 
     enriched = [_enrich(r) for r in fetch_all(build)]
+    if status_filter and status_filter.value == "ATRASADO":
+        enriched = [
+            r for r in enriched if r["status"] == "ATRASADO" or r.get("urgencia") == "atrasado"
+        ]
     if bu:
         enriched = [r for r in enriched if (r.get("empresa") or {}).get("bu") == bu]
     if q:
@@ -208,8 +216,7 @@ def calendario(
     detalhe_dia: date | None = None,
 ):
     resolved = _scoped_responsavel_id(user, client, responsavel_id)
-    if not user.org_wide and resolved is None:
-        return CalendarioResponse(dias=[], detalhe=[])
+    sem_escopo = not user.org_wide and resolved is None
 
     de_iso, ate_iso = de.isoformat(), ate.isoformat()
     # Mesmo critério do agrupamento abaixo: prazo_fiscal, ou prazo_legal quando não há fiscal.
@@ -228,7 +235,7 @@ def calendario(
         )
         return apply_responsavel_filter(query, rid).order("id")
 
-    enriched = [_enrich(r) for r in fetch_all(build)]
+    enriched = [] if sem_escopo else [_enrich(r) for r in fetch_all(build)]
     if bu:
         enriched = [r for r in enriched if (r.get("empresa") or {}).get("bu") == bu]
 
@@ -241,29 +248,7 @@ def calendario(
         if de <= d <= ate:
             by_day[d.isoformat()].append(row)
 
-    dias: list[CalendarioDia] = []
-    for key in sorted(by_day.keys()):
-        items = by_day[key]
-        por_status: dict[str, int] = defaultdict(int)
-        atrasadas = 0
-        for item in items:
-            por_status[item["status"]] += 1
-            if item["status"] == "ATRASADO" or item.get("urgencia") == "atrasado":
-                atrasadas += 1
-        dias.append(
-            CalendarioDia(
-                data=date.fromisoformat(key),
-                total=len(items),
-                atrasadas=atrasadas,
-                por_status=dict(por_status),
-            )
-        )
-
-    detalhe: list[dict[str, Any]] = []
-    if detalhe_dia:
-        detalhe = by_day.get(detalhe_dia.isoformat(), [])
-
-    tarefas: list[Any] = []
+    tarefas: list[dict[str, Any]] = []
     try:
         tarefas = query_tarefas(
             user,
@@ -275,6 +260,20 @@ def calendario(
         )
     except Exception:  # noqa: BLE001
         logger.exception("Falha ao carregar tarefas do calendário")
+
+    tarefas_by_day: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for t in tarefas:
+        if t.get("prazo"):
+            tarefas_by_day[str(t["prazo"])[:10]].append(t)
+
+    dias = [
+        resumo_dia(date.fromisoformat(key), by_day.get(key, []), tarefas_by_day.get(key, []))
+        for key in sorted(by_day.keys() | tarefas_by_day.keys())
+    ]
+
+    detalhe: list[dict[str, Any]] = []
+    if detalhe_dia:
+        detalhe = by_day.get(detalhe_dia.isoformat(), [])
 
     return CalendarioResponse(dias=dias, detalhe=detalhe, tarefas=tarefas)
 
@@ -422,6 +421,82 @@ def create_obrigacao(
             corpo="Uma obrigação foi atribuída a você.",
         )
     return _fetch_full(client, oid)
+
+
+@router.post("/{obrigacao_id}/copiar", response_model=CopiarResponse)
+def copiar_obrigacao(
+    obrigacao_id: UUID,
+    body: CopiarRequest,
+    user: Annotated[AuthUser, Depends(require_admin)],
+    client: Annotated[Client, Depends(get_db_client)],
+):
+    origem = _fetch_full(client, str(obrigacao_id))
+    destinos, ignoradas = carregar_destinos(
+        client, [str(e) for e in body.empresa_ids], str(origem["empresa_id"])
+    )
+    duplicada = "Já existe essa obrigação para a empresa nesta competência"
+    existentes: set[str] = set()
+    if destinos:
+        rows = (
+            client.table("obrigacoes")
+            .select("empresa_id")
+            .eq("atividade_id", str(origem["atividade_id"]))
+            .eq("competencia", str(origem["competencia"]))
+            .in_("empresa_id", list(destinos))
+            .execute()
+            .data
+            or []
+        )
+        existentes = {str(r["empresa_id"]) for r in rows}
+
+    principal = str(origem["responsavel_id"]) if origem.get("responsavel_id") else None
+    co_ids = [str(r["id"]) for r in origem.get("responsaveis") or [] if r.get("id")]
+    criadas = 0
+    for eid in destinos:
+        if eid in existentes:
+            ignoradas.append({"empresa_id": eid, "motivo": duplicada})
+            continue
+        payload = {
+            "empresa_id": eid,
+            "atividade_id": str(origem["atividade_id"]),
+            "competencia": origem["competencia"],
+            "prazo_legal": origem.get("prazo_legal"),
+            "prazo_fiscal": origem.get("prazo_fiscal"),
+            "categoria": origem.get("categoria") or "fechamento",
+            "responsavel_id": principal,
+            "status": "PENDENTE",
+            "updated_by": user.id,
+        }
+        try:
+            with constraint_errors(duplicate=duplicada):
+                data = client.table("obrigacoes").insert(payload).execute().data
+        except HTTPException as exc:
+            ignoradas.append({"empresa_id": eid, "motivo": str(exc.detail)})
+            continue
+        if not data:
+            ignoradas.append({"empresa_id": eid, "motivo": "Falha ao criar obrigação"})
+            continue
+        oid = str(data[0]["id"])
+        if co_ids:
+            set_responsaveis(client, oid, co_ids, principal)
+        write_audit(
+            client,
+            obrigacao_id=oid,
+            user_id=user.id,
+            acao="CREATE",
+            campo="copiada_de",
+            valor_novo=str(obrigacao_id),
+        )
+        criadas += 1
+        if principal:
+            notify_responsavel_of_obrigacao(
+                client,
+                obrigacao_id=oid,
+                tipo="ATRIBUICAO",
+                titulo="Nova obrigação atribuída",
+                corpo="Uma obrigação foi copiada para outra empresa e atribuída a você.",
+            )
+    return CopiarResponse(criadas=criadas, ignoradas=ignoradas)
 
 
 @router.patch("/{obrigacao_id}", response_model=ObrigacaoOut)

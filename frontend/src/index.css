@@ -263,6 +263,58 @@ html.dark {
     @apply inline-flex items-center justify-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-brand-500/25 transition-all hover:bg-brand-400 hover:shadow-md hover:shadow-brand-500/30 disabled:opacity-60;
   }
 
+  /* Branco em repouso; no hover o degradê laranja nstech entra por baixo (gradiente não anima, a opacidade sim). */
+  .btn-responsaveis {
+    @apply relative isolate inline-flex items-center gap-1.5 overflow-hidden rounded-xl px-3.5 py-2 text-xs font-semibold transition-all duration-300;
+    background: #fff;
+    color: #1f2937;
+    border: 1px solid rgb(15 23 42 / 0.1);
+    box-shadow: 0 1px 2px rgb(15 23 42 / 0.06);
+  }
+
+  .btn-responsaveis::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    opacity: 0;
+    background: linear-gradient(
+      135deg,
+      #ff7a4d 0%,
+      var(--color-brand-400) 28%,
+      var(--color-brand-500) 62%,
+      var(--color-brand-700) 100%
+    );
+    transition: opacity 300ms ease;
+  }
+
+  .btn-responsaveis:hover,
+  .btn-responsaveis:focus-visible {
+    color: #fff;
+    border-color: transparent;
+    box-shadow:
+      0 1px 0 rgb(255 255 255 / 0.28) inset,
+      0 8px 22px -10px rgb(255 61 3 / 0.65);
+    transform: translateY(-1px);
+  }
+
+  .btn-responsaveis:hover::before,
+  .btn-responsaveis:focus-visible::before {
+    opacity: 1;
+  }
+
+  .btn-responsaveis:active {
+    transform: translateY(0);
+  }
+
+  .btn-responsaveis svg {
+    transition: transform 300ms ease;
+  }
+
+  .btn-responsaveis:hover svg {
+    transform: translate(2px, -2px);
+  }
+
   .btn-ghost {
     @apply inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-medium backdrop-blur-md transition-colors;
     border: 1px solid var(--control-border);

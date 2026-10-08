@@ -46,6 +46,9 @@ Thumbs.db
 /*.webp
 /*.gif
 
+# Dumps locais da API (dados reais)
+frontend/public/__mock/
+
 # Planilhas (dados fiscais / exports locais)
 *.xlsx
 *.xls

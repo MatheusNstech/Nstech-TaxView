@@ -1,4 +1,4 @@
-import { Building2, ListFilter, Search } from 'lucide-react'
+import { Building2, Copy, ListFilter, Search } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import GlassMonthPicker from '../components/GlassMonthPicker'
 import GlassSelect from '../components/GlassSelect'
@@ -9,13 +9,20 @@ import TarefaDrawer from '../components/TarefaDrawer'
 import { CalendarSkeleton } from '../components/ui/PageSkeletons'
 import { apiFetch, buildQuery } from '../lib/api'
 import { formatDate, formatHorario, statusLabel } from '../lib/format'
-import { tarefaIsAtrasada } from '../lib/diretoriaFechamento'
 import { obrigacaoResponsaveisLabel } from '../lib/responsaveis'
+import { workItemFromObrigacao, workItemFromTarefa } from '../lib/workItems'
+import { useAuth } from '../context/AuthContext'
+import CopiarModal from '../components/CopiarModal'
+import EmpresaLogo from '../components/empresas/EmpresaLogo'
+import { Pontos, Selos, sinaisDe } from '../components/SinaisItem'
 import type {
+  CalendarioDia,
   CalendarioResponse,
+  Empresa,
   Obrigacao,
   StatusObrigacao,
   Tarefa,
+  WorkItem,
 } from '../types'
 
 const STATUS_OPTS: StatusObrigacao[] = [
@@ -35,6 +42,68 @@ function monthBounds(ym: string) {
   return { de, ate, year: y, month: m, last }
 }
 
+function plural(n: number, um: string, varios: string) {
+  return `${n} ${n === 1 ? um : varios}`
+}
+
+function tooltipDia(d: CalendarioDia): string {
+  const partes = [plural(d.total, 'item', 'itens')]
+  if (d.atrasadas) partes.push(plural(d.atrasadas, 'atrasado', 'atrasados'))
+  if (d.reabertas) partes.push(plural(d.reabertas, 'reaberto', 'reabertos'))
+  if (d.tarefas) partes.push(plural(d.tarefas, 'tarefa', 'tarefas'))
+  const nomes = d.empresas.map((e) => e.nome).join(', ')
+  if (nomes) partes.push(d.mais_empresas ? `${nomes}…` : nomes)
+  return partes.join(' · ')
+}
+
+function ItemDia({
+  empresa,
+  titulo,
+  detalhe,
+  item,
+  onOpen,
+  onCopiar,
+}: {
+  empresa: Empresa | null | undefined
+  titulo: string
+  detalhe: string
+  item: Parameters<typeof sinaisDe>[0] & { status: StatusObrigacao; urgencia?: string | null }
+  onOpen: () => void
+  onCopiar?: () => void
+}) {
+  const sinais = sinaisDe(item)
+  return (
+    <div className="group relative flex w-full items-center gap-2.5 rounded-xl border border-[color:var(--color-line)] bg-[color:var(--control-bg)] px-3 py-2 text-sm transition hover:bg-[color:var(--nav-hover)]">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="flex min-w-0 flex-1 items-center gap-2.5 text-left after:absolute after:inset-0 after:rounded-xl"
+      >
+        <EmpresaLogo empresa={empresa} size="sm" />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-medium">{titulo}</span>
+          <span className="block truncate text-xs text-[color:var(--color-muted)]">{detalhe}</span>
+        </span>
+      </button>
+      <span className="relative flex shrink-0 items-center gap-1.5">
+        <Selos sinais={sinais} />
+        <StatusBadge status={item.status} urgencia={item.urgencia} />
+        {onCopiar && (
+          <button
+            type="button"
+            onClick={onCopiar}
+            title="Copiar para outra empresa"
+            aria-label="Copiar para outra empresa"
+            className="rounded-md p-1 text-[color:var(--color-muted)] opacity-0 transition hover:bg-[color:var(--color-panel)] hover:text-brand-600 focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+          >
+            <Copy className="h-3.5 w-3.5" strokeWidth={2} />
+          </button>
+        )}
+      </span>
+    </div>
+  )
+}
+
 export default function Calendario() {
   const now = new Date()
   const [ym, setYm] = useState(
@@ -50,9 +119,11 @@ export default function Calendario() {
   const [busca, setBusca] = useState('')
   const [filtroStatus, setFiltroStatus] = useState<StatusObrigacao | ''>('')
   const [filtroBu, setFiltroBu] = useState('')
+  const [copiando, setCopiando] = useState<WorkItem | null>(null)
+  const { canWrite, isAdmin } = useAuth()
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true)
     setLoadError('')
     const { de, ate } = monthBounds(ym)
     try {
@@ -61,14 +132,9 @@ export default function Calendario() {
         ate,
         detalhe_dia: selectedDay ?? undefined,
       })
-      const [cal, tarefas] = await Promise.all([
-        apiFetch<CalendarioResponse>(`/api/obrigacoes/calendario${qs}`),
-        apiFetch<Tarefa[]>(
-          `/api/tarefas${buildQuery({ prazo_de: de, prazo_ate: ate })}`,
-        ),
-      ])
+      const cal = await apiFetch<CalendarioResponse>(`/api/obrigacoes/calendario${qs}`)
       setData(cal)
-      setTarefasMes(cal.tarefas?.length ? cal.tarefas : tarefas)
+      setTarefasMes(cal.tarefas ?? [])
     } catch (err) {
       setData({ dias: [], detalhe: [] })
       setTarefasMes([])
@@ -89,20 +155,10 @@ export default function Calendario() {
   }, [selectedDay])
 
   const byDate = useMemo(() => {
-    const map = new Map<string, { total: number; atrasadas: number }>()
-    for (const d of data?.dias ?? []) {
-      map.set(d.data.slice(0, 10), { total: d.total, atrasadas: d.atrasadas })
-    }
-    for (const t of tarefasMes) {
-      const day = t.prazo?.slice(0, 10)
-      if (!day || day < `${ym}-01` || day > `${ym}-31`) continue
-      const cur = map.get(day) ?? { total: 0, atrasadas: 0 }
-      cur.total += 1
-      if (tarefaIsAtrasada(t)) cur.atrasadas += 1
-      map.set(day, cur)
-    }
+    const map = new Map<string, CalendarioDia>()
+    for (const d of data?.dias ?? []) map.set(d.data.slice(0, 10), d)
     return map
-  }, [data, tarefasMes, ym])
+  }, [data])
 
   const { year, month, last } = monthBounds(ym)
   const firstWeekday = new Date(year, month - 1, 1).getDay()
@@ -228,8 +284,9 @@ export default function Calendario() {
                   key={key}
                   type="button"
                   onClick={() => setSelectedDay(key)}
+                  title={info ? tooltipDia(info) : undefined}
                   className={[
-                    'aspect-square rounded-xl border text-xs transition',
+                    'flex aspect-square min-w-0 flex-col rounded-xl border p-1.5 text-left text-xs transition hover:border-brand-500/50',
                     selectedDay === key
                       ? 'border-brand-500 ring-2 ring-brand-500/30'
                       : 'border-[color:var(--color-line)]',
@@ -237,16 +294,45 @@ export default function Calendario() {
                   style={{
                     backgroundColor: info
                       ? hasAtraso
-                        ? `rgba(244, 63, 94, ${0.15 + intensity * 0.45})`
-                        : `rgba(255, 107, 0, ${0.12 + intensity * 0.4})`
+                        ? `rgba(244, 63, 94, ${0.06 + intensity * 0.2})`
+                        : `rgba(255, 107, 0, ${0.05 + intensity * 0.18})`
                       : 'var(--control-bg)',
                   }}
                 >
-                  <span className="font-semibold text-[color:var(--color-ink)]">{day}</span>
+                  <span className="flex w-full items-baseline justify-between gap-1">
+                    <span className="font-semibold text-[color:var(--color-ink)]">{day}</span>
+                    {info && (
+                      <span className="text-[10px] font-semibold tabular-nums text-[color:var(--color-muted)]">
+                        {info.total}
+                      </span>
+                    )}
+                  </span>
                   {info && (
-                    <span className="mt-0.5 block text-[10px] text-[color:var(--color-muted)]">
-                      {info.total}
-                    </span>
+                    <>
+                      <span className="mt-auto hidden items-center sm:flex">
+                        {info.empresas.map((e, i) => (
+                          <span
+                            key={e.id}
+                            className={`rounded-md ring-2 ring-[color:var(--color-panel)] ${i > 0 ? '-ml-1.5' : ''}`}
+                          >
+                            <EmpresaLogo empresa={e} size="xs" />
+                          </span>
+                        ))}
+                        {info.mais_empresas > 0 && (
+                          <span className="ml-1 text-[9px] font-semibold text-[color:var(--color-muted)]">
+                            +{info.mais_empresas}
+                          </span>
+                        )}
+                      </span>
+                      <Pontos
+                        className="mt-auto pt-1 sm:mt-1 sm:pt-0"
+                        contagem={{
+                          atrasadas: info.atrasadas,
+                          reabertas: info.reabertas,
+                          tarefas: info.tarefas,
+                        }}
+                      />
+                    </>
                   )}
                 </button>
               )
@@ -344,51 +430,36 @@ export default function Calendario() {
                   : 'Nenhum resultado com esses filtros.'}
               </p>
             )}
-            {tarefasFiltradas.map((t) => (
-              <button
-                key={`tarefa:${t.id}`}
-                type="button"
-                onClick={() => {
-                  setSelected(null)
-                  setSelectedTarefa(t)
-                }}
-                className="flex w-full items-center justify-between gap-2 rounded-xl border border-[color:var(--color-line)] bg-[color:var(--control-bg)] px-3 py-2 text-left text-sm transition hover:bg-[color:var(--nav-hover)]"
-              >
-                <div className="min-w-0">
-                  <p className="truncate font-medium">
-                    <span className="mr-1 rounded bg-brand-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase text-brand-700">
-                      Tarefa
-                    </span>
-                    {t.titulo}
-                  </p>
-                  <p className="truncate text-xs text-[color:var(--color-muted)]">
-                    {formatHorario(t.hora_inicio, t.hora_fim)
-                      ? `${formatHorario(t.hora_inicio, t.hora_fim)} · `
-                      : ''}
-                    {t.empresa?.razao_social ?? 'Fechamento'}
-                  </p>
-                </div>
-                <StatusBadge status={t.status} urgencia={t.urgencia} />
-              </button>
-            ))}
+            {tarefasFiltradas.map((t) => {
+              const horario = formatHorario(t.hora_inicio, t.hora_fim)
+              return (
+                <ItemDia
+                  key={`tarefa:${t.id}`}
+                  empresa={t.empresa}
+                  titulo={t.titulo}
+                  detalhe={`${horario ? `${horario} · ` : ''}${t.empresa?.razao_social ?? 'Fechamento'}`}
+                  item={{ ...t, origem: 'tarefa', entregaOriginal: t.entrega_original }}
+                  onOpen={() => {
+                    setSelected(null)
+                    setSelectedTarefa(t)
+                  }}
+                  onCopiar={canWrite ? () => setCopiando(workItemFromTarefa(t)) : undefined}
+                />
+              )
+            })}
             {detalheFiltrado.map((o) => (
-              <button
+              <ItemDia
                 key={o.id}
-                type="button"
-                onClick={() => {
+                empresa={o.empresa}
+                titulo={o.atividade?.nome ?? '—'}
+                detalhe={o.empresa?.razao_social ?? ''}
+                item={{ ...o, origem: 'obrigacao', entregaOriginal: o.entrega_original }}
+                onOpen={() => {
                   setSelectedTarefa(null)
                   setSelected(o)
                 }}
-                className="flex w-full items-center justify-between gap-2 rounded-xl border border-[color:var(--color-line)] bg-[color:var(--control-bg)] px-3 py-2 text-left text-sm transition hover:bg-[color:var(--nav-hover)]"
-              >
-                <div className="min-w-0">
-                  <p className="truncate font-medium">{o.atividade?.nome}</p>
-                  <p className="truncate text-xs text-[color:var(--color-muted)]">
-                    {o.empresa?.razao_social}
-                  </p>
-                </div>
-                <StatusBadge status={o.status} urgencia={o.urgencia} />
-              </button>
+                onCopiar={isAdmin ? () => setCopiando(workItemFromObrigacao(o)) : undefined}
+              />
             ))}
           </div>
         </div>
@@ -401,7 +472,7 @@ export default function Calendario() {
         onClose={() => setSelected(null)}
         onSaved={(u) => {
           setSelected(u)
-          void load()
+          void load({ silent: true })
         }}
       />
       <TarefaDrawer
@@ -417,11 +488,18 @@ export default function Calendario() {
             return next
           })
           setSelectedTarefa(null)
+          void load({ silent: true })
         }}
         onDeleted={(id) => {
           setTarefasMes((prev) => prev.filter((t) => t.id !== id))
           setSelectedTarefa(null)
+          void load({ silent: true })
         }}
+      />
+      <CopiarModal
+        item={copiando}
+        onClose={() => setCopiando(null)}
+        onCopiado={() => void load({ silent: true })}
       />
     </div>
   )

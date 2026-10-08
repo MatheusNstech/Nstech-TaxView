@@ -21,6 +21,8 @@ interface KanbanBoardProps {
   onStatusChange: (item: WorkItem, status: StatusObrigacao) => Promise<void>
   onCardClick: (item: WorkItem) => void
   readOnly?: boolean
+  onCopiar?: (item: WorkItem) => void
+  podeCopiar?: (item: WorkItem) => boolean
 }
 
 // A coluna sob o ponteiro vence; closestCorners só quando o ponteiro sai das colunas.
@@ -39,6 +41,8 @@ export default function KanbanBoard({
   onStatusChange,
   onCardClick,
   readOnly = false,
+  onCopiar,
+  podeCopiar,
 }: KanbanBoardProps) {
   const [activeKey, setActiveKey] = useState<string | null>(null)
   const sensors = useSensors(
@@ -101,6 +105,8 @@ export default function KanbanBoard({
           items={grouped[col.id] ?? []}
           onCardClick={onCardClick}
           disableDrag={readOnly}
+          onCopiar={onCopiar}
+          podeCopiar={podeCopiar}
         />
       ))}
     </div>

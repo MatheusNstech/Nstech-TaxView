@@ -4,13 +4,15 @@ import { avatarInitials, resolveAvatarUrl } from '../lib/avatars'
 interface PersonAvatarProps {
   nome: string | null | undefined
   fotoUrl?: string | null
-  size?: 'sm' | 'md'
+  size?: 'xs' | 'sm' | 'md' | 'lg'
   className?: string
 }
 
 const SIZE = {
+  xs: 'h-5 w-5 text-[8px]',
   sm: 'h-7 w-7 text-[9px]',
   md: 'h-8 w-8 text-[10px]',
+  lg: 'h-9 w-9 text-[11px]',
 } as const
 
 export default function PersonAvatar({

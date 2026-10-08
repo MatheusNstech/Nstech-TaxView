@@ -16,7 +16,7 @@ from app.schemas.models import (
     EmpresaUpdate,
 )
 from app.services.db import constraint_errors, fetch_all, reject_nulls
-from app.services.empresas_painel import montar_grupos
+from app.services.empresas_painel import cnpj_raiz, montar_grupos
 
 router = APIRouter(prefix="/empresas", tags=["empresas"])
 
@@ -90,7 +90,25 @@ def update_empresa(
         data = client.table("empresas").update(body).eq("id", str(empresa_id)).execute().data
     if not data:
         raise HTTPException(status_code=404, detail="Empresa não encontrada")
+    logo = {k: body[k] for k in ("logo_url", "logo_url_escuro") if k in body}
+    if logo:
+        _propagar_logo_no_grupo(client, data[0], logo)
     return data[0]
+
+
+def _propagar_logo_no_grupo(client: Client, empresa: dict, logo: dict) -> None:
+    """Matriz e filiais dividem o logo: Kanban e calendário mostram o de cada unidade."""
+    raiz = cnpj_raiz(empresa)
+    if raiz.startswith("id:"):
+        return
+    todas = fetch_all(lambda: client.table("empresas").select("id,cnpj").order("id"))
+    irmas = [
+        str(e["id"])
+        for e in todas
+        if str(e["id"]) != str(empresa["id"]) and cnpj_raiz(e) == raiz
+    ]
+    if irmas:
+        client.table("empresas").update(logo).in_("id", irmas).execute()
 
 
 @router.put("/{empresa_id}/contatos", response_model=list[EmpresaContatoOut])

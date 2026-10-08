@@ -46,6 +46,7 @@ class EmpresaOut(EmpresaBase):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
     logo_url: str | None = None
+    logo_url_escuro: str | None = None
 
 
 class EmpresaContatoIn(BaseModel):
@@ -101,6 +102,7 @@ class EmpresaGrupoOut(BaseModel):
     nome: str
     porte: str | None = None
     logo_url: str | None = None
+    logo_url_escuro: str | None = None
     bus: list[str]
     matriz: EmpresaUnidadeOut
     filiais: list[EmpresaUnidadeOut]
@@ -299,17 +301,44 @@ class NotificacaoOut(BaseModel):
     created_at: datetime
 
 
+class CalendarioEmpresa(BaseModel):
+    id: UUID
+    nome: str
+    logo_url: str | None = None
+    logo_url_escuro: str | None = None
+    bu: str | None = None
+
+
 class CalendarioDia(BaseModel):
     data: date
     total: int
     atrasadas: int
     por_status: dict[str, int]
+    reabertas: int = 0
+    tarefas: int = 0
+    empresas: list[CalendarioEmpresa] = Field(default_factory=list)
+    mais_empresas: int = 0
 
 
 class CalendarioResponse(BaseModel):
     dias: list[CalendarioDia]
     detalhe: list[ObrigacaoOut] = []
     tarefas: list["TarefaOut"] = []
+
+
+class CopiarRequest(BaseModel):
+    empresa_ids: list[UUID] = Field(min_length=1, max_length=200)
+    titulo: str | None = Field(default=None, max_length=200)
+
+
+class CopiaIgnorada(BaseModel):
+    empresa_id: UUID
+    motivo: str
+
+
+class CopiarResponse(BaseModel):
+    criadas: int
+    ignoradas: list[CopiaIgnorada] = Field(default_factory=list)
 
 
 class GerarCompetenciaRequest(BaseModel):

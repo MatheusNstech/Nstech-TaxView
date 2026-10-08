@@ -1,7 +1,10 @@
 import { Columns3, Download, ListTodo, Plus, Table2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import CopiarModal from '../components/CopiarModal'
 import FiltersBar from '../components/FiltersBar'
 import KanbanBoard from '../components/KanbanBoard'
+import { empresaDoItem } from '../components/KanbanCard'
+import EmpresaLogo from '../components/empresas/EmpresaLogo'
 import MotivoAtrasoModal from '../components/MotivoAtrasoModal'
 import NovaTarefaModal from '../components/NovaTarefaModal'
 import NotificationBell from '../components/NotificationBell'
@@ -98,6 +101,7 @@ export default function MinhasTarefas() {
   } | null>(null)
   const [lateSubmitting, setLateSubmitting] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
+  const [copiando, setCopiando] = useState<WorkItem | null>(null)
   const [error, setError] = useState('')
   const [exporting, setExporting] = useState(false)
 
@@ -522,6 +526,8 @@ export default function MinhasTarefas() {
           onStatusChange={handleStatusChange}
           onCardClick={openItem}
           readOnly={!canWrite}
+          onCopiar={canWrite ? setCopiando : undefined}
+          podeCopiar={(item) => item.origem === 'tarefa' || isAdmin}
         />
       ) : (
         <div className="card-surface overflow-hidden">
@@ -547,7 +553,10 @@ export default function MinhasTarefas() {
                       {item.origem === 'tarefa' ? 'Tarefa' : 'Obrigação'}
                     </td>
                     <td className="px-5 py-3 font-medium text-[color:var(--color-ink)]">
-                      {item.title}
+                      <span className="flex items-center gap-2.5">
+                        <EmpresaLogo empresa={empresaDoItem(item)} size="xs" />
+                        <span className="min-w-0">{item.title}</span>
+                      </span>
                     </td>
                     <td className="px-5 py-3 text-[color:var(--color-muted)]">
                       {item.subtitle}
@@ -618,6 +627,12 @@ export default function MinhasTarefas() {
           setPendingLateDelivery(null)
         }}
         onConfirm={confirmLateDelivery}
+      />
+
+      <CopiarModal
+        item={copiando}
+        onClose={() => setCopiando(null)}
+        onCopiado={() => void load({ silent: true })}
       />
 
       <NovaTarefaModal

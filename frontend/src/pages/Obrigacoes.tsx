@@ -1,5 +1,6 @@
 import { ListChecks, Pencil } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import ExportMenu, { marketCallFilename } from '../components/ExportMenu'
 import FiltersBar from '../components/FiltersBar'
 import NotificationBell from '../components/NotificationBell'
@@ -16,12 +17,13 @@ import {
 import type { FilterValues, Obrigacao } from '../types'
 
 export default function Obrigacoes() {
-  const [filters, setFilters] = useState<FilterValues>({
-    competencia: currentCompetenciaMonth(),
+  const [searchParams] = useSearchParams()
+  const [filters, setFilters] = useState<FilterValues>(() => ({
+    competencia: searchParams.get('competencia') || currentCompetenciaMonth(),
     bu: '',
-    status: '',
-    search: '',
-  })
+    status: searchParams.get('status') || '',
+    search: searchParams.get('q') || '',
+  }))
   const [items, setItems] = useState<Obrigacao[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Obrigacao | null>(null)

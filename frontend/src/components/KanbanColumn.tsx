@@ -8,6 +8,8 @@ interface KanbanColumnProps {
   items: WorkItem[]
   onCardClick: (item: WorkItem) => void
   disableDrag?: boolean
+  onCopiar?: (item: WorkItem) => void
+  podeCopiar?: (item: WorkItem) => boolean
 }
 
 export default function KanbanColumn({
@@ -16,6 +18,8 @@ export default function KanbanColumn({
   items,
   onCardClick,
   disableDrag = false,
+  onCopiar,
+  podeCopiar,
 }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id, disabled: disableDrag })
 
@@ -52,6 +56,9 @@ export default function KanbanColumn({
               item={item}
               onClick={() => onCardClick(item)}
               disableDrag={disableDrag}
+              onCopiar={
+                onCopiar && (podeCopiar?.(item) ?? true) ? () => onCopiar(item) : undefined
+              }
             />
           ))
         )}
