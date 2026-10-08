@@ -117,6 +117,16 @@ export function statusParaPainel<T extends string>(item: {
   return st
 }
 
+/** Coluna do Kanban em que o item aparece (atrasado sem andamento fica em Pendente). */
+export function colunaKanban<T extends string>(status: T): T | 'PENDENTE' | 'ENTREGUE' {
+  if (status === 'ATRASADO') return 'PENDENTE'
+  return statusParaContagem(status)
+}
+
+export function isItemAtrasado(item: { status: string; urgencia?: string | null }): boolean {
+  return !isEntregue(item.status) && (item.status === 'ATRASADO' || item.urgencia === 'atrasado')
+}
+
 export function urgenciaLabel(urgencia: string | null | undefined): string {
   const labels: Record<string, string> = {
     ok: 'No prazo',

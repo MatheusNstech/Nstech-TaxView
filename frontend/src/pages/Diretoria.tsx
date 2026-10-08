@@ -21,7 +21,8 @@ import { mergeWorkItems } from '../lib/workItems'
 import {
   currentCompetenciaMonth,
   monthToCompetencia,
-  statusParaPainel,
+  colunaKanban,
+  isItemAtrasado,
 } from '../lib/format'
 import type {
   DashboardSummary,
@@ -104,15 +105,17 @@ export default function Diretoria() {
 
   const matrixCounts = useMemo(() => {
     const counts: BuStatusCounts = {}
+    const empty = () => ({ status: {}, atrasados: {} })
     for (const item of workItems) {
       const bu = itemBu(item)
-      if (!counts[bu]) counts[bu] = {}
-      const st = statusParaPainel(item)
-      counts[bu][st] = (counts[bu][st] ?? 0) + 1
+      const cell = (counts[bu] ??= empty())
+      const col = colunaKanban(item.status)
+      cell.status[col] = (cell.status[col] ?? 0) + 1
+      if (isItemAtrasado(item)) cell.atrasados[col] = (cell.atrasados[col] ?? 0) + 1
     }
     if (summary) {
       for (const bu of Object.keys(summary.por_bu)) {
-        if (!counts[bu]) counts[bu] = {}
+        counts[bu] ??= empty()
       }
     }
     return counts
@@ -137,7 +140,7 @@ export default function Diretoria() {
       const bu = itemBu(item)
       const atividade = workItemServicoNome(item)
       if (drill.bu && bu !== drill.bu) return false
-      if (drill.status && statusParaPainel(item) !== drill.status) return false
+      if (drill.status && colunaKanban(item.status) !== drill.status) return false
       if (
         drill.responsavelNome &&
         (item.responsavelNome ?? '') !== drill.responsavelNome

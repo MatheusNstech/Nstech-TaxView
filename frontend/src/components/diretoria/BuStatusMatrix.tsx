@@ -1,3 +1,4 @@
+import { AlertTriangle } from 'lucide-react'
 import type { StatusObrigacao } from '../../types'
 
 const STATUS_ORDER: { key: StatusObrigacao; label: string; cell: string }[] = [
@@ -21,16 +22,15 @@ const STATUS_ORDER: { key: StatusObrigacao; label: string; cell: string }[] = [
     label: 'Entregue',
     cell: 'bg-[#00A76F]/16 text-[#007867] dark:text-[#5BE49B]',
   },
-  {
-    key: 'ATRASADO',
-    label: 'Atrasado',
-    cell: 'bg-[#FF5630]/16 text-[#B71D18] dark:text-[#FFAC82]',
-  },
 ]
 
+/** Por BU: itens por coluna do Kanban e quantos deles estão com prazo vencido. */
 export type BuStatusCounts = Record<
   string,
-  Partial<Record<StatusObrigacao, number>>
+  {
+    status: Partial<Record<StatusObrigacao, number>>
+    atrasados: Partial<Record<StatusObrigacao, number>>
+  }
 >
 
 interface BuStatusMatrixProps {
@@ -68,9 +68,14 @@ export default function BuStatusMatrix({
         </thead>
         <tbody className="divide-y divide-[color:var(--color-line)]">
           {bus.map((bu) => {
-            const row = counts[bu] ?? {}
+            const row = counts[bu]?.status ?? {}
+            const late = counts[bu]?.atrasados ?? {}
             const total = STATUS_ORDER.reduce(
               (acc, s) => acc + (row[s.key] ?? 0),
+              0,
+            )
+            const totalLate = STATUS_ORDER.reduce(
+              (acc, s) => acc + (late[s.key] ?? 0),
               0,
             )
             return (
@@ -78,39 +83,76 @@ export default function BuStatusMatrix({
                 <td className="px-2 py-2.5">
                   <button
                     type="button"
-                    className="font-semibold text-[color:var(--color-ink)] hover:opacity-80"
+                    className="inline-flex items-center gap-2 font-semibold text-[color:var(--color-ink)] hover:opacity-80"
                     onClick={() => onCellClick?.(bu, null)}
+                    title={totalLate > 0 ? `${totalLate} item(ns) com prazo vencido` : undefined}
                   >
+                    <span
+                      className={[
+                        'h-2 w-2 shrink-0 rounded-full',
+                        totalLate > 0 ? 'bg-[#FF5630] shadow-[0_0_0_3px_rgb(255_86_48_/_0.15)]' : 'bg-transparent',
+                      ].join(' ')}
+                      aria-hidden
+                    />
                     {bu}
                   </button>
                 </td>
                 {STATUS_ORDER.map((s) => {
                   const n = row[s.key] ?? 0
+                  const atrasados = late[s.key] ?? 0
                   return (
                     <td key={s.key} className="px-1.5 py-2 text-center">
                       <button
                         type="button"
                         disabled={n === 0}
                         onClick={() => onCellClick?.(bu, s.key)}
+                        title={
+                          atrasados > 0
+                            ? `${n} em ${s.label.toLowerCase()}, ${atrasados} com prazo vencido`
+                            : undefined
+                        }
                         className={[
-                          'inline-flex min-w-[2.5rem] items-center justify-center rounded-full px-2.5 py-1 text-xs font-bold tabular-nums',
+                          'inline-flex items-stretch overflow-hidden rounded-full text-xs font-bold tabular-nums',
                           'origin-center transition duration-150 ease-out',
                           n === 0
                             ? 'cursor-default text-[color:var(--color-muted)] opacity-35'
                             : [
-                                s.cell,
-                                'cursor-pointer hover:z-10 hover:scale-110 hover:shadow-md hover:shadow-black/10',
+                                atrasados > 0 ? 'ring-1 ring-[#FF5630]/35' : '',
+                                'cursor-pointer hover:z-10 hover:scale-105 hover:shadow-md hover:shadow-black/10',
                                 'active:scale-95',
                               ].join(' '),
                         ].join(' ')}
                       >
-                        {n}
+                        <span
+                          className={[
+                            'inline-flex min-w-[2.5rem] items-center justify-center px-2.5 py-1',
+                            n === 0 ? '' : s.cell,
+                          ].join(' ')}
+                        >
+                          {n}
+                        </span>
+                        {atrasados > 0 && (
+                          <span className="inline-flex items-center gap-1 border-l border-[#FF5630]/25 bg-[#FF5630]/14 py-1 pr-2.5 pl-2 text-[#B71D18] dark:text-[#FFAC82]">
+                            <AlertTriangle className="h-3 w-3" strokeWidth={2.25} />
+                            {atrasados}
+                          </span>
+                        )}
                       </button>
                     </td>
                   )
                 })}
-                <td className="px-2 py-2.5 text-center text-xs font-bold tabular-nums text-[color:var(--color-ink)]">
-                  {total}
+                <td className="px-2 py-2.5 text-center">
+                  <div className="inline-flex items-center gap-2">
+                    <span className="text-xs font-bold tabular-nums text-[color:var(--color-ink)]">
+                      {total}
+                    </span>
+                    {totalLate > 0 && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-[#FF5630]/12 px-2 py-0.5 text-[10px] font-semibold text-[#B71D18] dark:text-[#FFAC82]">
+                        <AlertTriangle className="h-2.5 w-2.5" strokeWidth={2.25} />
+                        {totalLate} em atraso
+                      </span>
+                    )}
+                  </div>
                 </td>
               </tr>
             )

@@ -1,7 +1,7 @@
 import { Search, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import type { StatusObrigacao, WorkItem } from '../../types'
-import { formatDate, statusLabel, statusParaPainel } from '../../lib/format'
+import { formatDate, isItemAtrasado, statusLabel, statusParaPainel } from '../../lib/format'
 import { workItemServicoNome } from '../../lib/diretoriaAggregates'
 import { obrigacaoResponsaveis } from '../../lib/responsaveis'
 import PersonAvatar from '../PersonAvatar'
@@ -337,7 +337,13 @@ export default function DiretoriaDrillModal({
                       {formatDate(item.prazo)}
                     </td>
                     <td className="whitespace-nowrap px-5 py-3.5">
-                      <StatusBadge status={item.status} urgencia={item.urgencia} />
+                      <StatusBadge
+                        status={item.status}
+                        urgencia={
+                          item.status !== 'ATRASADO' && isItemAtrasado(item) ? 'atrasado' : null
+                        }
+                        showUrgencia
+                      />
                     </td>
                   </tr>
                 ))
