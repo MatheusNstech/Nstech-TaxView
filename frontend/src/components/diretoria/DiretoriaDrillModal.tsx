@@ -1,7 +1,7 @@
 import { Search, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import type { StatusObrigacao, WorkItem } from '../../types'
-import { formatDate, statusLabel, statusParaContagem } from '../../lib/format'
+import { formatDate, statusLabel, statusParaPainel } from '../../lib/format'
 import { workItemServicoNome } from '../../lib/diretoriaAggregates'
 import { obrigacaoResponsaveis } from '../../lib/responsaveis'
 import PersonAvatar from '../PersonAvatar'
@@ -126,7 +126,7 @@ export default function DiretoriaDrillModal({
       if (responsavel && !itemResponsavelNomes(item).includes(responsavel)) return false
       if (status) {
         const atual =
-          status === 'ENTREGA_PARCIAL' ? item.status : statusParaContagem(item.status)
+          status === 'ENTREGA_PARCIAL' ? item.status : statusParaPainel(item)
         if (atual !== status) return false
       }
       if (!q) return true

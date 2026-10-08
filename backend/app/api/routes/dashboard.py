@@ -16,7 +16,12 @@ from app.services.obrigacao_responsaveis import (
     select_with_responsavel_filter,
 )
 from app.services.scope import effective_responsavel_id
-from app.services.status_engine import as_br_date, is_delivered, normalize_status
+from app.services.status_engine import (
+    as_br_date,
+    is_delivered,
+    normalize_status,
+    urgencia_label,
+)
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -122,16 +127,28 @@ def summary(
     vence_7 = 0
 
     for row in obr_rows:
+        prazo_legal = date.fromisoformat(row["prazo_legal"]) if row.get("prazo_legal") else None
+        prazo_fiscal = date.fromisoformat(row["prazo_fiscal"]) if row.get("prazo_fiscal") else None
+        entrega_original = as_br_date(row.get("entrega_original"))
         st = normalize_status(
             row.get("status") or "PENDENTE",
-            date.fromisoformat(row["prazo_legal"]) if row.get("prazo_legal") else None,
-            date.fromisoformat(row["prazo_fiscal"]) if row.get("prazo_fiscal") else None,
+            prazo_legal,
+            prazo_fiscal,
             date.fromisoformat(row["data_entrega"]) if row.get("data_entrega") else None,
             today=today,
-            entrega_original=as_br_date(row.get("entrega_original")),
+            entrega_original=entrega_original,
         )
         if is_delivered(st):
             st = "ENTREGUE"
+        elif (
+            st in {"EM_ANDAMENTO", "EM_REVISAO"}
+            and urgencia_label(
+                st, prazo_legal, prazo_fiscal, today=today, entrega_original=entrega_original
+            )
+            == "atrasado"
+        ):
+            # No Kanban segue na coluna; nos painéis conta como atraso.
+            st = "ATRASADO"
         status_counter[st] += 1
         bu_counter[(row.get("empresas") or {}).get("bu") or "N/A"] += 1
         # Cada responsável (principal ou co-responsável) carrega a obrigação.

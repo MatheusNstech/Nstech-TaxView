@@ -1,6 +1,6 @@
 import type { Obrigacao, StatusObrigacao, WorkItem } from '../types'
 import { tarefaCategoriaLabel } from '../types'
-import { statusParaContagem } from './format'
+import { statusParaPainel } from './format'
 
 export const SERVICO_STATUS_ORDER: {
   key: StatusObrigacao
@@ -81,7 +81,7 @@ export function aggregateByServico(
     const nome = isWork
       ? workItemServicoNome(raw as WorkItem)
       : activityName(raw as Obrigacao)
-    const status = statusParaContagem((raw as Obrigacao | WorkItem).status)
+    const status = statusParaPainel(raw as Obrigacao | WorkItem)
     const bucket = byName.get(nome) ?? { total: 0, status: {} }
     bucket.total += 1
     bucket.status[status] = (bucket.status[status] ?? 0) + 1

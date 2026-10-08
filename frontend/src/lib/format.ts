@@ -104,6 +104,19 @@ export function statusParaContagem<T extends string>(status: T): T | 'ENTREGUE' 
   return status === 'ENTREGA_PARCIAL' ? 'ENTREGUE' : status
 }
 
+/**
+ * Status para painéis: como statusParaContagem, e Em andamento / Em revisão com
+ * prazo vencido contam como Atrasado (no Kanban continuam na coluna).
+ */
+export function statusParaPainel<T extends string>(item: {
+  status: T
+  urgencia?: string | null
+}): T | 'ENTREGUE' | 'ATRASADO' {
+  const st = statusParaContagem(item.status)
+  if (st !== 'ENTREGUE' && item.urgencia === 'atrasado') return 'ATRASADO'
+  return st
+}
+
 export function urgenciaLabel(urgencia: string | null | undefined): string {
   const labels: Record<string, string> = {
     ok: 'No prazo',

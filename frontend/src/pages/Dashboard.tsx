@@ -25,7 +25,7 @@ import {
   formatCompetencia,
   monthToCompetencia,
   nextCompetenciaDate,
-  statusParaContagem,
+  statusParaPainel,
 } from '../lib/format'
 import type {
   Atividade,
@@ -236,8 +236,7 @@ export default function Dashboard() {
       const bu = o.empresa?.bu?.trim() || 'Sem BU'
       busSet.add(bu)
       const label =
-        statusOrder.find((s) => s.key === statusParaContagem(o.status))?.label ??
-        'Pendente'
+        statusOrder.find((s) => s.key === statusParaPainel(o))?.label ?? 'Pendente'
       const row = counts.get(label)!
       row.set(bu, (row.get(bu) ?? 0) + 1)
     }
