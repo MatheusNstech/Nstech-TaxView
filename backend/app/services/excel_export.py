@@ -140,7 +140,8 @@ def _row_values(kind: str, row: dict[str, Any]) -> tuple[list[Any], str]:
     urgencia = str(row.get("urgencia") or "")
     if kind == "Tarefa":
         entrega = _as_date(row.get("entregue_em"))
-        item = row.get("titulo") or ""
+        servico = (row.get("atividade") or {}).get("nome")
+        item = " · ".join(p for p in (servico, row.get("titulo")) if p)
         prazo = _as_date(row.get("prazo"))
         values: list[Any] = [
             "Tarefa",

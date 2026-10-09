@@ -285,8 +285,7 @@ def _export_rows(
     **filters: Any,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     rows = query_obrigacoes(user, client, atividade_id=atividade_id, **filters)
-    # Tarefas avulsas não têm tipo de serviço: somem quando o filtro está ativo.
-    tarefas = [] if atividade_id else query_tarefas(user, client, **filters)
+    tarefas = query_tarefas(user, client, atividade_id=atividade_id, **filters)
     return rows, tarefas
 
 

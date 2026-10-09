@@ -40,6 +40,8 @@ from app.services.status_engine import (
 
 router = APIRouter(prefix="/tarefas", tags=["tarefas"])
 
+_FULL_SELECT = "*, empresas(*), atividades_modelo(*), responsaveis(*)"
+
 
 def _enrich(row: dict[str, Any]) -> dict[str, Any]:
     status_value = row.get("status") or "PENDENTE"
@@ -54,6 +56,8 @@ def _enrich(row: dict[str, Any]) -> dict[str, Any]:
     )
     if "empresas" in row:
         row["empresa"] = row.pop("empresas")
+    if "atividades_modelo" in row:
+        row["atividade"] = row.pop("atividades_modelo")
     if "responsaveis" in row:
         row["responsavel"] = row.pop("responsaveis")
     return row
@@ -62,7 +66,7 @@ def _enrich(row: dict[str, Any]) -> dict[str, Any]:
 def _fetch_full(client: Client, tarefa_id: str) -> dict[str, Any]:
     rows = (
         client.table("tarefas")
-        .select("*, empresas(*), responsaveis(*)")
+        .select(_FULL_SELECT)
         .eq("id", tarefa_id)
         .limit(1)
         .execute()
@@ -93,6 +97,20 @@ def _is_late_entrega(
     if current_status == "ATRASADO":
         return True
     return prazo is not None and prazo < today
+
+
+def _assert_atividade_existe(client: Client, atividade_id: str) -> None:
+    rows = (
+        client.table("atividades_modelo")
+        .select("id")
+        .eq("id", atividade_id)
+        .limit(1)
+        .execute()
+        .data
+        or []
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="Tipo de serviço não encontrado")
 
 
 def _notify_assignee(
@@ -140,6 +158,7 @@ def query_tarefas(
     responsavel_id: UUID | None = None,
     status_filter: StatusObrigacao | None = None,
     categoria: TarefaCategoria | None = None,
+    atividade_id: UUID | None = None,
     q: str | None = None,
     equipe: bool = False,
 ) -> list[dict[str, Any]]:
@@ -148,7 +167,7 @@ def query_tarefas(
         return []
 
     def build():
-        query = client.table("tarefas").select("*, empresas(*), responsaveis(*)")
+        query = client.table("tarefas").select(_FULL_SELECT)
         if competencia and not (prazo_de or prazo_ate):
             query = query.eq("competencia", competencia.isoformat())
         if prazo_de:
@@ -163,6 +182,8 @@ def query_tarefas(
             query = query.in_("status", status_filter_values(status_filter.value))
         if categoria:
             query = query.eq("categoria", categoria.value)
+        if atividade_id:
+            query = query.eq("atividade_id", str(atividade_id))
         return query.order("created_at", desc=True).order("id")
 
     rows = fetch_all(build)
@@ -182,6 +203,7 @@ def query_tarefas(
                     enriched.get("descricao") or "",
                     enriched.get("solicitante_nome") or "",
                     (enriched.get("empresa") or {}).get("razao_social") or "",
+                    (enriched.get("atividade") or {}).get("nome") or "",
                     (enriched.get("responsavel") or {}).get("nome") or "",
                 ]
             ).lower()
@@ -202,6 +224,7 @@ def list_tarefas(
     responsavel_id: UUID | None = None,
     status_filter: StatusObrigacao | None = Query(default=None, alias="status"),
     categoria: TarefaCategoria | None = None,
+    atividade_id: UUID | None = None,
     q: str | None = None,
     equipe: bool = False,
 ):
@@ -215,6 +238,7 @@ def list_tarefas(
         responsavel_id=responsavel_id,
         status_filter=status_filter,
         categoria=categoria,
+        atividade_id=atividade_id,
         q=q,
         equipe=equipe,
     )
@@ -283,6 +307,9 @@ def create_tarefa(
         if not empresa:
             raise HTTPException(status_code=404, detail="Empresa não encontrada")
 
+    if body.atividade_id is not None:
+        _assert_atividade_existe(client, str(body.atividade_id))
+
     motivo_atraso = None
     if is_delivered(body.status.value) and body.prazo < today_br():
         motivo = (body.motivo_atraso or "").strip()
@@ -307,6 +334,7 @@ def create_tarefa(
         "hora_inicio": _time_value(body.hora_inicio),
         "hora_fim": _time_value(body.hora_fim),
         "empresa_id": str(body.empresa_id) if body.empresa_id else None,
+        "atividade_id": str(body.atividade_id) if body.atividade_id else None,
         "obrigacao_id": str(body.obrigacao_id) if body.obrigacao_id else None,
         "responsavel_id": str(rid),
         "created_by": user.id,
@@ -372,9 +400,11 @@ def update_tarefa(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Informe o prazo do dia para definir o horário",
         )
-    for key in ("empresa_id", "obrigacao_id", "responsavel_id"):
+    for key in ("empresa_id", "atividade_id", "obrigacao_id", "responsavel_id"):
         if key in patch and patch[key] is not None:
             patch[key] = str(patch[key])
+    if patch.get("atividade_id"):
+        _assert_atividade_existe(client, patch["atividade_id"])
     if "solicitante_nome" in patch and patch["solicitante_nome"] is not None:
         patch["solicitante_nome"] = str(patch["solicitante_nome"]).strip()
 
@@ -527,6 +557,7 @@ def copiar_tarefa(
                 "hora_inicio": origem.get("hora_inicio"),
                 "hora_fim": origem.get("hora_fim"),
                 "empresa_id": eid,
+                "atividade_id": origem.get("atividade_id"),
                 "obrigacao_id": None,
                 "responsavel_id": str(origem["responsavel_id"]),
                 "created_by": user.id,

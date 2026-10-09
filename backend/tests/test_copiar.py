@@ -13,7 +13,7 @@ from app.core.auth import AuthUser, get_current_user, get_db_client
 from app.main import app
 from app.services.copia import trocar_nome_empresa
 
-ORIGEM, NOVA, DUPLICADA, INEXISTENTE = (str(uuid4()) for _ in range(4))
+ORIGEM, NOVA, DUPLICADA, INEXISTENTE, ATIVIDADE = (str(uuid4()) for _ in range(5))
 ADMIN = AuthUser(id="a", email="a@x.com", access_token="t", role="admin")
 
 
@@ -143,6 +143,7 @@ def test_copia_tarefa_troca_titulo_e_volta_para_pendente(monkeypatch):
         "hora_fim": "10:00:00",
         "empresa_id": ORIGEM,
         "empresa": {"id": ORIGEM, "razao_social": "ACME"},
+        "atividade_id": ATIVIDADE,
         "responsavel_id": resp_id,
         "entregue_em": "2026-10-09T12:00:00+00:00",
         "motivo_atraso": "x" * 30,
@@ -167,6 +168,7 @@ def test_copia_tarefa_troca_titulo_e_volta_para_pendente(monkeypatch):
     assert nova["titulo"] == "Fechamento KMM Logística - outubro"
     assert nova["status"] == "PENDENTE"
     assert nova["empresa_id"] == NOVA
+    assert nova["atividade_id"] == ATIVIDADE
     assert "entregue_em" not in nova and "motivo_atraso" not in nova
 
 

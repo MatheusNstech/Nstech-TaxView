@@ -1,8 +1,9 @@
-import { Building2, Plus, Tags, UserRound, X } from 'lucide-react'
+import { Briefcase, Building2, Plus, Tags, UserRound, X } from 'lucide-react'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import GlassDatePicker from './GlassDatePicker'
 import GlassSelect from './GlassSelect'
 import { apiFetch } from '../lib/api'
+import { useAtividadesAtivas } from '../lib/atividades'
 import { formatTime } from '../lib/format'
 import type {
   Empresa,
@@ -41,14 +42,24 @@ export default function NovaTarefaModal({
   const [horaInicio, setHoraInicio] = useState('')
   const [horaFim, setHoraFim] = useState('')
   const [empresaId, setEmpresaId] = useState('')
+  const [atividadeId, setAtividadeId] = useState('')
   const [categoria, setCategoria] = useState<TarefaCategoria>('fechamento')
   const [responsavelId, setResponsavelId] = useState(defaultResponsavelId ?? '')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const atividades = useAtividadesAtivas(open)
 
   const categoriaOptions = useMemo(
     () => TAREFA_CATEGORIA_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
     [],
+  )
+
+  const atividadeOptions = useMemo(
+    () => [
+      { value: '', label: 'Sem tipo de serviço' },
+      ...atividades.map((a) => ({ value: a.id, label: a.nome })),
+    ],
+    [atividades],
   )
 
   const empresaOptions = useMemo(
@@ -76,6 +87,7 @@ export default function NovaTarefaModal({
     setHoraInicio('')
     setHoraFim('')
     setEmpresaId('')
+    setAtividadeId('')
     setCategoria('fechamento')
     setResponsavelId(defaultResponsavelId ?? '')
     setError('')
@@ -118,6 +130,7 @@ export default function NovaTarefaModal({
         hora_inicio: inicio,
         hora_fim: fim,
         empresa_id: empresaId || null,
+        atividade_id: atividadeId || null,
         responsavel_id: responsavelId || null,
       }
       const created = await apiFetch<Tarefa>('/api/tarefas', {
@@ -182,17 +195,33 @@ export default function NovaTarefaModal({
             />
           </div>
 
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-[color:var(--color-muted)]">
-              Categoria
-            </label>
-            <GlassSelect
-              ariaLabel="Categoria"
-              icon={Tags}
-              value={categoria}
-              onChange={(v) => setCategoria(v as TarefaCategoria)}
-              options={categoriaOptions}
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="min-w-0">
+              <label className="mb-1.5 block text-xs font-medium text-[color:var(--color-muted)]">
+                Categoria
+              </label>
+              <GlassSelect
+                ariaLabel="Categoria"
+                icon={Tags}
+                value={categoria}
+                onChange={(v) => setCategoria(v as TarefaCategoria)}
+                options={categoriaOptions}
+              />
+            </div>
+            <div className="min-w-0">
+              <label className="mb-1.5 block text-xs font-medium text-[color:var(--color-muted)]">
+                Tipo de serviço
+              </label>
+              <GlassSelect
+                ariaLabel="Tipo de serviço"
+                icon={Briefcase}
+                value={atividadeId}
+                onChange={setAtividadeId}
+                options={atividadeOptions}
+                align="right"
+                listClassName="max-h-60 min-w-[14rem] max-w-[min(18rem,calc(100vw-2rem))]"
+              />
+            </div>
           </div>
 
           <div>

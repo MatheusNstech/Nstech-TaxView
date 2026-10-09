@@ -410,6 +410,7 @@ class TarefaCreate(BaseModel):
     hora_inicio: time
     hora_fim: time
     empresa_id: UUID | None = None
+    atividade_id: UUID | None = None
     obrigacao_id: UUID | None = None
     responsavel_id: UUID | None = None
     motivo_atraso: str | None = Field(default=None, max_length=2000)
@@ -436,6 +437,7 @@ class TarefaUpdate(BaseModel):
     hora_inicio: time | None = None
     hora_fim: time | None = None
     empresa_id: UUID | None = None
+    atividade_id: UUID | None = None
     obrigacao_id: UUID | None = None
     responsavel_id: UUID | None = None
     motivo_atraso: str | None = Field(default=None, max_length=2000)
@@ -467,6 +469,7 @@ class TarefaOut(BaseModel):
     hora_inicio: time | None = None
     hora_fim: time | None = None
     empresa_id: UUID | None = None
+    atividade_id: UUID | None = None
     obrigacao_id: UUID | None = None
     responsavel_id: UUID
     solicitante_nome: str
@@ -477,6 +480,7 @@ class TarefaOut(BaseModel):
     created_at: datetime | None = None
     updated_at: datetime | None = None
     empresa: EmpresaOut | None = None
+    atividade: AtividadeOut | None = None
     responsavel: ResponsavelOut | None = None
     urgencia: str | None = None
 

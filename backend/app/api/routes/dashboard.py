@@ -78,12 +78,12 @@ def summary(
                     select_with_responsavel_filter(columns, scope_rid)
                 )
                 query = apply_responsavel_filter(query, scope_rid)
-                if atividade_id:
-                    query = query.eq("atividade_id", str(atividade_id))
             else:
                 query = client.table(table).select(columns)
                 if scope_rid:
                     query = query.eq("responsavel_id", scope_rid)
+            if atividade_id:
+                query = query.eq("atividade_id", str(atividade_id))
             if competencia:
                 query = query.eq("competencia", competencia.isoformat())
             return query.order("id")
@@ -98,15 +98,11 @@ def summary(
             "obrigacao_responsaveis(responsavel_id,responsaveis(id,nome,capacidade_max))",
         )
     )
-    tar_rows = (
-        []
-        if atividade_id
-        else fetch_all(
-            build(
-                "tarefas",
-                "id,status,prazo,entrega_original,responsavel_id,"
-                "empresas(bu,razao_social),responsaveis(nome,capacidade_max)",
-            )
+    tar_rows = fetch_all(
+        build(
+            "tarefas",
+            "id,status,prazo,entrega_original,responsavel_id,"
+            "empresas(bu,razao_social),responsaveis(nome,capacidade_max)",
         )
     )
 

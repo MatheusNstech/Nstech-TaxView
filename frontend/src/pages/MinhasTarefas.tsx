@@ -156,15 +156,10 @@ export default function MinhasTarefas() {
         equipe: !isAdmin && !singleResponsavel ? 'true' : undefined,
         q: filters.search || undefined,
       }
-      const atividadeId = filters.atividade_id || undefined
-      // Tarefas avulsas não têm tipo de serviço: somem quando o filtro está ativo.
+      const query = buildQuery({ ...params, atividade_id: filters.atividade_id || undefined })
       const [obrData, tarData] = await Promise.all([
-        apiFetch<Obrigacao[]>(
-          `/api/obrigacoes${buildQuery({ ...params, atividade_id: atividadeId })}`,
-        ),
-        atividadeId
-          ? Promise.resolve<Tarefa[]>([])
-          : apiFetch<Tarefa[]>(`/api/tarefas${buildQuery(params)}`),
+        apiFetch<Obrigacao[]>(`/api/obrigacoes${query}`),
+        apiFetch<Tarefa[]>(`/api/tarefas${query}`),
       ])
       const anySelected = selectedRespIds.length > 0
       setObrigacoes(

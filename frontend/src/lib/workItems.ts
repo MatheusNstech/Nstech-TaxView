@@ -22,15 +22,15 @@ export function workItemFromObrigacao(o: Obrigacao): WorkItem {
 }
 
 export function workItemFromTarefa(t: Tarefa): WorkItem {
-  const catLabel = tarefaCategoriaLabel(t.categoria)
+  const tipo = t.atividade?.nome || tarefaCategoriaLabel(t.categoria)
   return {
     key: `tarefa:${t.id}`,
     origem: 'tarefa',
     id: t.id,
     title: t.titulo,
     subtitle: t.empresa?.razao_social
-      ? `${t.empresa.razao_social} · ${catLabel}`
-      : `Tarefa · ${catLabel}`,
+      ? `${t.empresa.razao_social} · ${tipo}`
+      : `Tarefa · ${tipo}`,
     responsavelNome: t.responsavel?.nome ?? null,
     solicitanteNome: t.solicitante_nome || null,
     prazo: t.prazo,

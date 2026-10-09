@@ -154,6 +154,7 @@ export interface Tarefa {
   hora_inicio: string | null
   hora_fim: string | null
   empresa_id: string | null
+  atividade_id?: string | null
   obrigacao_id: string | null
   responsavel_id: string
   solicitante_nome: string
@@ -164,6 +165,7 @@ export interface Tarefa {
   created_at?: string | null
   updated_at?: string | null
   empresa: Empresa | null
+  atividade?: Atividade | null
   responsavel: Responsavel | null
   urgencia: string | null
 }
@@ -179,6 +181,7 @@ export interface TarefaCreate {
   hora_inicio: string
   hora_fim: string
   empresa_id?: string | null
+  atividade_id?: string | null
   obrigacao_id?: string | null
   responsavel_id?: string | null
 }
@@ -192,6 +195,7 @@ export interface TarefaUpdate {
   hora_inicio?: string | null
   hora_fim?: string | null
   empresa_id?: string | null
+  atividade_id?: string | null
   obrigacao_id?: string | null
   responsavel_id?: string | null
   solicitante_nome?: string

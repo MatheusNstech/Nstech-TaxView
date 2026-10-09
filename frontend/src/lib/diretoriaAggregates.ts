@@ -53,7 +53,9 @@ function activityName(o: Obrigacao): string {
 /** Rótulo de serviço para obrigação ou tarefa manual. */
 export function workItemServicoNome(item: WorkItem): string {
   if (item.origem === 'tarefa') {
-    return `Tarefa · ${tarefaCategoriaLabel(item.categoria)}`
+    return (
+      item.tarefa?.atividade?.nome?.trim() || `Tarefa · ${tarefaCategoriaLabel(item.categoria)}`
+    )
   }
   return item.obrigacao
     ? activityName(item.obrigacao)

@@ -1,6 +1,7 @@
 import { ClipboardList, History, Trash2, Users } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { apiFetch } from '../lib/api'
+import { useAtividadesAtivas } from '../lib/atividades'
 import {
   formatCompetencia,
   formatDate,
@@ -78,12 +79,14 @@ export default function TarefaDrawer({
   const [horaInicio, setHoraInicio] = useState('')
   const [horaFim, setHoraFim] = useState('')
   const [descricao, setDescricao] = useState('')
+  const [atividadeId, setAtividadeId] = useState('')
   const [motivoAtraso, setMotivoAtraso] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [audit, setAudit] = useState<TarefaAudit[]>([])
   const [copiando, setCopiando] = useState(false)
   const { canWrite } = useAuth()
+  const atividades = useAtividadesAtivas(open && !readOnly)
 
   const tarefaId = open ? tarefa?.id : undefined
   useEffect(() => {
@@ -108,6 +111,7 @@ export default function TarefaDrawer({
     setHoraInicio(formatTime(tarefa.hora_inicio))
     setHoraFim(formatTime(tarefa.hora_fim))
     setDescricao(tarefa.descricao ?? '')
+    setAtividadeId(tarefa.atividade_id ?? '')
     setMotivoAtraso(tarefa.motivo_atraso ?? '')
     setError('')
     setCopiando(false)
@@ -152,6 +156,7 @@ export default function TarefaDrawer({
         hora_inicio: inicio,
         hora_fim: fim,
         descricao: descricao.trim() || null,
+        atividade_id: atividadeId || null,
       }
       if (needsMotivo) {
         payload.motivo_atraso = motivo
@@ -226,6 +231,7 @@ export default function TarefaDrawer({
         subtitulo={
           <>
             {empresa?.razao_social ?? 'Tarefa interna'}
+            {tarefa.atividade?.nome ? ` · ${tarefa.atividade.nome}` : ''}
             {` · ${tarefaCategoriaLabel(tarefa.categoria)}`}
           </>
         }
@@ -289,6 +295,7 @@ export default function TarefaDrawer({
                 {formatDate(prazo)}
                 {horario ? ` · ${horario}` : ''}
               </Campo>
+              <Campo rotulo="Tipo de serviço">{tarefa.atividade?.nome}</Campo>
               <div className="sm:col-span-2">
                 <Campo rotulo="Descrição">
                   {descricao ? <span className="whitespace-pre-wrap">{descricao}</span> : null}
@@ -307,6 +314,24 @@ export default function TarefaDrawer({
               <div className="sm:col-span-2">
                 <label className={ROTULO}>Título</label>
                 <input value={titulo} onChange={(e) => setTitulo(e.target.value)} className="glass-input" />
+              </div>
+              <div className="sm:col-span-2">
+                <label className={ROTULO}>Tipo de serviço</label>
+                <select
+                  value={atividadeId}
+                  onChange={(e) => setAtividadeId(e.target.value)}
+                  className="glass-input"
+                >
+                  <option value="">Sem tipo de serviço</option>
+                  {tarefa.atividade && !atividades.some((a) => a.id === tarefa.atividade?.id) ? (
+                    <option value={tarefa.atividade.id}>{tarefa.atividade.nome}</option>
+                  ) : null}
+                  {atividades.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.nome}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className={ROTULO}>Status</label>
