@@ -10,22 +10,27 @@ import {
 } from 'recharts'
 import AnalyticsHeroKpis from '../components/analytics/AnalyticsHeroKpis'
 import AnalyticsSkeleton from '../components/analytics/AnalyticsSkeleton'
-import BuRankingPanel from '../components/analytics/BuRankingPanel'
 import ResponsavelCargaCarousel from '../components/analytics/ResponsavelCargaCarousel'
 import WorkflowStrip from '../components/analytics/WorkflowStrip'
+import BuStatusMatrix, { type BuStatusCounts } from '../components/diretoria/BuStatusMatrix'
+import DiretoriaDrillModal from '../components/diretoria/DiretoriaDrillModal'
 import ExportMenu, { marketCallFilename } from '../components/ExportMenu'
 import FiltersBar from '../components/FiltersBar'
 import NotificationBell from '../components/NotificationBell'
+import ObrigacaoDrawer from '../components/ObrigacaoDrawer'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch, buildQuery } from '../lib/api'
 import { resolveAvatarUrl } from '../lib/avatars'
 import { obrigacaoResponsaveis } from '../lib/responsaveis'
+import { workItemFromObrigacao } from '../lib/workItems'
 import {
+  colunaKanban,
   currentCompetenciaMonth,
   formatCompetencia,
+  isItemAtrasado,
   monthToCompetencia,
   nextCompetenciaDate,
-  statusParaPainel,
+  statusLabel,
 } from '../lib/format'
 import type {
   Atividade,
@@ -34,6 +39,7 @@ import type {
   GerarCompetenciaResponse,
   Obrigacao,
   Responsavel,
+  StatusObrigacao,
 } from '../types'
 
 const STATUS_COLORS: Record<string, string> = {
@@ -61,6 +67,8 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
   const [message, setMessage] = useState('')
+  const [drill, setDrill] = useState<{ bu: string; status: StatusObrigacao | null } | null>(null)
+  const [selected, setSelected] = useState<Obrigacao | null>(null)
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -212,54 +220,31 @@ export default function Dashboard() {
       .sort((a, b) => b.total - a.total)
   }, [summary, obrigacoes, responsaveis])
 
-  const chartBu = useMemo(() => {
-    if (!summary) {
-      return { bus: [] as string[], data: [] as { status: string; [k: string]: string | number }[] }
-    }
-
-    const statusOrder = [
-      { key: 'PENDENTE', label: 'Pendente' },
-      { key: 'EM_ANDAMENTO', label: 'Andamento' },
-      { key: 'EM_REVISAO', label: 'Revisão' },
-      { key: 'ENTREGUE', label: 'Entregue' },
-      { key: 'ATRASADO', label: 'Atrasado' },
-    ] as const
-
-    const busSet = new Set<string>()
-    const counts = new Map<string, Map<string, number>>()
-
-    for (const status of statusOrder) {
-      counts.set(status.label, new Map())
-    }
-
+  const buCounts = useMemo(() => {
+    const counts: BuStatusCounts = {}
+    const empty = () => ({ status: {}, atrasados: {} })
     for (const o of obrigacoes) {
-      const bu = o.empresa?.bu?.trim() || 'Sem BU'
-      busSet.add(bu)
-      const label =
-        statusOrder.find((s) => s.key === statusParaPainel(o))?.label ?? 'Pendente'
-      const row = counts.get(label)!
-      row.set(bu, (row.get(bu) ?? 0) + 1)
+      const cell = (counts[o.empresa?.bu?.trim() || 'Sem BU'] ??= empty())
+      const col = colunaKanban(o.status)
+      cell.status[col] = (cell.status[col] ?? 0) + 1
+      if (isItemAtrasado(o)) cell.atrasados[col] = (cell.atrasados[col] ?? 0) + 1
     }
-
-    // inclui BUs do summary mesmo sem detalhe filtrado
-    for (const bu of Object.keys(summary.por_bu)) {
-      busSet.add(bu)
+    for (const bu of Object.keys(summary?.por_bu ?? {})) {
+      counts[bu] ??= empty()
     }
-
-    const bus = Array.from(busSet).sort((a, b) => a.localeCompare(b, 'pt-BR'))
-    const data = statusOrder.map((status) => {
-      const point: { status: string; [k: string]: string | number } = {
-        status: status.label,
-      }
-      const row = counts.get(status.label)!
-      for (const bu of bus) {
-        point[bu] = row.get(bu) ?? 0
-      }
-      return point
-    })
-
-    return { bus, data }
+    return counts
   }, [summary, obrigacoes])
+
+  const drillItems = useMemo(() => {
+    if (!drill) return []
+    return obrigacoes
+      .filter(
+        (o) =>
+          (o.empresa?.bu?.trim() || 'Sem BU') === drill.bu &&
+          (!drill.status || colunaKanban(o.status) === drill.status),
+      )
+      .map(workItemFromObrigacao)
+  }, [drill, obrigacoes])
 
   const pieData = useMemo(() => {
     if (!summary) return []
@@ -476,19 +461,22 @@ export default function Dashboard() {
                 <div className="mb-4 flex items-start justify-between gap-3">
                   <div>
                     <h3 className="text-sm font-semibold text-[color:var(--color-ink)]">
-                      Obrigações por BU
+                      Distribuição por BU e status
                     </h3>
                     <p className="text-xs text-[color:var(--color-muted)]">
-                      Uma linha por BU ao longo do workflow
+                      Contagem de obrigações por unidade de negócio. Clique para ver os itens.
                     </p>
                   </div>
-                  {chartBu.bus.length > 0 && (
+                  {Object.keys(buCounts).length > 0 && (
                     <span className="glass-chip tabular-nums text-brand-700">
-                      {chartBu.bus.length} BUs
+                      {Object.keys(buCounts).length} BUs
                     </span>
                   )}
                 </div>
-                <BuRankingPanel data={chartBu.data} bus={chartBu.bus} />
+                <BuStatusMatrix
+                  counts={buCounts}
+                  onCellClick={(bu, status) => setDrill({ bu, status })}
+                />
               </div>
             </>
           )}
@@ -498,6 +486,27 @@ export default function Dashboard() {
           Não foi possível carregar o resumo.
         </p>
       )}
+
+      <DiretoriaDrillModal
+        open={drill != null}
+        title={
+          drill ? (drill.status ? `${drill.bu} · ${statusLabel(drill.status)}` : `BU ${drill.bu}`) : ''
+        }
+        items={drillItems}
+        closeOnEscape={selected == null}
+        onClose={() => setDrill(null)}
+        onSelect={(item) => item.obrigacao && setSelected(item.obrigacao)}
+      />
+
+      <ObrigacaoDrawer
+        obrigacao={selected}
+        open={selected != null}
+        onClose={() => setSelected(null)}
+        onSaved={() => {
+          setSelected(null)
+          void loadData()
+        }}
+      />
     </div>
   )
 }
