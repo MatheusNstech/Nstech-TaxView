@@ -345,13 +345,7 @@ export default function EmpresaCard({ grupo, canEdit, onEdit, onOpen, onVerObrig
         </p>
       </div>
 
-      <div className="mt-auto flex items-center justify-between gap-2 border-t border-[color:var(--color-line)] px-1 pt-3">
-        <div className="min-w-0">
-          <p className="text-[11px] text-[color:var(--color-muted)]">Porte</p>
-          <p className="text-base font-semibold leading-tight text-[color:var(--color-ink)]">
-            {grupo.porte ?? '—'}
-          </p>
-        </div>
+      <div className="mt-auto flex items-center justify-end border-t border-[color:var(--color-line)] px-1 pt-3">
         <button
           type="button"
           onClick={() => onOpen(grupo)}

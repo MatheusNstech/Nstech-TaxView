@@ -37,8 +37,7 @@ function CardSkeleton() {
         <div className="h-4 w-32 rounded bg-[color:var(--color-surface)]" />
         <div className="h-3 w-44 rounded bg-[color:var(--color-surface)]" />
       </div>
-      <div className="mt-auto flex items-center justify-between border-t border-[color:var(--color-line)] px-1 pt-3">
-        <div className="h-8 w-14 rounded bg-[color:var(--color-surface)]" />
+      <div className="mt-auto flex items-center justify-end border-t border-[color:var(--color-line)] px-1 pt-3">
         <div className="h-8 w-28 rounded-xl bg-[color:var(--color-surface)]" />
       </div>
     </div>
