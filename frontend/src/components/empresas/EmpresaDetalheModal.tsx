@@ -163,10 +163,13 @@ function DocumentoAcoes({
   onAbrirEnvio,
   remover,
   onErro,
+  compacto = false,
 }: {
   rotulo: string
   tem: boolean
   canEdit: boolean
+  /** Só ícones (com tooltip), para linhas e quadros apertados. */
+  compacto?: boolean
   onVisualizar?: () => void
   baixar: () => Promise<void>
   enviar?: (file: File) => Promise<void>
@@ -190,26 +193,35 @@ function DocumentoAcoes({
     }
   }
 
+  const principal = compacto ? botaoIcone : botaoDoc
+
   return (
-    <div className="flex shrink-0 items-center gap-1.5">
+    <div className={`flex shrink-0 items-center ${compacto ? 'gap-0.5' : 'gap-1.5'}`}>
       {ocupado && <Loader2 className="h-3.5 w-3.5 animate-spin text-[color:var(--color-muted)]" strokeWidth={2} />}
       {tem && (
         <>
           {onVisualizar && (
-            <button type="button" onClick={onVisualizar} className={botaoDoc} aria-label={`Visualizar ${rotulo}`}>
+            <button
+              type="button"
+              onClick={onVisualizar}
+              className={principal}
+              title={compacto ? `Visualizar ${rotulo}` : undefined}
+              aria-label={`Visualizar ${rotulo}`}
+            >
               <Eye className="h-3.5 w-3.5" strokeWidth={2} />
-              Visualizar
+              {!compacto && 'Visualizar'}
             </button>
           )}
           <button
             type="button"
             disabled={ocupado}
             onClick={() => void executar(baixar)}
-            className={botaoDoc}
+            className={principal}
+            title={compacto ? `Baixar ${rotulo}` : undefined}
             aria-label={`Baixar ${rotulo}`}
           >
             <Download className="h-3.5 w-3.5" strokeWidth={2} />
-            Baixar
+            {!compacto && 'Baixar'}
           </button>
         </>
       )}
@@ -219,12 +231,12 @@ function DocumentoAcoes({
             type="button"
             disabled={ocupado}
             onClick={onAbrirEnvio ?? (() => inputRef.current?.click())}
-            className={tem ? botaoIcone : botaoDoc}
+            className={tem || compacto ? botaoIcone : botaoDoc}
             title={tem ? `Trocar ${rotulo}` : `Enviar ${rotulo}`}
             aria-label={`${tem ? 'Trocar' : 'Enviar'} ${rotulo}`}
           >
             <Upload className="h-3.5 w-3.5" strokeWidth={2} />
-            {!tem && 'Enviar'}
+            {!tem && !compacto && 'Enviar'}
           </button>
           {tem && (
             <button
@@ -259,60 +271,122 @@ function DocumentoAcoes({
   )
 }
 
-function CertificadoResumo({ certificado }: { certificado: CertificadoDigital | null }) {
-  if (!certificado?.valido_ate) {
-    return (
-      <p className="text-[11px] leading-tight text-[color:var(--color-muted)]">
-        Certificado digital
-        <br />
-        <span className="text-[color:var(--color-ink)]">não enviado</span>
-      </p>
-    )
-  }
-  const validoAte = diaBrasilia(certificado.valido_ate)
-  const [texto, classe] = prazo(diasParaVencer(validoAte), 'vencido')
-  const detalhes = [
-    certificado.titular && `Titular: ${certificado.titular}`,
-    certificado.emissor && `Emissor: ${certificado.emissor}`,
-    certificado.numero_serie && `Série: ${certificado.numero_serie}`,
-    `Atualizado em ${formatAtualizadoEm(certificado.atualizado_em)}`,
-  ]
-  return (
-    <p className="text-[11px] leading-tight text-[color:var(--color-muted)]" title={detalhes.filter(Boolean).join('\n')}>
-      Certificado digital
-      <br />
-      <span className="text-[color:var(--color-ink)]">válido até {formatDiaIso(validoAte)}</span>
-      <span className={`block ${classe}`}>{texto}</span>
-    </p>
-  )
+function diasDoCertificado(unidade: EmpresaUnidade): number | null {
+  const fim = unidade.certificado?.valido_ate
+  return fim ? diasParaVencer(diaBrasilia(fim)) : null
 }
 
-/** O certificado que vence primeiro no grupo (com vários CNPJs, é o que pede atenção). */
-function IndicadorCertificado({ grupo }: { grupo: EmpresaGrupo }) {
-  const unidades = [grupo.matriz, ...grupo.filiais]
-  const proximo = unidades
-    .flatMap((u) => (u.certificado?.valido_ate ? [{ unidade: u, validoAte: diaBrasilia(u.certificado.valido_ate) }] : []))
-    .sort((a, b) => a.validoAte.localeCompare(b.validoAte))[0]
-  if (!proximo) {
-    return (
-      <Indicador rotulo="Certificado digital">
-        <span className="text-sm font-normal text-[color:var(--color-muted)]">não enviado</span>
-      </Indicador>
-    )
-  }
-  const dias = diasParaVencer(proximo.validoAte)
-  const [texto, classe] = prazo(dias, 'vencido')
-  const comCertificado = unidades.filter((u) => u.certificado).length
+/** Aba inicial: o certificado que vence primeiro; sem nenhum, a matriz. */
+function certificadoPadrao(unidades: EmpresaUnidade[]): string {
+  const comPrazo = unidades.flatMap((u) => {
+    const dias = diasDoCertificado(u)
+    return dias === null ? [] : [{ id: u.id, dias }]
+  })
+  comPrazo.sort((a, b) => a.dias - b.dias)
+  return comPrazo[0]?.id ?? unidades[0].id
+}
+
+function estabelecimento(cnpj: string): string {
+  const digitos = cnpj.replace(/\D/g, '')
+  return digitos.length === 14 ? digitos.slice(8, 12) : cnpj
+}
+
+function corDoPrazo(dias: number | null): string {
+  if (dias === null) return 'bg-slate-400/50'
+  if (dias <= 0) return 'bg-rose-500'
+  if (dias <= 30) return 'bg-amber-500'
+  return 'bg-emerald-500'
+}
+
+function QuadroCertificado({
+  unidades,
+  selecionada,
+  canEdit,
+  onSelecionar,
+  onAbrirEnvio,
+  onRemovido,
+}: {
+  unidades: EmpresaUnidade[]
+  selecionada: EmpresaUnidade
+  canEdit: boolean
+  onSelecionar: (empresaId: string) => void
+  onAbrirEnvio: () => void
+  onRemovido: (empresaId: string) => void
+}) {
+  const [erro, setErro] = useState('')
+  const certificado = selecionada.certificado
+  const validoAte = certificado?.valido_ate ? diaBrasilia(certificado.valido_ate) : null
+  const [texto, classe] = validoAte ? prazo(diasParaVencer(validoAte), 'vencido') : ['', '']
+  const detalhes = certificado
+    ? [
+        selecionada.cnpj,
+        certificado.titular && `Titular: ${certificado.titular}`,
+        certificado.emissor && `Emissor: ${certificado.emissor}`,
+        certificado.numero_serie && `Série: ${certificado.numero_serie}`,
+        `Atualizado em ${formatAtualizadoEm(certificado.atualizado_em)}`,
+      ]
+        .filter(Boolean)
+        .join('\n')
+    : selecionada.cnpj
+
   return (
-    <Indicador
-      rotulo={unidades.length > 1 ? `Certificado digital · ${comCertificado}/${unidades.length}` : 'Certificado digital'}
-      alerta={dias <= 0}
-      title={`Vence primeiro: ${proximo.unidade.cnpj}`}
-    >
-      {dias <= 30 && <AlertTriangle className={`h-4 w-4 ${classe}`} strokeWidth={2} />}
-      {formatDiaIso(proximo.validoAte)}
-      <span className={`ml-1 text-xs font-normal ${classe}`}>{texto}</span>
-    </Indicador>
+    <div className="col-span-2 min-w-0 px-5 py-2.5 sm:col-span-1">
+      <div className="flex items-center gap-2">
+        <p className="flex-1 text-[11px] text-[color:var(--color-muted)]">Certificado digital</p>
+        <DocumentoAcoes
+          compacto
+          rotulo={`Certificado digital de ${selecionada.cnpj}`}
+          tem={Boolean(certificado)}
+          canEdit={canEdit}
+          baixar={() => apiDownload(certificadoPath(selecionada.id), certificadoArquivo(selecionada.cnpj))}
+          onAbrirEnvio={onAbrirEnvio}
+          remover={async () => {
+            await apiFetch<void>(certificadoPath(selecionada.id), { method: 'DELETE' })
+            onRemovido(selecionada.id)
+          }}
+          onErro={setErro}
+        />
+      </div>
+      {unidades.length > 1 && (
+        <div role="tablist" aria-label="Certificado por CNPJ" className="mb-1 flex flex-wrap gap-1">
+          {unidades.map((u) => {
+            const ativa = u.id === selecionada.id
+            return (
+              <button
+                key={u.id}
+                type="button"
+                role="tab"
+                aria-selected={ativa}
+                title={u.cnpj}
+                onClick={() => {
+                  setErro('')
+                  onSelecionar(u.id)
+                }}
+                className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-mono text-[10px] font-medium transition ${
+                  ativa
+                    ? 'bg-[color:var(--color-ink)] text-[color:var(--color-panel)]'
+                    : 'bg-[color:var(--color-surface)] text-[color:var(--color-muted)] hover:text-[color:var(--color-ink)]'
+                }`}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${corDoPrazo(diasDoCertificado(u))}`} />
+                {estabelecimento(u.cnpj)}
+              </button>
+            )
+          })}
+        </div>
+      )}
+      <div className="flex flex-wrap items-baseline gap-x-1.5 leading-tight" title={detalhes}>
+        {validoAte ? (
+          <>
+            <span className="text-base font-semibold text-[color:var(--color-ink)]">{formatDiaIso(validoAte)}</span>
+            <span className={`text-xs ${classe}`}>{texto}</span>
+          </>
+        ) : (
+          <span className="text-sm text-[color:var(--color-muted)]">não enviado</span>
+        )}
+      </div>
+      {erro && <p className="mt-1 text-[11px] text-rose-600 dark:text-rose-400">{erro}</p>}
+    </div>
   )
 }
 
@@ -385,7 +459,7 @@ function CertificadoEnvio({
   return (
     <form
       onSubmit={(e) => void salvar(e)}
-      className="mt-2 rounded-xl border border-dashed border-[color:var(--color-line)] p-3"
+      className="rounded-xl border border-dashed border-[color:var(--color-line)] p-3"
       autoComplete="off"
     >
       <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-[color:var(--color-ink)]">
@@ -443,16 +517,13 @@ function UnidadeLinha({
   canEdit,
   onVisualizar,
   onCartaoAlterado,
-  onCertificadoAlterado,
 }: {
   unidade: EmpresaUnidade
   canEdit: boolean
   onVisualizar: (documento: DocumentoPdf) => void
   onCartaoAlterado: (empresaId: string, atualizadoEm: string | null) => void
-  onCertificadoAlterado: (empresaId: string, certificado: CertificadoDigital | null) => void
 }) {
   const [aberta, setAberta] = useState(false)
-  const [enviandoCertificado, setEnviandoCertificado] = useState(false)
   const [erro, setErro] = useState('')
   const contabil = unidade.contatos.filter((c) => c.area === 'contabil')
   const pagar = unidade.contatos.filter((c) => c.area === 'contas_pagar')
@@ -495,60 +566,32 @@ function UnidadeLinha({
             {unidade.razao_social}
           </p>
         </div>
-        <div className="grid shrink-0 grid-cols-[9.5rem_auto] items-center gap-x-4 gap-y-2.5">
-          <p className="text-[11px] leading-tight text-[color:var(--color-muted)]">
-            Cartão CNPJ
-            <br />
-            <span className="text-[color:var(--color-ink)]">{atualizado ? `atualizado em ${atualizado}` : 'não enviado'}</span>
-          </p>
-          <div className="justify-self-end">
-            <DocumentoAcoes
-              rotulo={rotulo}
-              tem={Boolean(unidade.cartao_cnpj_atualizado_em)}
-              canEdit={canEdit}
-              onVisualizar={() => onVisualizar(cartaoCnpjDocumento(unidade))}
-              baixar={() => apiDownload(cartaoCnpjPath(unidade.id, true), cartaoCnpjArquivo(unidade.cnpj))}
-              enviar={async (file) => {
-                const form = new FormData()
-                form.append('file', file)
-                const empresa = await apiUpload<Empresa>(cartaoCnpjPath(unidade.id), form)
-                onCartaoAlterado(unidade.id, empresa.cartao_cnpj_atualizado_em ?? new Date().toISOString())
-              }}
-              remover={async () => {
-                await apiFetch<void>(cartaoCnpjPath(unidade.id), { method: 'DELETE' })
-                onCartaoAlterado(unidade.id, null)
-              }}
-              onErro={setErro}
-            />
-          </div>
-          <CertificadoResumo certificado={unidade.certificado} />
-          <div className="justify-self-end">
-            <DocumentoAcoes
-              rotulo={`Certificado digital de ${unidade.cnpj}`}
-              tem={Boolean(unidade.certificado)}
-              canEdit={canEdit}
-              baixar={() => apiDownload(certificadoPath(unidade.id), certificadoArquivo(unidade.cnpj))}
-              onAbrirEnvio={() => setEnviandoCertificado((v) => !v)}
-              remover={async () => {
-                await apiFetch<void>(certificadoPath(unidade.id), { method: 'DELETE' })
-                onCertificadoAlterado(unidade.id, null)
-              }}
-              onErro={setErro}
-            />
-          </div>
-        </div>
+        <p className="w-36 shrink-0 text-[11px] leading-tight text-[color:var(--color-muted)]">
+          Cartão CNPJ
+          <br />
+          <span className="text-[color:var(--color-ink)]">{atualizado ? `atualizado em ${atualizado}` : 'não enviado'}</span>
+        </p>
+        <DocumentoAcoes
+          compacto
+          rotulo={rotulo}
+          tem={Boolean(unidade.cartao_cnpj_atualizado_em)}
+          canEdit={canEdit}
+          onVisualizar={() => onVisualizar(cartaoCnpjDocumento(unidade))}
+          baixar={() => apiDownload(cartaoCnpjPath(unidade.id, true), cartaoCnpjArquivo(unidade.cnpj))}
+          enviar={async (file) => {
+            const form = new FormData()
+            form.append('file', file)
+            const empresa = await apiUpload<Empresa>(cartaoCnpjPath(unidade.id), form)
+            onCartaoAlterado(unidade.id, empresa.cartao_cnpj_atualizado_em ?? new Date().toISOString())
+          }}
+          remover={async () => {
+            await apiFetch<void>(cartaoCnpjPath(unidade.id), { method: 'DELETE' })
+            onCartaoAlterado(unidade.id, null)
+          }}
+          onErro={setErro}
+        />
       </div>
       {erro && <p className="mt-1.5 text-xs text-rose-600 dark:text-rose-400">{erro}</p>}
-      {canEdit && enviandoCertificado && (
-        <CertificadoEnvio
-          unidade={unidade}
-          onSalvo={(certificado) => {
-            setEnviandoCertificado(false)
-            onCertificadoAlterado(unidade.id, certificado)
-          }}
-          onCancelar={() => setEnviandoCertificado(false)}
-        />
-      )}
       {aberta && (
         <div className="mt-2 space-y-1 border-t border-dashed border-[color:var(--color-line)] pt-2">
           {contabil.length > 0 && (
@@ -686,6 +729,8 @@ export default function EmpresaDetalheModal({
   const [atual, setAtual] = useState<EmpresaGrupo | null>(grupo)
   const [visivel, setVisivel] = useState(false)
   const [documento, setDocumento] = useState<DocumentoPdf | null>(null)
+  const [certificadoId, setCertificadoId] = useState<string | null>(null)
+  const [enviandoCertificado, setEnviandoCertificado] = useState<string | null>(null)
   const painelRef = useRef<HTMLDivElement>(null)
 
   const cartaoAlterado = useCallback(
@@ -719,6 +764,8 @@ export default function EmpresaDetalheModal({
     (depois?: () => void) => {
       setVisivel(false)
       setDocumento(null)
+      setCertificadoId(null)
+      setEnviandoCertificado(null)
       window.setTimeout(() => {
         setAtual(null)
         ;(depois ?? onClose)()
@@ -745,6 +792,12 @@ export default function EmpresaDetalheModal({
 
   const theme = buTheme(atual.bus[0])
   const cnpjs = 1 + atual.filiais.length
+  const unidades = [atual.matriz, ...atual.filiais]
+  // A escolha anterior só vale se o CNPJ for deste grupo (o modal reaproveita o estado entre empresas).
+  const padraoId = certificadoPadrao(unidades)
+  const certificadoSelecionado =
+    unidades.find((u) => u.id === certificadoId) ?? unidades.find((u) => u.id === padraoId) ?? atual.matriz
+  const unidadeEnvio = canEdit ? unidades.find((u) => u.id === enviandoCertificado) : undefined
   const pct = atual.obrigacoes_total
     ? Math.round((atual.obrigacoes_entregues / atual.obrigacoes_total) * 100)
     : 0
@@ -823,7 +876,7 @@ export default function EmpresaDetalheModal({
           </div>
         </header>
 
-        <div className="grid shrink-0 grid-cols-2 divide-x divide-y divide-[color:var(--color-line)] border-b border-[color:var(--color-line)] sm:grid-cols-4 sm:divide-y-0">
+        <div className="grid shrink-0 grid-cols-2 divide-x divide-y divide-[color:var(--color-line)] border-b border-[color:var(--color-line)] sm:grid-cols-[1fr_1fr_1.2fr_1.6fr] sm:divide-y-0">
           <Indicador rotulo="Porte">{atual.porte ?? '—'}</Indicador>
           <Indicador rotulo="CNPJs">
             {cnpjs}
@@ -847,8 +900,34 @@ export default function EmpresaDetalheModal({
               />
             </span>
           </Indicador>
-          <IndicadorCertificado grupo={atual} />
+          <QuadroCertificado
+            unidades={unidades}
+            selecionada={certificadoSelecionado}
+            canEdit={canEdit}
+            onSelecionar={(id) => {
+              setCertificadoId(id)
+              setEnviandoCertificado(null)
+            }}
+            onAbrirEnvio={() =>
+              setEnviandoCertificado((atualId) => (atualId === certificadoSelecionado.id ? null : certificadoSelecionado.id))
+            }
+            onRemovido={(id) => certificadoAlterado(id, null)}
+          />
         </div>
+
+        {unidadeEnvio && (
+          <div className="shrink-0 border-b border-[color:var(--color-line)] px-5 py-3">
+            <CertificadoEnvio
+              key={unidadeEnvio.id}
+              unidade={unidadeEnvio}
+              onSalvo={(certificado) => {
+                setEnviandoCertificado(null)
+                certificadoAlterado(unidadeEnvio.id, certificado)
+              }}
+              onCancelar={() => setEnviandoCertificado(null)}
+            />
+          </div>
+        )}
 
         <div className="grid min-h-0 flex-1 items-stretch gap-4 overflow-y-auto p-5 lg:grid-cols-5">
           <AlertaCertificados grupo={atual} />
@@ -888,7 +967,6 @@ export default function EmpresaDetalheModal({
                   canEdit={canEdit}
                   onVisualizar={setDocumento}
                   onCartaoAlterado={cartaoAlterado}
-                  onCertificadoAlterado={certificadoAlterado}
                 />
               ))}
             </ul>
