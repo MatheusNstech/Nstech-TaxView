@@ -87,6 +87,17 @@ export function grupoComCartao(
   return { ...grupo, matriz: ajusta(grupo.matriz), filiais: grupo.filiais.map(ajusta) }
 }
 
+/** Texto e cor do prazo: vermelho vencido ou vencendo hoje, âmbar com 30 dias ou menos. */
+export function prazoValidade(dias: number, vencido: 'vencida' | 'vencido'): [texto: string, classe: string] {
+  const vermelho = 'text-rose-600 dark:text-rose-400'
+  if (dias < 0) return [`${vencido} há ${-dias} ${dias === -1 ? 'dia' : 'dias'}`, vermelho]
+  if (dias === 0) return ['vence hoje', vermelho]
+  return [
+    `vence em ${dias} ${dias === 1 ? 'dia' : 'dias'}`,
+    dias <= 30 ? 'text-amber-600 dark:text-amber-400' : 'text-[color:var(--color-muted)]',
+  ]
+}
+
 export function certificadoArquivo(cnpj: string): string {
   return `Certificado - ${cnpj.replace(/\//g, '-')}.pfx`
 }

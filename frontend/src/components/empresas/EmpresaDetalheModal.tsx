@@ -34,6 +34,7 @@ import {
   grupoComCartao,
   grupoComCertidao,
   grupoComCertificado,
+  prazoValidade,
   type DocumentoPdf,
 } from '../../lib/documentosEmpresa'
 import type { Certidao, CertificadoDigital, Empresa, EmpresaGrupo, EmpresaUnidade } from '../../types'
@@ -316,7 +317,7 @@ function QuadroCertificado({
   const [erro, setErro] = useState('')
   const certificado = selecionada.certificado
   const validoAte = certificado?.valido_ate ? diaBrasilia(certificado.valido_ate) : null
-  const [texto, classe] = validoAte ? prazo(diasParaVencer(validoAte), 'vencido') : ['', '']
+  const [texto, classe] = validoAte ? prazoValidade(diasParaVencer(validoAte), 'vencido') : ['', '']
   const detalhes = certificado
     ? [
         selecionada.cnpj,
@@ -606,21 +607,9 @@ function UnidadeLinha({
   )
 }
 
-const VERMELHO = 'text-rose-600 dark:text-rose-400'
-const AMBAR = 'text-amber-600 dark:text-amber-400'
-
-function prazo(dias: number, vencido: string): [texto: string, classe: string] {
-  if (dias < 0) return [`${vencido} há ${-dias} ${dias === -1 ? 'dia' : 'dias'}`, VERMELHO]
-  if (dias === 0) return ['vence hoje', VERMELHO]
-  return [
-    `vence em ${dias} ${dias === 1 ? 'dia' : 'dias'}`,
-    dias <= 30 ? AMBAR : 'text-[color:var(--color-muted)]',
-  ]
-}
-
 function Validade({ validaAte }: { validaAte: string | null }) {
   if (!validaAte) return <span className="text-[color:var(--color-muted)]">—</span>
-  const [texto, classe] = prazo(diasParaVencer(validaAte), 'vencida')
+  const [texto, classe] = prazoValidade(diasParaVencer(validaAte), 'vencida')
   return (
     <>
       {formatDiaIso(validaAte)}

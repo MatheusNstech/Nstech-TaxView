@@ -8,8 +8,11 @@ import {
   Pencil,
   type LucideIcon,
 } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { EmpresaContato, EmpresaGrupo } from '../../types'
+import EmpresaResumoTooltip from './EmpresaResumoTooltip'
+
+const ATRASO_TOOLTIP_MS = 400
 const BU_THEME: Record<string, { from: string; to: string; ink: string }> = {
   TMS: { from: '#FF6B2C', to: '#B7380C', ink: '#B7380C' },
   Embarcador: { from: '#1D7BF2', to: '#0B3F8F', ink: '#0B4FB3' },
@@ -215,9 +218,42 @@ interface EmpresaCardProps {
 export default function EmpresaCard({ grupo, canEdit, onEdit, onOpen, onVerObrigacoes }: EmpresaCardProps) {
   const cnpjs = 1 + grupo.filiais.length
   const temLogo = Boolean(grupo.logo_url)
+  const cardRef = useRef<HTMLElement>(null)
+  const timer = useRef<number | undefined>(undefined)
+  const [ancora, setAncora] = useState<DOMRect | null>(null)
+
+  const fecharResumo = () => {
+    window.clearTimeout(timer.current)
+    setAncora(null)
+  }
+
+  useEffect(() => () => window.clearTimeout(timer.current), [])
+
+  useEffect(() => {
+    if (!ancora) return
+    const fechar = () => setAncora(null)
+    window.addEventListener('scroll', fechar, true)
+    window.addEventListener('resize', fechar)
+    return () => {
+      window.removeEventListener('scroll', fechar, true)
+      window.removeEventListener('resize', fechar)
+    }
+  }, [ancora])
 
   return (
-    <article className="card-surface group flex h-full flex-col p-3 transition duration-300 hover:-translate-y-0.5 hover:shadow-lg">
+    <article
+      ref={cardRef}
+      onPointerEnter={(e) => {
+        if (e.pointerType !== 'mouse') return
+        window.clearTimeout(timer.current)
+        timer.current = window.setTimeout(() => {
+          if (cardRef.current) setAncora(cardRef.current.getBoundingClientRect())
+        }, ATRASO_TOOLTIP_MS)
+      }}
+      onPointerLeave={fecharResumo}
+      onPointerDown={fecharResumo}
+      className="card-surface group flex h-full flex-col p-3 transition duration-300 hover:-translate-y-0.5 hover:shadow-lg"
+    >
       <div className="relative aspect-[16/9] overflow-hidden rounded-xl ring-1 ring-inset ring-black/5 dark:ring-white/5">
         <button
           type="button"
@@ -292,6 +328,7 @@ export default function EmpresaCard({ grupo, canEdit, onEdit, onOpen, onVerObrig
           <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2.25} />
         </button>
       </div>
+      {ancora && <EmpresaResumoTooltip grupo={grupo} ancora={ancora} />}
     </article>
   )
 }
