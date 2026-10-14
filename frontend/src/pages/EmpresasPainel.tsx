@@ -33,12 +33,9 @@ function CardSkeleton() {
         <div className="h-6 w-16 rounded-lg bg-[color:var(--color-surface)]" />
         <div className="h-6 w-12 rounded-lg bg-[color:var(--color-surface)]" />
       </div>
-      <div className="mb-3 mt-2.5 min-h-[2.75rem] space-y-1.5 px-1">
+      <div className="mb-1 mt-2.5 min-h-[2.75rem] space-y-1.5 px-1">
         <div className="h-4 w-32 rounded bg-[color:var(--color-surface)]" />
         <div className="h-3 w-44 rounded bg-[color:var(--color-surface)]" />
-      </div>
-      <div className="mt-auto flex items-center justify-end border-t border-[color:var(--color-line)] px-1 pt-3">
-        <div className="h-8 w-28 rounded-xl bg-[color:var(--color-surface)]" />
       </div>
     </div>
   )

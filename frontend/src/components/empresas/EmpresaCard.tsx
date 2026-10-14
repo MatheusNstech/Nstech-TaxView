@@ -1,6 +1,5 @@
 import {
   AlertTriangle,
-  ArrowUpRight,
   Building,
   Check,
   ClipboardCheck,
@@ -336,24 +335,13 @@ export default function EmpresaCard({ grupo, canEdit, onEdit, onOpen, onVerObrig
         )}
       </div>
 
-      <div className="mb-3 mt-2.5 min-h-[2.75rem] px-1">
+      <div className="mb-1 mt-2.5 min-h-[2.75rem] px-1">
         <h3 className="line-clamp-1 text-[15px] font-semibold text-[color:var(--color-ink)]" title={grupo.nome}>
           {grupo.nome}
         </h3>
         <p className="truncate text-xs text-[color:var(--color-muted)]" title={grupo.matriz.razao_social}>
           {grupo.matriz.razao_social}
         </p>
-      </div>
-
-      <div className="mt-auto flex items-center justify-end border-t border-[color:var(--color-line)] px-1 pt-3">
-        <button
-          type="button"
-          onClick={() => onOpen(grupo)}
-          className="btn-responsaveis"
-        >
-          Responsáveis
-          <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2.25} />
-        </button>
       </div>
       {resumo && (
         <EmpresaResumoTooltip
