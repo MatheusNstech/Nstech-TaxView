@@ -47,6 +47,7 @@ class EmpresaOut(EmpresaBase):
     id: UUID
     logo_url: str | None = None
     logo_url_escuro: str | None = None
+    cartao_cnpj_atualizado_em: datetime | None = None
 
 
 class EmpresaContatoIn(BaseModel):
@@ -78,6 +79,17 @@ class EmpresaContatoOut(BaseModel):
     ordem: int = 0
 
 
+class CertificadoDigitalOut(BaseModel):
+    empresa_id: UUID
+    titular: str | None = None
+    cnpj: str | None = None
+    emissor: str | None = None
+    numero_serie: str | None = None
+    valido_de: datetime | None = None
+    valido_ate: datetime | None = None
+    atualizado_em: datetime
+
+
 class EmpresaUnidadeOut(BaseModel):
     id: UUID
     cnpj: str
@@ -89,6 +101,18 @@ class EmpresaUnidadeOut(BaseModel):
     matriz: bool
     contatos: list[EmpresaContatoOut]
     contatos_diferentes: bool
+    cartao_cnpj_atualizado_em: datetime | None = None
+    certificado: CertificadoDigitalOut | None = None
+
+
+class CertidaoOut(BaseModel):
+    empresa_id: UUID
+    esfera: Literal["federal", "estadual", "municipal"]
+    situacao: Literal["negativa", "positiva_efeitos_negativa", "positiva"] | None = None
+    emitida_em: date | None = None
+    valida_ate: date | None = None
+    codigo_controle: str | None = None
+    atualizado_em: datetime
 
 
 class ResponsavelFiscalResumo(BaseModel):
@@ -107,6 +131,7 @@ class EmpresaGrupoOut(BaseModel):
     matriz: EmpresaUnidadeOut
     filiais: list[EmpresaUnidadeOut]
     contatos: dict[AreaContato, list[EmpresaContatoOut]]
+    certidoes: list[CertidaoOut] = Field(default_factory=list)
     responsaveis_fiscais: list[ResponsavelFiscalResumo]
     obrigacoes_total: int
     obrigacoes_entregues: int

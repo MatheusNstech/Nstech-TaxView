@@ -160,6 +160,15 @@ export async function apiDownload(
   filename: string,
   onProgress?: (progress: number | null) => void,
 ): Promise<void> {
+  const blob = await apiBlob(path, onProgress)
+  onProgress?.(100)
+  triggerDownload(blob, filename)
+}
+
+export async function apiBlob(
+  path: string,
+  onProgress?: (progress: number | null) => void,
+): Promise<Blob> {
   const token = await resolveToken()
   const headers = new Headers()
   if (token) headers.set('Authorization', `Bearer ${token}`)
@@ -181,8 +190,8 @@ export async function apiDownload(
   }
 
   const blob = await readDownloadBlob(response, onProgress)
-  onProgress?.(100)
-  triggerDownload(blob, filename)
+  const type = response.headers.get('Content-Type')?.split(';')[0]
+  return type && !blob.type ? new Blob([blob], { type }) : blob
 }
 
 async function readDownloadBlob(
@@ -207,7 +216,7 @@ async function readDownloadBlob(
   return new Blob(chunks)
 }
 
-function triggerDownload(blob: Blob, filename: string) {
+export function triggerDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url

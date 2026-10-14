@@ -16,6 +16,7 @@ export interface Empresa {
   porte?: PorteEmpresa | null
   logo_url?: string | null
   logo_url_escuro?: string | null
+  cartao_cnpj_atualizado_em?: string | null
 }
 
 export type PorteEmpresa = 'Pequeno' | 'Médio' | 'Grande'
@@ -41,6 +42,31 @@ export interface EmpresaUnidade {
   matriz: boolean
   contatos: EmpresaContato[]
   contatos_diferentes: boolean
+  cartao_cnpj_atualizado_em: string | null
+  certificado: CertificadoDigital | null
+}
+
+export interface CertificadoDigital {
+  empresa_id: string
+  titular: string | null
+  cnpj: string | null
+  emissor: string | null
+  numero_serie: string | null
+  valido_de: string | null
+  valido_ate: string | null
+  atualizado_em: string
+}
+
+export type SituacaoCertidao = 'negativa' | 'positiva_efeitos_negativa' | 'positiva'
+
+export interface Certidao {
+  empresa_id: string
+  esfera: 'federal' | 'estadual' | 'municipal'
+  situacao: SituacaoCertidao | null
+  emitida_em: string | null
+  valida_ate: string | null
+  codigo_controle: string | null
+  atualizado_em: string
 }
 
 export interface EmpresaGrupo {
@@ -53,6 +79,7 @@ export interface EmpresaGrupo {
   matriz: EmpresaUnidade
   filiais: EmpresaUnidade[]
   contatos: Record<AreaContato, EmpresaContato[]>
+  certidoes: Certidao[]
   responsaveis_fiscais: { id: string; nome: string; total: number }[]
   obrigacoes_total: number
   obrigacoes_entregues: number

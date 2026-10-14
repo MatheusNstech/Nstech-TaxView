@@ -60,15 +60,33 @@ def _resumo_obrigacao(row: dict[str, Any], today: date) -> tuple[bool, bool]:
     return False, atrasada
 
 
+def ordenar_grupo(membros: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Matriz primeiro; sem 0001 cadastrada, o menor CNPJ faz o papel de matriz."""
+    return sorted(
+        membros,
+        key=lambda e: (not _is_matriz(e), cnpj_digits(e.get("cnpj")), e.get("razao_social") or ""),
+    )
+
+
 def montar_grupos(
     empresas: list[dict[str, Any]],
     contatos: list[dict[str, Any]],
     obrigacoes: list[dict[str, Any]],
     today: date,
+    certidoes: list[dict[str, Any]] | None = None,
+    certificados: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     contatos_emp: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for c in contatos:
         contatos_emp[str(c["empresa_id"])].append(c)
+
+    certidoes_emp: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for c in certidoes or []:
+        certidoes_emp[str(c["empresa_id"])].append(c)
+
+    certificado_emp = {
+        str(c["empresa_id"]): {k: v for k, v in c.items() if k != "path"} for c in certificados or []
+    }
 
     obr_emp: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for o in obrigacoes:
@@ -80,7 +98,7 @@ def montar_grupos(
 
     out: list[dict[str, Any]] = []
     for raiz, membros in grupos.items():
-        membros.sort(key=lambda e: (not _is_matriz(e), cnpj_digits(e.get("cnpj")), e.get("razao_social") or ""))
+        membros = ordenar_grupo(membros)
         matriz = membros[0]
 
         proprios = {str(e["id"]): _contatos_por_area(contatos_emp.get(str(e["id"]), [])) for e in membros}
@@ -107,6 +125,10 @@ def montar_grupos(
                     own[area] and _assinatura(own[area]) != _assinatura(contatos_grupo[area])
                     for area in AREAS
                 ),
+                "cartao_cnpj_atualizado_em": (
+                    e.get("cartao_cnpj_atualizado_em") if e.get("cartao_cnpj_path") else None
+                ),
+                "certificado": certificado_emp.get(str(e["id"])),
             }
 
         total = entregues = atrasadas = 0
@@ -143,6 +165,9 @@ def montar_grupos(
                 "matriz": _unidade(matriz),
                 "filiais": [_unidade(e) for e in membros[1:]],
                 "contatos": contatos_grupo,
+                "certidoes": sorted(
+                    certidoes_emp.get(str(matriz["id"]), []), key=lambda c: c.get("esfera") or ""
+                ),
                 "responsaveis_fiscais": [
                     {"id": rid, "nome": nomes[rid], "total": n}
                     for rid, n in sorted(fiscais.items(), key=lambda kv: (-kv[1], nomes[kv[0]].lower()))

@@ -8,6 +8,7 @@ import GlassMonthPicker from '../components/GlassMonthPicker'
 import GlassSelect from '../components/GlassSelect'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../lib/api'
+import { grupoComCartao, grupoComCertidao, grupoComCertificado } from '../lib/documentosEmpresa'
 import { currentCompetenciaMonth, monthToCompetencia } from '../lib/format'
 import type { EmpresaGrupo } from '../types'
 
@@ -223,6 +224,15 @@ export default function EmpresasPainel() {
           setDetalhe(null)
           setEditando(g)
         }}
+        onCartaoAlterado={(empresaId, atualizadoEm) =>
+          setGrupos((gs) => gs.map((g) => grupoComCartao(g, empresaId, atualizadoEm)))
+        }
+        onCertidaoAlterada={(raiz, esfera, certidao) =>
+          setGrupos((gs) => gs.map((g) => (g.raiz === raiz ? grupoComCertidao(g, esfera, certidao) : g)))
+        }
+        onCertificadoAlterado={(empresaId, certificado) =>
+          setGrupos((gs) => gs.map((g) => grupoComCertificado(g, empresaId, certificado)))
+        }
       />
 
       <EmpresaEditModal
