@@ -15,6 +15,7 @@ import EmpresaResumoTooltip from './EmpresaResumoTooltip'
 const ATRASO_TOOLTIP_MS = 400
 const FECHAR_GAVETA_MS = 200
 const LARGURA_GAVETA = 360
+const SOMBRA_COM_GAVETA = '0 20px 25px rgb(0 0 0 / 0.1), 0 8px 10px rgb(0 0 0 / 0.08)'
 const BU_THEME: Record<string, { from: string; to: string; ink: string }> = {
   TMS: { from: '#FF6B2C', to: '#B7380C', ink: '#B7380C' },
   Embarcador: { from: '#1D7BF2', to: '#0B3F8F', ink: '#0B4FB3' },
@@ -253,10 +254,13 @@ export default function EmpresaCard({ grupo, canEdit, onEdit, onOpen, onVerObrig
     }
   }, [resumo])
 
-  const cantosRetos: CSSProperties | undefined = resumo
-    ? resumo.lado === 'direita'
-      ? { borderTopRightRadius: 0, borderBottomRightRadius: 0 }
-      : { borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }
+  const emendaComGaveta: CSSProperties | undefined = resumo
+    ? {
+        boxShadow: SOMBRA_COM_GAVETA,
+        ...(resumo.lado === 'direita'
+          ? { borderTopRightRadius: 0, borderBottomRightRadius: 0, borderRightColor: 'transparent' }
+          : { borderTopLeftRadius: 0, borderBottomLeftRadius: 0, borderLeftColor: 'transparent' }),
+      }
     : undefined
 
   return (
@@ -280,8 +284,8 @@ export default function EmpresaCard({ grupo, canEdit, onEdit, onOpen, onVerObrig
       }}
       onPointerLeave={recolher}
       onPointerDown={fecharJa}
-      style={cantosRetos}
-      className={`card-surface group flex h-full flex-col p-3 transition duration-300 hover:-translate-y-0.5 ${resumo ? 'shadow-2xl' : 'hover:shadow-lg'}`}
+      style={emendaComGaveta}
+      className={`card-surface group flex h-full flex-col p-3 transition duration-300 hover:-translate-y-0.5 ${resumo ? '' : 'hover:shadow-lg'}`}
     >
       <div className="relative aspect-[16/9] overflow-hidden rounded-xl ring-1 ring-inset ring-black/5 dark:ring-white/5">
         <button
