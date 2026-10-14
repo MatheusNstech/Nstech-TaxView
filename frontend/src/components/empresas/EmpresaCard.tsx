@@ -8,11 +8,13 @@ import {
   Pencil,
   type LucideIcon,
 } from 'lucide-react'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import type { EmpresaContato, EmpresaGrupo } from '../../types'
 import EmpresaResumoTooltip from './EmpresaResumoTooltip'
 
 const ATRASO_TOOLTIP_MS = 400
+const FECHAR_GAVETA_MS = 200
+const LARGURA_GAVETA = 360
 const BU_THEME: Record<string, { from: string; to: string; ink: string }> = {
   TMS: { from: '#FF6B2C', to: '#B7380C', ink: '#B7380C' },
   Embarcador: { from: '#1D7BF2', to: '#0B3F8F', ink: '#0B4FB3' },
@@ -220,25 +222,42 @@ export default function EmpresaCard({ grupo, canEdit, onEdit, onOpen, onVerObrig
   const temLogo = Boolean(grupo.logo_url)
   const cardRef = useRef<HTMLElement>(null)
   const timer = useRef<number | undefined>(undefined)
-  const [ancora, setAncora] = useState<DOMRect | null>(null)
+  const [resumo, setResumo] = useState<{ ancora: DOMRect; lado: 'direita' | 'esquerda' } | null>(null)
+  const [aberto, setAberto] = useState(false)
 
-  const fecharResumo = () => {
+  const fecharJa = () => {
     window.clearTimeout(timer.current)
-    setAncora(null)
+    setAberto(false)
+    setResumo(null)
+  }
+
+  const recolher = () => {
+    window.clearTimeout(timer.current)
+    setAberto(false)
+    if (resumo) timer.current = window.setTimeout(() => setResumo(null), FECHAR_GAVETA_MS)
   }
 
   useEffect(() => () => window.clearTimeout(timer.current), [])
 
   useEffect(() => {
-    if (!ancora) return
-    const fechar = () => setAncora(null)
+    if (!resumo) return
+    const fechar = () => {
+      setAberto(false)
+      setResumo(null)
+    }
     window.addEventListener('scroll', fechar, true)
     window.addEventListener('resize', fechar)
     return () => {
       window.removeEventListener('scroll', fechar, true)
       window.removeEventListener('resize', fechar)
     }
-  }, [ancora])
+  }, [resumo])
+
+  const cantosRetos: CSSProperties | undefined = resumo
+    ? resumo.lado === 'direita'
+      ? { borderTopRightRadius: 0, borderBottomRightRadius: 0 }
+      : { borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }
+    : undefined
 
   return (
     <article
@@ -246,13 +265,23 @@ export default function EmpresaCard({ grupo, canEdit, onEdit, onOpen, onVerObrig
       onPointerEnter={(e) => {
         if (e.pointerType !== 'mouse') return
         window.clearTimeout(timer.current)
+        if (resumo) {
+          setAberto(true)
+          return
+        }
         timer.current = window.setTimeout(() => {
-          if (cardRef.current) setAncora(cardRef.current.getBoundingClientRect())
+          const card = cardRef.current
+          if (!card) return
+          const ancora = card.getBoundingClientRect()
+          const cabeDireita = ancora.right + LARGURA_GAVETA + 12 <= document.documentElement.clientWidth
+          setResumo({ ancora, lado: cabeDireita ? 'direita' : 'esquerda' })
+          setAberto(true)
         }, ATRASO_TOOLTIP_MS)
       }}
-      onPointerLeave={fecharResumo}
-      onPointerDown={fecharResumo}
-      className="card-surface group flex h-full flex-col p-3 transition duration-300 hover:-translate-y-0.5 hover:shadow-lg"
+      onPointerLeave={recolher}
+      onPointerDown={fecharJa}
+      style={cantosRetos}
+      className={`card-surface group flex h-full flex-col p-3 transition duration-300 hover:-translate-y-0.5 ${resumo ? 'shadow-2xl' : 'hover:shadow-lg'}`}
     >
       <div className="relative aspect-[16/9] overflow-hidden rounded-xl ring-1 ring-inset ring-black/5 dark:ring-white/5">
         <button
@@ -328,7 +357,15 @@ export default function EmpresaCard({ grupo, canEdit, onEdit, onOpen, onVerObrig
           <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2.25} />
         </button>
       </div>
-      {ancora && <EmpresaResumoTooltip grupo={grupo} ancora={ancora} />}
+      {resumo && (
+        <EmpresaResumoTooltip
+          grupo={grupo}
+          ancora={resumo.ancora}
+          lado={resumo.lado}
+          largura={LARGURA_GAVETA}
+          aberto={aberto}
+        />
+      )}
     </article>
   )
 }

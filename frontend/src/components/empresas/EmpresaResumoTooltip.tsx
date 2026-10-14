@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import {
   SITUACAO_CERTIDAO,
@@ -10,16 +10,20 @@ import {
 import type { EmpresaGrupo, EmpresaUnidade } from '../../types'
 import { buTheme } from './EmpresaCard'
 
-const LARGURA = 352
 const MARGEM = 12
+const FOLGA_SOMBRA = 32
 const MAX_CNPJS = 6
+const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
+const ABRIR_MS = 320
+const FECHAR_MS = 200
+const ATRASOS_SECAO_MS = [60, 120, 180]
 
 function Validade({ dia, vencido }: { dia: string; vencido: 'vencida' | 'vencido' }) {
   const [texto, classe] = prazoValidade(diasParaVencer(dia), vencido)
   return (
-    <span className="text-right leading-tight">
-      <span className="block text-xs font-medium text-[color:var(--color-ink)]">{formatDiaIso(dia)}</span>
-      <span className={`block text-[10px] ${classe}`}>{texto}</span>
+    <span className="shrink-0 text-right leading-tight">
+      <span className="block text-sm font-medium text-[color:var(--color-ink)]">{formatDiaIso(dia)}</span>
+      <span className={`block text-[11px] ${classe}`}>{texto}</span>
     </span>
   )
 }
@@ -28,7 +32,7 @@ function LinhaCnpj({ unidade }: { unidade: EmpresaUnidade }) {
   const nome = unidade.nome_fantasia && unidade.nome_fantasia !== unidade.razao_social ? unidade.nome_fantasia : unidade.razao_social
   const fim = unidade.certificado?.valido_ate
   return (
-    <li className="flex items-center gap-3 py-1.5">
+    <li className="flex items-center gap-3 py-2">
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <span className="font-mono text-xs font-medium text-[color:var(--color-ink)]">{unidade.cnpj}</span>
@@ -42,101 +46,132 @@ function LinhaCnpj({ unidade }: { unidade: EmpresaUnidade }) {
             {unidade.matriz ? 'Matriz' : 'Filial'}
           </span>
         </div>
-        <p className="truncate text-[11px] text-[color:var(--color-muted)]">{nome}</p>
+        <p className="truncate text-xs text-[color:var(--color-muted)]">{nome}</p>
       </div>
       {fim ? (
         <Validade dia={diaBrasilia(fim)} vencido="vencido" />
       ) : (
-        <span className="text-[10px] text-[color:var(--color-muted)]">sem certificado</span>
+        <span className="shrink-0 text-[11px] text-[color:var(--color-muted)]">sem certificado</span>
       )}
     </li>
   )
 }
 
-/** Resumo rápido da empresa ao lado do card (CND, certificados e CNPJs). */
-export default function EmpresaResumoTooltip({ grupo, ancora }: { grupo: EmpresaGrupo; ancora: DOMRect }) {
+interface Props {
+  grupo: EmpresaGrupo
+  ancora: DOMRect
+  lado: 'direita' | 'esquerda'
+  largura: number
+  aberto: boolean
+}
+
+/** Gaveta com o resumo da empresa (CND, certificados e CNPJs) que sai de trás do card. */
+export default function EmpresaResumoTooltip({ grupo, ancora, lado, largura, aberto }: Props) {
   const ref = useRef<HTMLDivElement>(null)
+  const [entrou, setEntrou] = useState(false)
+  const [reduzirMovimento] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+  const mostrar = aberto && entrou
+
   const unidades = [grupo.matriz, ...grupo.filiais]
   const cnd = grupo.certidoes.find((c) => c.esfera === 'federal')
   const situacao = cnd?.situacao ? SITUACAO_CERTIDAO[cnd.situacao] : null
+  const direita = lado === 'direita'
 
-  const cabeDireita = ancora.right + MARGEM + LARGURA <= window.innerWidth - MARGEM
-  const left = cabeDireita ? ancora.right + MARGEM : Math.max(MARGEM, ancora.left - MARGEM - LARGURA)
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setEntrou(true))
+    return () => cancelAnimationFrame(frame)
+  }, [])
 
   useLayoutEffect(() => {
     const el = ref.current
     if (!el) return
-    const top = Math.min(Math.max(MARGEM, ancora.top), window.innerHeight - el.offsetHeight - MARGEM)
-    el.style.top = `${Math.max(MARGEM, top)}px`
-    const frame = requestAnimationFrame(() => {
-      el.style.opacity = '1'
-      el.style.transform = 'translateX(0)'
-    })
-    return () => cancelAnimationFrame(frame)
+    const altura = el.offsetHeight - 2 * FOLGA_SOMBRA
+    const top = Math.min(ancora.top, window.innerHeight - altura - MARGEM)
+    el.style.top = `${Math.max(MARGEM, top) - FOLGA_SOMBRA}px`
   }, [ancora])
+
+  const duracao = mostrar ? ABRIR_MS : FECHAR_MS
+  const painel: CSSProperties = {
+    minHeight: ancora.height,
+    transition: `transform ${duracao}ms ${EASE}, opacity ${duracao}ms ${EASE}`,
+    transform: reduzirMovimento || mostrar ? 'none' : `translateX(${direita ? '-100%' : '100%'})`,
+    opacity: reduzirMovimento && !mostrar ? 0 : 1,
+  }
+  const secao = (i: number): CSSProperties => ({
+    transition: mostrar
+      ? `opacity 260ms ${EASE} ${ATRASOS_SECAO_MS[i]}ms, transform 260ms ${EASE} ${ATRASOS_SECAO_MS[i]}ms`
+      : `opacity 120ms ease-in, transform 120ms ease-in`,
+    opacity: mostrar ? 1 : 0,
+    transform: mostrar || reduzirMovimento ? 'none' : `translateX(${direita ? -8 : 8}px)`,
+  })
 
   return createPortal(
     <div
       ref={ref}
       role="tooltip"
+      className="pointer-events-none fixed z-[90] overflow-hidden"
       style={{
-        left,
-        top: ancora.top,
-        width: LARGURA,
-        opacity: 0,
-        transform: `translateX(${cabeDireita ? -6 : 6}px)`,
+        top: ancora.top - FOLGA_SOMBRA,
+        ...(direita ? { left: ancora.right, paddingRight: FOLGA_SOMBRA } : { right: document.documentElement.clientWidth - ancora.left, paddingLeft: FOLGA_SOMBRA }),
+        paddingTop: FOLGA_SOMBRA,
+        paddingBottom: FOLGA_SOMBRA,
+        width: largura + FOLGA_SOMBRA,
       }}
-      className="pointer-events-none fixed z-[90] rounded-2xl border border-[color:var(--color-line)] bg-white p-4 shadow-2xl transition duration-200 ease-out dark:bg-[color:var(--color-panel)]"
     >
-      <div className="flex items-start gap-2">
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-[color:var(--color-ink)]">{grupo.nome}</p>
-          <p className="truncate text-[11px] text-[color:var(--color-muted)]">{grupo.matriz.razao_social}</p>
+      <div
+        style={painel}
+        className={`flex flex-col border border-[color:var(--color-line)] bg-[color:var(--color-panel)] p-5 shadow-2xl ${
+          direita ? 'rounded-r-2xl border-l-0' : 'rounded-l-2xl border-r-0'
+        }`}
+      >
+        <div style={secao(0)} className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-base font-semibold text-[color:var(--color-ink)]">{grupo.nome}</p>
+            <p className="truncate text-xs text-[color:var(--color-muted)]">{grupo.matriz.razao_social}</p>
+          </div>
+          <div className="flex shrink-0 gap-1">
+            {grupo.bus.map((bu) => (
+              <span
+                key={bu}
+                className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white"
+                style={{ background: buTheme(bu).from }}
+              >
+                {bu}
+              </span>
+            ))}
+          </div>
         </div>
-        <div className="flex shrink-0 gap-1">
-          {grupo.bus.map((bu) => (
-            <span
-              key={bu}
-              className="rounded-full px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-white"
-              style={{ background: buTheme(bu).from }}
-            >
-              {bu}
-            </span>
-          ))}
-        </div>
-      </div>
 
-      <div className="mt-3 flex items-center gap-3 border-t border-[color:var(--color-line)] pt-3">
-        <div className="min-w-0 flex-1">
-          <p className="text-[11px] text-[color:var(--color-muted)]">CND Federal</p>
-          {situacao ? (
-            <span className={`mt-0.5 inline-block rounded-full px-2 py-px text-[10px] font-semibold ${situacao.classe}`}>
-              {situacao.rotulo}
-            </span>
-          ) : (
-            <p className="text-xs text-[color:var(--color-muted)]">{cnd ? '—' : 'não cadastrada'}</p>
+        <div style={secao(1)} className="mt-4 flex items-center gap-3 border-t border-[color:var(--color-line)] pt-4">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs text-[color:var(--color-muted)]">CND Federal</p>
+            {situacao ? (
+              <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold ${situacao.classe}`}>
+                {situacao.rotulo}
+              </span>
+            ) : (
+              <p className="text-sm text-[color:var(--color-muted)]">{cnd ? '—' : 'não cadastrada'}</p>
+            )}
+          </div>
+          {cnd?.valida_ate && <Validade dia={cnd.valida_ate} vencido="vencida" />}
+        </div>
+
+        <div style={secao(2)} className="mt-4 border-t border-[color:var(--color-line)] pt-3">
+          <div className="flex items-center justify-between text-xs text-[color:var(--color-muted)]">
+            <span>{unidades.length === 1 ? 'CNPJ' : `CNPJs (${unidades.length})`}</span>
+            <span>Certificado digital</span>
+          </div>
+          <ul className="divide-y divide-[color:var(--color-line)]">
+            {unidades.slice(0, MAX_CNPJS).map((u) => (
+              <LinhaCnpj key={u.id} unidade={u} />
+            ))}
+          </ul>
+          {unidades.length > MAX_CNPJS && (
+            <p className="pt-1 text-xs text-[color:var(--color-muted)]">
+              + {unidades.length - MAX_CNPJS} CNPJs (veja todos no detalhe da empresa)
+            </p>
           )}
         </div>
-        {cnd?.valida_ate && <Validade dia={cnd.valida_ate} vencido="vencida" />}
-      </div>
-
-      <div className="mt-3 border-t border-[color:var(--color-line)] pt-2">
-        <div className="flex items-center justify-between text-[11px] text-[color:var(--color-muted)]">
-          <span>
-            {unidades.length === 1 ? 'CNPJ' : `CNPJs (${unidades.length})`}
-          </span>
-          <span>Certificado digital</span>
-        </div>
-        <ul className="divide-y divide-[color:var(--color-line)]">
-          {unidades.slice(0, MAX_CNPJS).map((u) => (
-            <LinhaCnpj key={u.id} unidade={u} />
-          ))}
-        </ul>
-        {unidades.length > MAX_CNPJS && (
-          <p className="pt-1 text-[11px] text-[color:var(--color-muted)]">
-            + {unidades.length - MAX_CNPJS} CNPJs (veja todos no detalhe da empresa)
-          </p>
-        )}
       </div>
     </div>,
     document.body,
