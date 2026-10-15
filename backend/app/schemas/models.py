@@ -356,6 +356,11 @@ class CopiarRequest(BaseModel):
     titulo: str | None = Field(default=None, max_length=200)
 
 
+class TransferirRequest(BaseModel):
+    responsavel_id: UUID
+    motivo: str | None = Field(default=None, max_length=300)
+
+
 class CopiaIgnorada(BaseModel):
     empresa_id: UUID
     motivo: str

@@ -2,7 +2,7 @@ import { ClipboardCheck, History, MessageSquare, Users } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../lib/api'
-import { formatCompetencia, formatDate, isItemAtrasado, statusLabel } from '../lib/format'
+import { formatCompetencia, formatDate, isEntregue, isItemAtrasado, statusLabel } from '../lib/format'
 import { obrigacaoResponsaveis } from '../lib/responsaveis'
 import { workItemFromObrigacao } from '../lib/workItems'
 import type { AuditLog, Comentario, Obrigacao, ObrigacaoUpdate, StatusObrigacao } from '../types'
@@ -11,6 +11,7 @@ import DetalheModal, { Bloco, Campo, ChipBu, Indicador, ROTULO } from './Detalhe
 import AcoesEmpresa from './empresas/AcoesEmpresa'
 import PersonAvatar from './PersonAvatar'
 import StatusBadge from './StatusBadge'
+import { AcoesTransferir } from './TransferirModal'
 
 interface ObrigacaoDrawerProps {
   obrigacao: Obrigacao | null
@@ -53,6 +54,7 @@ export default function ObrigacaoDrawer({
   const [reprovarMotivo, setReprovarMotivo] = useState('')
   const [showReprovar, setShowReprovar] = useState(false)
   const [copiando, setCopiando] = useState(false)
+  const [transferindo, setTransferindo] = useState(false)
 
   const loadExtras = useCallback(async (id: string) => {
     try {
@@ -80,6 +82,7 @@ export default function ObrigacaoDrawer({
     setShowReprovar(false)
     setReprovarMotivo('')
     setCopiando(false)
+    setTransferindo(false)
     void loadExtras(obrigacao.id)
   }, [obrigacao, loadExtras])
 
@@ -410,7 +413,7 @@ export default function ObrigacaoDrawer({
       <DetalheModal
         aberto={open}
         onClose={onClose}
-        escapeBloqueado={copiando}
+        escapeBloqueado={copiando || transferindo}
         empresa={empresa}
         titulo={obrigacao.atividade?.nome ?? 'Obrigação'}
         chips={
@@ -431,11 +434,23 @@ export default function ObrigacaoDrawer({
           </>
         }
         acoes={
-          <AcoesEmpresa
-            empresa={empresa}
-            onCopiar={isAdmin ? () => setCopiando(true) : undefined}
-            onNavegar={onClose}
-          />
+          <>
+            <AcoesTransferir
+              item={workItemFromObrigacao(obrigacao)}
+              entregue={isEntregue(obrigacao.status) || Boolean(obrigacao.data_entrega)}
+              onAbertoChange={setTransferindo}
+              onErro={setError}
+              onTransferido={(updated) => {
+                onSaved(updated as Obrigacao)
+                onClose()
+              }}
+            />
+            <AcoesEmpresa
+              empresa={empresa}
+              onCopiar={isAdmin ? () => setCopiando(true) : undefined}
+              onNavegar={onClose}
+            />
+          </>
         }
         indicadores={
           <>

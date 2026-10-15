@@ -36,6 +36,7 @@ from app.schemas.models import (
     ObrigacaoUpdate,
     ReprovarRequest,
     StatusObrigacao,
+    TransferirRequest,
 )
 from app.services.calendario import resumo_dia
 from app.services.copia import carregar_destinos
@@ -66,6 +67,7 @@ from app.services.status_engine import (
     status_filter_values,
     urgencia_label,
 )
+from app.services.transferencia import transferir_obrigacao
 
 logger = logging.getLogger(__name__)
 
@@ -650,6 +652,19 @@ def update_obrigacao(
             client, user, full, status_antes=before.get("status")
         )
     return full
+
+
+@router.post("/{obrigacao_id}/transferir", response_model=ObrigacaoOut)
+def transferir(
+    obrigacao_id: UUID,
+    body: TransferirRequest,
+    user: Annotated[AuthUser, Depends(require_not_viewer)],
+    client: Annotated[Client, Depends(get_db_client)],
+):
+    """Pegar ou enviar a obrigação: troca o responsável principal."""
+    assert_obrigacao_in_scope(user, client, str(obrigacao_id))
+    transferir_obrigacao(client, user, str(obrigacao_id), str(body.responsavel_id), body.motivo)
+    return _fetch_full(client, str(obrigacao_id))
 
 
 @router.post("/{obrigacao_id}/aprovar", response_model=ObrigacaoOut)

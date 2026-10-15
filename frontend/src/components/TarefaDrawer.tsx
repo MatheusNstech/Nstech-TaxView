@@ -21,6 +21,7 @@ import AcoesEmpresa from './empresas/AcoesEmpresa'
 import GlassDatePicker from './GlassDatePicker'
 import PersonAvatar from './PersonAvatar'
 import StatusBadge from './StatusBadge'
+import { AcoesTransferir } from './TransferirModal'
 
 const STATUS_OPTS: StatusObrigacao[] = [
   'PENDENTE',
@@ -85,6 +86,7 @@ export default function TarefaDrawer({
   const [error, setError] = useState('')
   const [audit, setAudit] = useState<TarefaAudit[]>([])
   const [copiando, setCopiando] = useState(false)
+  const [transferindo, setTransferindo] = useState(false)
   const { canWrite } = useAuth()
   const atividades = useAtividadesAtivas(open && !readOnly)
 
@@ -115,6 +117,7 @@ export default function TarefaDrawer({
     setMotivoAtraso(tarefa.motivo_atraso ?? '')
     setError('')
     setCopiando(false)
+    setTransferindo(false)
   }, [tarefa, initialStatus])
 
   const needsMotivo = useMemo(
@@ -211,12 +214,174 @@ export default function TarefaDrawer({
   const atrasada = isItemAtrasado(tarefa)
   const horario = formatHorario(horaInicio, horaFim)
 
+  const abaDados = (
+    <>
+      <Bloco icon={ClipboardList} titulo="Tarefa" className="lg:col-span-2">
+        {readOnly ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Campo rotulo="Status">{statusLabel(status)}</Campo>
+            <Campo rotulo="Prazo">
+              {formatDate(prazo)}
+              {horario ? ` · ${horario}` : ''}
+            </Campo>
+            <Campo rotulo="Tipo de serviço">{tarefa.atividade?.nome}</Campo>
+            <div className="sm:col-span-2">
+              <Campo rotulo="Descrição">
+                {descricao ? <span className="whitespace-pre-wrap">{descricao}</span> : null}
+              </Campo>
+            </div>
+            {tarefa.motivo_atraso ? (
+              <div className="sm:col-span-2">
+                <Campo rotulo="Motivo do atraso">
+                  <span className="whitespace-pre-wrap">{tarefa.motivo_atraso}</span>
+                </Campo>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label className={ROTULO}>Título</label>
+              <input value={titulo} onChange={(e) => setTitulo(e.target.value)} className="glass-input" />
+            </div>
+            <div className="sm:col-span-2">
+              <label className={ROTULO}>Tipo de serviço</label>
+              <select
+                value={atividadeId}
+                onChange={(e) => setAtividadeId(e.target.value)}
+                className="glass-input"
+              >
+                <option value="">Sem tipo de serviço</option>
+                {tarefa.atividade && !atividades.some((a) => a.id === tarefa.atividade?.id) ? (
+                  <option value={tarefa.atividade.id}>{tarefa.atividade.nome}</option>
+                ) : null}
+                {atividades.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.nome}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={ROTULO}>Status</label>
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value as StatusObrigacao)}
+                className="glass-input"
+              >
+                {STATUS_OPTS.map((s) => (
+                  <option key={s} value={s}>
+                    {statusLabel(s)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={ROTULO}>Prazo</label>
+              <GlassDatePicker ariaLabel="Prazo" value={prazo} onChange={setPrazo} />
+            </div>
+            <div>
+              <label className={ROTULO}>Início</label>
+              <input
+                type="time"
+                required
+                value={horaInicio}
+                onChange={(e) => setHoraInicio(e.target.value)}
+                className="glass-input"
+                aria-label="Horário de início"
+              />
+            </div>
+            <div>
+              <label className={ROTULO}>Fim</label>
+              <input
+                type="time"
+                required
+                value={horaFim}
+                onChange={(e) => setHoraFim(e.target.value)}
+                className="glass-input"
+                aria-label="Horário de fim"
+              />
+            </div>
+            <p className="-mt-1 text-[11px] text-[color:var(--color-muted)] sm:col-span-2">
+              Obrigatório. O atraso continua só pelo dia do prazo, não pelo horário.
+            </p>
+            {needsMotivo ? (
+              <div className="sm:col-span-2">
+                <label className="mb-1.5 block text-xs font-medium text-rose-600">Motivo do atraso *</label>
+                <textarea
+                  value={motivoAtraso}
+                  onChange={(e) => setMotivoAtraso(e.target.value)}
+                  rows={3}
+                  className="glass-input resize-none border-rose-200 focus:border-rose-400 focus:ring-rose-400/20"
+                  placeholder="Por que a entrega está fora do prazo?"
+                />
+                <p className="mt-1 text-[11px] text-[color:var(--color-muted)]">
+                  Obrigatório para entregar após o prazo (mín. 20 caracteres).
+                </p>
+              </div>
+            ) : null}
+            <div className="sm:col-span-2">
+              <label className={ROTULO}>Descrição</label>
+              <textarea
+                value={descricao}
+                onChange={(e) => setDescricao(e.target.value)}
+                rows={3}
+                className="glass-input resize-none"
+                placeholder="Anotações..."
+              />
+            </div>
+          </div>
+        )}
+      </Bloco>
+
+      <Bloco icon={Users} titulo="Pessoas">
+        <div className="space-y-3">
+          <div>
+            <p className="mb-1.5 text-[11px] font-medium text-[color:var(--color-muted)]">Responsável</p>
+            {tarefa.responsavel?.nome ? (
+              <div className="flex items-center gap-2.5">
+                <PersonAvatar nome={tarefa.responsavel.nome} fotoUrl={tarefa.responsavel.foto_url} size="lg" />
+                <span className="truncate text-sm font-medium text-[color:var(--color-ink)]">
+                  {tarefa.responsavel.nome}
+                </span>
+              </div>
+            ) : (
+              <p className="text-sm text-[color:var(--color-muted)]">—</p>
+            )}
+          </div>
+          <div className="border-t border-[color:var(--color-line)] pt-3">
+            <Campo rotulo="Solicitante">{tarefa.solicitante_nome}</Campo>
+          </div>
+        </div>
+      </Bloco>
+    </>
+  )
+
+  const abaHistorico = (
+    <div className="lg:col-span-3">
+      {audit.length === 0 ? (
+        <p className="py-10 text-center text-sm text-[color:var(--color-muted)]">Sem histórico registrado.</p>
+      ) : (
+        <div className="space-y-2">
+          {audit.map((a) => (
+            <div key={a.id} className="rounded-xl bg-[color:var(--color-surface)] px-3 py-2 text-xs">
+              <p className="font-medium text-[color:var(--color-ink)]">{a.acao}</p>
+              <p className="mt-1 text-[10px] text-[color:var(--color-muted)]">
+                {new Date(a.created_at).toLocaleString('pt-BR')}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+
   return (
     <>
       <DetalheModal
         aberto={open}
         onClose={onClose}
-        escapeBloqueado={copiando}
+        escapeBloqueado={copiando || transferindo}
         empresa={empresa}
         titulo={tarefa.titulo}
         chips={
@@ -236,11 +401,23 @@ export default function TarefaDrawer({
           </>
         }
         acoes={
-          <AcoesEmpresa
-            empresa={empresa}
-            onCopiar={canWrite && !readOnly ? () => setCopiando(true) : undefined}
-            onNavegar={onClose}
-          />
+          <>
+            <AcoesTransferir
+              item={workItemFromTarefa(tarefa)}
+              desabilitado={readOnly}
+              onAbertoChange={setTransferindo}
+              onErro={setError}
+              onTransferido={(updated) => {
+                onSaved({ ...tarefa, ...(updated as Tarefa) })
+                onClose()
+              }}
+            />
+            <AcoesEmpresa
+              empresa={empresa}
+              onCopiar={canWrite && !readOnly ? () => setCopiando(true) : undefined}
+              onNavegar={onClose}
+            />
+          </>
         }
         indicadores={
           <>
@@ -254,6 +431,16 @@ export default function TarefaDrawer({
             </Indicador>
           </>
         }
+        abas={[
+          { id: 'dados', rotulo: 'Dados', icon: ClipboardList, conteudo: abaDados },
+          {
+            id: 'historico',
+            rotulo: 'Histórico',
+            icon: History,
+            contador: audit.length,
+            conteudo: abaHistorico,
+          },
+        ]}
         rodape={
           readOnly ? undefined : (
             <>
@@ -286,164 +473,6 @@ export default function TarefaDrawer({
         {error && (
           <p className="rounded-xl bg-rose-50/90 px-3 py-2 text-sm text-rose-700 lg:col-span-3">{error}</p>
         )}
-
-        <Bloco icon={ClipboardList} titulo="Tarefa" className="lg:col-span-2">
-          {readOnly ? (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Campo rotulo="Status">{statusLabel(status)}</Campo>
-              <Campo rotulo="Prazo">
-                {formatDate(prazo)}
-                {horario ? ` · ${horario}` : ''}
-              </Campo>
-              <Campo rotulo="Tipo de serviço">{tarefa.atividade?.nome}</Campo>
-              <div className="sm:col-span-2">
-                <Campo rotulo="Descrição">
-                  {descricao ? <span className="whitespace-pre-wrap">{descricao}</span> : null}
-                </Campo>
-              </div>
-              {tarefa.motivo_atraso ? (
-                <div className="sm:col-span-2">
-                  <Campo rotulo="Motivo do atraso">
-                    <span className="whitespace-pre-wrap">{tarefa.motivo_atraso}</span>
-                  </Campo>
-                </div>
-              ) : null}
-            </div>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <label className={ROTULO}>Título</label>
-                <input value={titulo} onChange={(e) => setTitulo(e.target.value)} className="glass-input" />
-              </div>
-              <div className="sm:col-span-2">
-                <label className={ROTULO}>Tipo de serviço</label>
-                <select
-                  value={atividadeId}
-                  onChange={(e) => setAtividadeId(e.target.value)}
-                  className="glass-input"
-                >
-                  <option value="">Sem tipo de serviço</option>
-                  {tarefa.atividade && !atividades.some((a) => a.id === tarefa.atividade?.id) ? (
-                    <option value={tarefa.atividade.id}>{tarefa.atividade.nome}</option>
-                  ) : null}
-                  {atividades.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.nome}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className={ROTULO}>Status</label>
-                <select
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value as StatusObrigacao)}
-                  className="glass-input"
-                >
-                  {STATUS_OPTS.map((s) => (
-                    <option key={s} value={s}>
-                      {statusLabel(s)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className={ROTULO}>Prazo</label>
-                <GlassDatePicker ariaLabel="Prazo" value={prazo} onChange={setPrazo} />
-              </div>
-              <div>
-                <label className={ROTULO}>Início</label>
-                <input
-                  type="time"
-                  required
-                  value={horaInicio}
-                  onChange={(e) => setHoraInicio(e.target.value)}
-                  className="glass-input"
-                  aria-label="Horário de início"
-                />
-              </div>
-              <div>
-                <label className={ROTULO}>Fim</label>
-                <input
-                  type="time"
-                  required
-                  value={horaFim}
-                  onChange={(e) => setHoraFim(e.target.value)}
-                  className="glass-input"
-                  aria-label="Horário de fim"
-                />
-              </div>
-              <p className="-mt-1 text-[11px] text-[color:var(--color-muted)] sm:col-span-2">
-                Obrigatório. O atraso continua só pelo dia do prazo, não pelo horário.
-              </p>
-              {needsMotivo ? (
-                <div className="sm:col-span-2">
-                  <label className="mb-1.5 block text-xs font-medium text-rose-600">Motivo do atraso *</label>
-                  <textarea
-                    value={motivoAtraso}
-                    onChange={(e) => setMotivoAtraso(e.target.value)}
-                    rows={3}
-                    className="glass-input resize-none border-rose-200 focus:border-rose-400 focus:ring-rose-400/20"
-                    placeholder="Por que a entrega está fora do prazo?"
-                  />
-                  <p className="mt-1 text-[11px] text-[color:var(--color-muted)]">
-                    Obrigatório para entregar após o prazo (mín. 20 caracteres).
-                  </p>
-                </div>
-              ) : null}
-              <div className="sm:col-span-2">
-                <label className={ROTULO}>Descrição</label>
-                <textarea
-                  value={descricao}
-                  onChange={(e) => setDescricao(e.target.value)}
-                  rows={3}
-                  className="glass-input resize-none"
-                  placeholder="Anotações..."
-                />
-              </div>
-            </div>
-          )}
-        </Bloco>
-
-        <div className="flex min-w-0 flex-col gap-4">
-          <Bloco icon={Users} titulo="Pessoas">
-            <div className="space-y-3">
-              <div>
-                <p className="mb-1.5 text-[11px] font-medium text-[color:var(--color-muted)]">Responsável</p>
-                {tarefa.responsavel?.nome ? (
-                  <div className="flex items-center gap-2.5">
-                    <PersonAvatar nome={tarefa.responsavel.nome} fotoUrl={tarefa.responsavel.foto_url} size="lg" />
-                    <span className="truncate text-sm font-medium text-[color:var(--color-ink)]">
-                      {tarefa.responsavel.nome}
-                    </span>
-                  </div>
-                ) : (
-                  <p className="text-sm text-[color:var(--color-muted)]">—</p>
-                )}
-              </div>
-              <div className="border-t border-[color:var(--color-line)] pt-3">
-                <Campo rotulo="Solicitante">{tarefa.solicitante_nome}</Campo>
-              </div>
-            </div>
-          </Bloco>
-
-          <Bloco icon={History} titulo="Histórico">
-            {audit.length === 0 ? (
-              <p className="text-sm text-[color:var(--color-muted)]">Sem histórico registrado.</p>
-            ) : (
-              <div className="max-h-48 space-y-2 overflow-y-auto pr-1 [scrollbar-width:thin]">
-                {audit.map((a) => (
-                  <div key={a.id} className="rounded-xl bg-[color:var(--color-surface)] px-3 py-2 text-xs">
-                    <p className="font-medium text-[color:var(--color-ink)]">{a.acao}</p>
-                    <p className="mt-1 text-[10px] text-[color:var(--color-muted)]">
-                      {new Date(a.created_at).toLocaleString('pt-BR')}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Bloco>
-        </div>
       </DetalheModal>
       <CopiarModal
         item={copiando ? workItemFromTarefa(tarefa) : null}

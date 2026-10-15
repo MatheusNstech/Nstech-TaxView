@@ -18,6 +18,7 @@ from app.schemas.models import (
     TarefaCreate,
     TarefaOut,
     TarefaUpdate,
+    TransferirRequest,
 )
 from app.services.copia import carregar_destinos, trocar_nome_empresa
 from app.services.db import fetch_all, reject_nulls
@@ -37,6 +38,7 @@ from app.services.status_engine import (
     status_filter_values,
     urgencia_label,
 )
+from app.services.transferencia import transferir_tarefa
 
 router = APIRouter(prefix="/tarefas", tags=["tarefas"])
 
@@ -575,6 +577,19 @@ def copiar_tarefa(
             actor_user_id=user.id,
         )
     return CopiarResponse(criadas=len(payloads), ignoradas=ignoradas)
+
+
+@router.post("/{tarefa_id}/transferir", response_model=TarefaOut)
+def transferir(
+    tarefa_id: UUID,
+    body: TransferirRequest,
+    user: Annotated[AuthUser, Depends(require_not_viewer)],
+    client: Annotated[Client, Depends(get_db_client)],
+):
+    """Pegar (para si) ou enviar (para um colega) a tarefa. Só o dono muda."""
+    tarefa = assert_tarefa_in_scope(user, client, str(tarefa_id))
+    transferir_tarefa(client, user, tarefa, str(body.responsavel_id), body.motivo)
+    return _fetch_full(client, str(tarefa_id))
 
 
 @router.get("/{tarefa_id}/audit", response_model=list[TarefaAuditOut])
