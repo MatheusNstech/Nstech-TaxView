@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react'
 import { apiFetch, setAccessToken } from '../lib/api'
+import { setCompetenciaPadraoPorLogin } from '../lib/format'
 import { supabase } from '../lib/supabase'
 
 type UserRole = 'admin' | 'diretor' | 'user'
@@ -208,6 +209,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(data.session)
     markRecovery(true)
   }, [markRecovery])
+
+  // Antes de renderizar as páginas, que leem o padrão no useState inicial.
+  setCompetenciaPadraoPorLogin(session?.user?.email)
 
   const role = me?.role ?? roleFromSession(session)
   const mustChangePassword =

@@ -61,13 +61,30 @@ export function monthToCompetencia(month: string): string {
   return `${month}-01`
 }
 
+/** Logins cujos filtros abrem no mês do calendário, e não no anterior. */
+const LOGINS_MES_VIGENTE = ['matheus.silva-oliveira@nstech.com.br']
+
+let competenciaNoMesVigente = false
+
+/** Chamado pelo AuthProvider a cada sessão. */
+export function setCompetenciaPadraoPorLogin(email: string | null | undefined) {
+  competenciaNoMesVigente = LOGINS_MES_VIGENTE.includes(
+    (email ?? '').trim().toLowerCase(),
+  )
+}
+
 /**
  * Competência em trabalho ("YYYY-MM"), padrão dos filtros: o mês anterior ao
  * do calendário, porque em outubro se fecha a competência de setembro.
+ * Para os logins em LOGINS_MES_VIGENTE é o próprio mês do calendário.
  */
 export function currentCompetenciaMonth(): string {
   const now = new Date()
-  const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+  const prev = new Date(
+    now.getFullYear(),
+    now.getMonth() - (competenciaNoMesVigente ? 0 : 1),
+    1,
+  )
   return `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`
 }
 
