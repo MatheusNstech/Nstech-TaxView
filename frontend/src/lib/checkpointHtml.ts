@@ -2,7 +2,7 @@ import { formatDate, formatHorario, isEntregue } from './format'
 import { tarefaCategoriaLabel } from '../types'
 import type { StatusObrigacao, WorkItem } from '../types'
 
-/** 'dev': quebra por solicitante e tipo, com horas, no lugar de BU/empresa. */
+/** 'dev': gráficos por solicitante e por tipo no lugar de BU/empresa. */
 export type PerfilCheckpoint = 'padrao' | 'dev'
 
 const LOGINS_DESENVOLVEDOR = ['matheus.silva-oliveira@nstech.com.br']
@@ -48,8 +48,6 @@ interface Linha {
   responsavel: string
   solicitante: string
   tipo: string
-  /** Minutos planejados (hora_inicio → hora_fim). */
-  minutos: number
   prazo: string | null
   entrega: string | null
   situacao: Situacao
@@ -158,24 +156,6 @@ function oQueDoItem(item: WorkItem): string {
   return item.title
 }
 
-function minutosPlanejados(item: WorkItem): number {
-  const toMin = (v: string | null | undefined) => {
-    if (!v) return null
-    const [h, m] = v.split(':').map(Number)
-    return Number.isNaN(h) ? null : h * 60 + (m || 0)
-  }
-  const a = toMin(item.horaInicio)
-  const b = toMin(item.horaFim)
-  return a !== null && b !== null && b > a ? b - a : 0
-}
-
-function formatHoras(minutos: number): string {
-  if (minutos <= 0) return '—'
-  const h = Math.floor(minutos / 60)
-  const m = minutos % 60
-  return m ? `${h}h${String(m).padStart(2, '0')}` : `${h}h`
-}
-
 function montarLinha(item: WorkItem, hoje: string): Linha {
   const prazo = item.prazo?.slice(0, 10) || null
   const entrega = dataEntrega(item)
@@ -226,7 +206,6 @@ function montarLinha(item: WorkItem, hoje: string): Linha {
       item.obrigacao?.atividade?.nome?.trim() ||
       item.tarefa?.atividade?.nome?.trim() ||
       tarefaCategoriaLabel(item.categoria),
-    minutos: minutosPlanejados(item),
     prazo,
     entrega,
     situacao,
@@ -349,7 +328,7 @@ function pessoa(nome: string): string {
   )}<span class="person-name">${escapeHtml(nomeCurto(primeiro))}</span>${extra}</span>`
 }
 
-/** Baixa as fotos e reduz para 96px, para o HTML funcionar offline. */
+/** Baixa as fotos e reduz para 176px, para o HTML funcionar offline. */
 export async function carregarFotosCheckpoint(
   pessoas: Array<{ nome: string; url: string | null }>,
 ): Promise<Record<string, string>> {
@@ -367,9 +346,9 @@ export async function carregarFotosCheckpoint(
         // Mesmo enquadramento do PersonAvatar (object-position: center 20%).
         const sy = (bmp.height - lado) * 0.2
         const canvas = document.createElement('canvas')
-        canvas.width = 96
-        canvas.height = 96
-        canvas.getContext('2d')?.drawImage(bmp, sx, sy, lado, lado, 0, 0, 96, 96)
+        canvas.width = 176
+        canvas.height = 176
+        canvas.getContext('2d')?.drawImage(bmp, sx, sy, lado, lado, 0, 0, 176, 176)
         out[chave] = canvas.toDataURL('image/jpeg', 0.85)
       } catch {
         // Sem foto: o relatório usa as iniciais.
@@ -392,8 +371,6 @@ const ICON: Record<string, string> = {
     '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
   octagon:
     '<path d="M12 16h.01"/><path d="M12 8v4"/><path d="M15.31 2a2 2 0 0 1 1.42.59l4.68 4.68A2 2 0 0 1 22 8.69v6.62a2 2 0 0 1-.59 1.42l-4.68 4.68a2 2 0 0 1-1.42.59H8.69a2 2 0 0 1-1.42-.59l-4.68-4.68A2 2 0 0 1 2 15.31V8.69a2 2 0 0 1 .59-1.42l4.68-4.68A2 2 0 0 1 8.69 2z"/>',
-  timer:
-    '<path d="M10 2h4"/><path d="M12 14l3-3"/><circle cx="12" cy="14" r="8"/>',
   search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
 }
 
@@ -408,7 +385,6 @@ interface Grupo {
   noPrazo: number
   atrasados: number
   risco: number
-  minutos: number
 }
 
 function agrupar(linhas: Linha[], chave: (l: Linha) => string[]): Grupo[] {
@@ -417,9 +393,8 @@ function agrupar(linhas: Linha[], chave: (l: Linha) => string[]): Grupo[] {
     for (const nome of chave(l)) {
       const g =
         map.get(nome) ??
-        { nome, total: 0, entregues: 0, noPrazo: 0, atrasados: 0, risco: 0, minutos: 0 }
+        { nome, total: 0, entregues: 0, noPrazo: 0, atrasados: 0, risco: 0 }
       g.total += 1
-      g.minutos += l.minutos
       if (l.situacao === 'entregue_prazo' || l.situacao === 'entregue_atraso') {
         g.entregues += 1
       }
@@ -455,9 +430,8 @@ function tabelaGrupos(opts: {
   coluna: string
   grupos: Grupo[]
   comPessoa?: boolean
-  comHoras?: boolean
 }): string {
-  const { grupos, comHoras, comPessoa } = opts
+  const { grupos, comPessoa } = opts
   const rows = grupos
     .map((g) => {
       const p = pct(g.entregues, g.total)
@@ -466,7 +440,6 @@ function tabelaGrupos(opts: {
           <td class="num">${g.total}</td>
           <td class="num ${g.atrasados ? 'n-rose' : 'n-zero'}">${g.atrasados}</td>
           <td class="num ${g.risco ? 'n-brand' : 'n-zero'}">${g.risco}</td>
-          ${comHoras ? `<td class="num">${formatHoras(g.minutos)}</td>` : ''}
           <td class="progress-cell">
             <span class="meter"><span style="width:${p}%"></span></span>
             <span class="meter-v">${p}%</span>
@@ -484,11 +457,135 @@ function tabelaGrupos(opts: {
             <th class="num">Itens</th>
             <th class="num">Atrasados</th>
             <th class="num">Vencendo</th>
-            ${comHoras ? '<th class="num">Horas</th>' : ''}
             <th>Entregues</th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>
+      </div>
+    </section>`
+}
+
+/** Paleta validada (CVD e contraste) para as barras por situação. */
+const COR_BARRA = {
+  entregue: '#059669',
+  aberto: '#0284c7',
+  risco: '#ea580c',
+  atrasado: '#be123c',
+}
+
+/** Barras horizontais empilhadas por situação, uma linha por grupo. */
+function graficoGrupos(opts: { titulo: string; sub: string; grupos: Grupo[] }): string {
+  const grupos = [...opts.grupos].sort(
+    (a, b) => b.total - a.total || a.nome.localeCompare(b.nome),
+  )
+  const max = Math.max(1, ...grupos.map((g) => g.total))
+  const soma = (k: 'entregues' | 'atrasados' | 'risco') =>
+    grupos.reduce((s, g) => s + g[k], 0)
+  const abertoDe = (g: Grupo) => g.total - g.entregues - g.atrasados - g.risco
+  const legenda: Array<[string, string, number]> = [
+    ['Entregue', COR_BARRA.entregue, soma('entregues')],
+    ['Em aberto', COR_BARRA.aberto, grupos.reduce((s, g) => s + abertoDe(g), 0)],
+    [`Vence em até ${JANELA_RISCO_DIAS} dias`, COR_BARRA.risco, soma('risco')],
+    ['Atrasado', COR_BARRA.atrasado, soma('atrasados')],
+  ]
+  const rows = grupos
+    .map((g) => {
+      const partes: Array<[number, string, string]> = [
+        [g.entregues, COR_BARRA.entregue, 'Entregue'],
+        [abertoDe(g), COR_BARRA.aberto, 'Em aberto'],
+        [g.risco, COR_BARRA.risco, 'Vencendo'],
+        [g.atrasados, COR_BARRA.atrasado, 'Atrasado'],
+      ]
+      const detalhe = partes
+        .filter(([n]) => n > 0)
+        .map(([n, , nome]) => `${nome}: ${n}`)
+        .join(' · ')
+      const segs = partes
+        .filter(([n]) => n > 0)
+        .map(([n, cor]) => `<span style="flex:${n};background:${cor}"></span>`)
+        .join('')
+      return `<div class="hbar-row" title="${escapeHtml(`${g.nome} — ${detalhe}`)}">
+          <span class="hbar-label">${escapeHtml(g.nome)}</span>
+          <span class="hbar-track"><span class="hbar" style="width:${(g.total / max) * 100}%">${segs}</span></span>
+          <span class="hbar-value"><b>${g.total}</b> ${plural(g.total, 'item', 'itens')}</span>
+        </div>`
+    })
+    .join('')
+  return `<section class="card">
+      ${cardHead(opts.titulo, opts.sub, grupos.length)}
+      <div class="hbar-legend">${legenda
+        .map(([nome, cor, n]) => `<span><i style="background:${cor}"></i>${escapeHtml(nome)} <b>${n}</b></span>`)
+        .join('')}</div>
+      <div class="hbar-list">${rows}</div>
+    </section>`
+}
+
+/** Ordem categórica fixa (paleta de referência validada). */
+const CORES_CATEGORIA = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300']
+const COR_OUTROS = '#94a3b8'
+
+/** Rosca com a fatia de itens de cada grupo; acima de 6 grupos, junta em "Outros". */
+function graficoRosca(opts: { titulo: string; sub: string; grupos: Grupo[] }): string {
+  const grupos = [...opts.grupos].sort(
+    (a, b) => b.total - a.total || a.nome.localeCompare(b.nome),
+  )
+  const total = grupos.reduce((s, g) => s + g.total, 0)
+  const head = cardHead(opts.titulo, opts.sub, grupos.length)
+  if (total === 0) {
+    return `<section class="card">${head}<div class="empty"><b>Nenhum item</b>Não há itens com os filtros usados.</div></section>`
+  }
+  const fatias: Array<{ nome: string; n: number; cor: string }> = grupos
+    .slice(0, CORES_CATEGORIA.length)
+    .map((g, i) => ({ nome: g.nome, n: g.total, cor: CORES_CATEGORIA[i] }))
+  const resto = grupos.slice(CORES_CATEGORIA.length)
+  if (resto.length) {
+    fatias.push({
+      nome: `Outros (${resto.length})`,
+      n: resto.reduce((s, g) => s + g.total, 0),
+      cor: COR_OUTROS,
+    })
+  }
+  const itens = (n: number) => `${n} ${plural(n, 'item', 'itens')}`
+
+  const R = 70
+  const C = 2 * Math.PI * R
+  // 2px de respiro entre as fatias (só com mais de uma).
+  const gap = fatias.length > 1 ? 2 : 0
+  let acumulado = 0
+  const arcos = fatias
+    .map((f) => {
+      const len = (f.n / total) * C
+      const arco = `<circle cx="90" cy="90" r="${R}" fill="none" stroke="${f.cor}" stroke-width="26"
+          stroke-dasharray="${Math.max(0, len - gap).toFixed(2)} ${(C - Math.max(0, len - gap)).toFixed(2)}"
+          stroke-dashoffset="${(-acumulado).toFixed(2)}"><title>${escapeHtml(
+            `${f.nome}: ${itens(f.n)} (${pct(f.n, total)}%)`,
+          )}</title></circle>`
+      acumulado += len
+      return arco
+    })
+    .join('')
+  const legenda = fatias
+    .map(
+      (f) => `<li>
+          <i style="background:${f.cor}"></i>
+          <span class="pie-name">${escapeHtml(f.nome)}</span>
+          <span class="pie-val"><b>${itens(f.n)}</b> · ${pct(f.n, total)}%</span>
+        </li>`,
+    )
+    .join('')
+  return `<section class="card">
+      ${head}
+      <div class="pie">
+        <div class="pie-chart">
+          <svg viewBox="0 0 180 180" width="180" height="180" role="img" aria-label="${escapeHtml(opts.titulo)}">
+            <g transform="rotate(-90 90 90)">
+              <circle cx="90" cy="90" r="${R}" fill="none" stroke="var(--line-soft)" stroke-width="26" />
+              ${arcos}
+            </g>
+          </svg>
+          <div class="pie-center"><b>${total}</b><span>${plural(total, 'item', 'itens')}</span></div>
+        </div>
+        <ul class="pie-legend">${legenda}</ul>
       </div>
     </section>`
 }
@@ -620,7 +717,10 @@ body {
 .legend i { width: 8px; height: 8px; border-radius: 50%; }
 .legend b { color: var(--ink); font-weight: 600; }
 
-.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr)); gap: 24px; align-items: start; }
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr)); gap: 24px; align-items: stretch; }
+.grid-2 > .card:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.grid-2 > .card > .tbl-wrap, .grid-2 > .card > .hbar-list, .grid-2 > .card > .pie, .grid-2 > .card > .empty { flex: 1 1 auto; }
+.grid-2 > .card > .empty { display: grid; place-content: center; }
 .section-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 8px 0 -8px; }
 
 /* Tabelas com rolagem e cabeçalho fixo */
@@ -628,7 +728,7 @@ body {
 .tbl-wrap::-webkit-scrollbar { width: 8px; height: 8px; }
 .tbl-wrap::-webkit-scrollbar-thumb { background: var(--line); border-radius: 999px; }
 .tbl { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
-.tbl.wide { min-width: 900px; }
+.tbl.wide { min-width: 760px; }
 .tbl th {
   position: sticky; top: 0; z-index: 1; background: var(--panel-head);
   text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
@@ -647,7 +747,8 @@ body {
 .tbl.fixed td { overflow-wrap: anywhere; }
 .row-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 6px; }
 .row-meta .person { gap: 6px; }
-.row-meta .avatar { width: 20px; height: 20px; font-size: 9px; }
+.row-meta .avatar { width: 30px; height: 30px; font-size: 11px; }
+.row-meta { margin-top: 8px; }
 .row-meta .person-name { font-weight: 500; color: var(--ink); }
 .row-meta .sep { color: var(--line); }
 .tbl-wrap:not(.x) { overflow-x: hidden; }
@@ -679,16 +780,16 @@ body {
 
 .person { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
 .avatar {
-  display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
-  background: var(--brand-soft); color: var(--brand-700); font-size: 10.5px; font-weight: 700; letter-spacing: 0.02em;
+  display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
+  background: var(--brand-soft); color: var(--brand-700); font-size: 12px; font-weight: 700; letter-spacing: 0.02em;
   overflow: hidden; box-shadow: 0 0 0 1px rgb(145 158 171 / 0.25);
 }
 .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .head-main { display: flex; align-items: center; gap: 18px; min-width: 0; }
 .head-people { display: flex; flex-shrink: 0; }
-.head-people .avatar { width: 64px; height: 64px; font-size: 20px; box-shadow: 0 0 0 3px #fff, 0 8px 20px -8px rgb(33 43 54 / 0.35); }
-.head-people .avatar + .avatar { margin-left: -16px; }
-.head-people.many .avatar { width: 48px; height: 48px; font-size: 15px; }
+.head-people .avatar { width: 88px; height: 88px; font-size: 26px; box-shadow: 0 0 0 3px #fff, 0 8px 20px -8px rgb(33 43 54 / 0.35); }
+.head-people .avatar + .avatar { margin-left: -18px; }
+.head-people.many .avatar { width: 60px; height: 60px; font-size: 18px; }
 .head-people.many .avatar + .avatar { margin-left: -12px; }
 .head-people .more { background: var(--line-soft); color: var(--muted); }
 .person-name { font-weight: 500; }
@@ -701,6 +802,37 @@ body {
 .meter-sub { display: block; margin-top: 2px; font-size: 11.5px; color: var(--muted); }
 .meter-v { display: inline-block; width: 40px; text-align: right; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; vertical-align: middle; }
 
+.hbar-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 0 20px 12px; font-size: 12px; color: var(--muted); }
+.hbar-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.hbar-legend i { width: 8px; height: 8px; border-radius: 2px; }
+.hbar-legend b { color: var(--ink); font-weight: 600; }
+.hbar-list { max-height: 340px; overflow-y: auto; border-top: 1px solid var(--line); padding: 8px 0; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.hbar-row { display: grid; grid-template-columns: minmax(90px, 160px) 1fr auto; align-items: center; gap: 14px; padding: 7px 20px; }
+.hbar-row:hover { background: var(--row-hover); }
+.hbar-label { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hbar-track { display: block; min-width: 0; }
+.hbar { display: flex; gap: 2px; height: 12px; min-width: 6px; }
+.hbar span { display: block; height: 100%; }
+.hbar span:first-child { border-radius: 4px 0 0 4px; }
+.hbar span:last-child { border-radius: 0 4px 4px 0; }
+.hbar span:only-child { border-radius: 4px; }
+.hbar-value { font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; text-align: right; min-width: 92px; }
+.hbar-value b { font-weight: 600; }
+.pie { display: flex; align-items: center; gap: 28px; padding: 8px 24px 24px; flex-wrap: wrap; }
+.pie-chart { position: relative; width: 180px; height: 180px; flex-shrink: 0; margin: 0 auto; }
+.pie-chart circle { transition: opacity .15s; }
+.pie-chart svg:hover circle[stroke^="#"] { opacity: .55; }
+.pie-chart svg circle[stroke^="#"]:hover { opacity: 1; }
+.pie-center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; pointer-events: none; }
+.pie-center b { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+.pie-center span { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.pie-legend { list-style: none; flex: 1 1 200px; display: flex; flex-direction: column; gap: 4px; }
+.pie-legend li { display: grid; grid-template-columns: 10px 1fr auto; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; font-size: 13px; }
+.pie-legend li:hover { background: var(--row-hover); }
+.pie-legend i { width: 10px; height: 10px; border-radius: 3px; }
+.pie-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pie-val { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pie-val b { color: var(--ink); font-weight: 600; }
 .empty { padding: 28px 20px; text-align: center; color: var(--muted); border-top: 1px solid var(--line); }
 .empty b { display: block; color: var(--ink); font-weight: 600; margin-bottom: 2px; }
 
@@ -829,10 +961,6 @@ export function buildCheckpointHtml(input: CheckpointHtmlInput): string {
   const abertos = total - entregues
   const conclusao = pct(entregues, total)
   const pontualidade = pct(noPrazo, entregues)
-  const minutosTotal = linhas.reduce((s, l) => s + l.minutos, 0)
-  const minutosEntregues = linhas
-    .filter((l) => grupoFiltro(l) === 'entregue')
-    .reduce((s, l) => s + l.minutos, 0)
 
   // Farol: vermelho com atraso em aberto; amarelo só com prazo a até 3 dias.
   const farol: 'g' | 'y' | 'r' =
@@ -924,16 +1052,6 @@ export function buildCheckpointHtml(input: CheckpointHtmlInput): string {
       icone: 'alert',
     },
   ]
-  if (dev) {
-    kpis.push({
-      label: 'Horas planejadas',
-      value: formatHoras(minutosTotal),
-      hint: `${formatHoras(minutosEntregues)} já entregues`,
-      box: 'ib-sky',
-      valueClass: '',
-      icone: 'timer',
-    })
-  }
   const kpiHtml = kpis
     .map(
       (k) => `<div class="glass kpi">
@@ -1050,25 +1168,20 @@ export function buildCheckpointHtml(input: CheckpointHtmlInput): string {
         coluna: 'Responsável',
         grupos: porResp,
         comPessoa: true,
-        comHoras: dev,
       }),
     )
   }
   if (dev) {
     blocosGrupo.push(
-      tabelaGrupos({
+      graficoGrupos({
         titulo: 'Por solicitante',
-        sub: 'Quem originou as demandas do mês',
-        coluna: 'Solicitante',
+        sub: 'Quem originou as demandas do mês e em que situação elas estão',
         grupos: agrupar(linhas, (l) => [l.solicitante]),
-        comHoras: true,
       }),
-      tabelaGrupos({
+      graficoRosca({
         titulo: 'Por tipo de atividade',
-        sub: 'Onde o tempo do mês foi investido',
-        coluna: 'Tipo',
+        sub: 'Como os itens do mês se dividem entre os tipos',
         grupos: agrupar(linhas, (l) => [l.tipo]),
-        comHoras: true,
       }),
     )
   } else {
@@ -1106,7 +1219,6 @@ export function buildCheckpointHtml(input: CheckpointHtmlInput): string {
         .join(' · ')
       return `<tr data-grupo="${grupoFiltro(l)}">
           <td>${celulaItem(l, { desc: true, meta })}</td>
-          <td>${escapeHtml(l.empresa)}</td>
           <td>${pessoa(l.responsavel)}</td>
           <td class="date">${escapeHtml(formatDate(l.prazo))}</td>
           <td class="date">${escapeHtml(
@@ -1198,7 +1310,7 @@ export function buildCheckpointHtml(input: CheckpointHtmlInput): string {
     <section class="card detail-card" id="detalhe">
       ${cardHead('Todos os itens', 'Ordenados por criticidade. Clique na descrição para ler o texto completo.', total)}
       <div class="toolbar">
-        <label class="search">${icon('search', 16)}<input id="busca" type="search" placeholder="Buscar por item, empresa ou pessoa" aria-label="Buscar" /></label>
+        <label class="search">${icon('search', 16)}<input id="busca" type="search" placeholder="Buscar por item ou pessoa" aria-label="Buscar" /></label>
         <div class="segmented" role="group" aria-label="Filtrar por situação">
           ${filtros
             .map(
@@ -1212,7 +1324,7 @@ export function buildCheckpointHtml(input: CheckpointHtmlInput): string {
       <div class="tbl-wrap x" style="--h: 560px">
         <table class="tbl wide">
           <thead><tr>
-            <th>Item</th><th>Empresa</th><th>Responsável</th>
+            <th>Item</th><th>Responsável</th>
             <th>Prazo</th><th>Entrega</th><th>Situação</th>
           </tr></thead>
           <tbody>${detalheRows}</tbody>
