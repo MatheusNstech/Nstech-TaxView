@@ -16,6 +16,7 @@ import { useAuth } from '../context/AuthContext'
 import { apiFetch, buildQuery } from '../lib/api'
 import {
   buildCheckpointHtml,
+  carregarFotosCheckpoint,
   checkpointFilename,
   downloadCheckpointHtml,
   perfilCheckpointPorLogin,
@@ -27,7 +28,11 @@ import {
   isEntregue,
   monthToCompetencia,
 } from '../lib/format'
-import { obrigacaoTemResponsavel } from '../lib/responsaveis'
+import { resolveAvatarUrl } from '../lib/avatars'
+import {
+  obrigacaoResponsaveis,
+  obrigacaoTemResponsavel,
+} from '../lib/responsaveis'
 import { mergeWorkItems } from '../lib/workItems'
 import type {
   Atividade,
@@ -243,7 +248,7 @@ export default function MinhasTarefas() {
     })
   }, [obrigacoes, tarefas, selectedRespIds])
 
-  const exportHtml = () => {
+  const exportHtml = async () => {
     if (exporting) return
     if (workItems.length === 0) {
       setError('Nada para exportar com os filtros atuais')
@@ -261,7 +266,26 @@ export default function MinhasTarefas() {
         responsavelNome?.trim() ||
         session?.user?.email?.split('@')[0] ||
         'Responsável'
+      // Fotos de quem aparece no relatório (cabeçalho e tabelas).
+      const pessoas = new Map<string, string | null>()
+      const addPessoa = (r?: Pick<Responsavel, 'nome' | 'foto_url'> | null) => {
+        const nome = r?.nome?.trim()
+        if (!nome || pessoas.get(nome)) return
+        pessoas.set(nome, resolveAvatarUrl(nome, r?.foto_url))
+      }
+      for (const item of workItems) {
+        if (item.obrigacao) obrigacaoResponsaveis(item.obrigacao).forEach(addPessoa)
+        addPessoa(item.tarefa?.responsavel)
+      }
+      ;[...responsaveis, ...equipe].forEach(addPessoa)
+      for (const nome of personName.split(',')) {
+        addPessoa({ nome, foto_url: null })
+      }
+      const fotos = await carregarFotosCheckpoint(
+        [...pessoas].map(([nome, url]) => ({ nome, url })),
+      )
       const html = buildCheckpointHtml({
+        fotos,
         personName,
         competenciaMonth: filters.competencia,
         generatedAt: new Date(),
@@ -429,7 +453,7 @@ export default function MinhasTarefas() {
             type="button"
             className="btn-ghost !py-2"
             disabled={exporting || loading}
-            onClick={exportHtml}
+            onClick={() => void exportHtml()}
           >
             <Download className="h-4 w-4" strokeWidth={1.75} />
             {exporting ? 'Gerando…' : 'Extrair HTML'}

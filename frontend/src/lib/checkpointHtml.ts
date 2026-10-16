@@ -21,10 +21,12 @@ export interface CheckpointHtmlInput {
   generatedAt: Date
   items: WorkItem[]
   perfil?: PerfilCheckpoint
+  /** Foto (data URL) por nome do responsável; sem foto, usa as iniciais. */
+  fotos?: Record<string, string>
 }
 
 /** Janela (dias) para considerar um item aberto como "vence em breve". */
-const JANELA_RISCO_DIAS = 5
+const JANELA_RISCO_DIAS = 3
 
 type Situacao =
   | 'atrasado'
@@ -322,14 +324,59 @@ function iniciais(nome: string): string {
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase()
 }
 
+function nomeCurto(nome: string): string {
+  const parts = nome.trim().split(/\s+/).filter(Boolean)
+  return parts.length > 2 ? `${parts[0]} ${parts[parts.length - 1]}` : nome.trim()
+}
+
+/** Fotos do relatório em montagem (buildCheckpointHtml é síncrono). */
+let fotosAtuais: Record<string, string> = {}
+
+function avatar(nome: string, classe = ''): string {
+  const foto = fotosAtuais[nome.trim()]
+  return foto
+    ? `<span class="avatar ${classe}"><img src="${foto}" alt="" /></span>`
+    : `<span class="avatar ${classe}">${escapeHtml(iniciais(nomeCurto(nome)))}</span>`
+}
+
 function pessoa(nome: string): string {
   if (!nome || nome === '—') return '<span class="muted">—</span>'
   const nomes = nome.split(' / ').map((n) => n.trim()).filter(Boolean)
-  const principal = nomes[0] ?? nome
+  const primeiro = nomes[0] ?? nome
   const extra = nomes.length > 1 ? ` <span class="muted">+${nomes.length - 1}</span>` : ''
-  return `<span class="person" title="${escapeHtml(nomes.join(', '))}"><span class="avatar">${escapeHtml(
-    iniciais(principal),
-  )}</span><span class="person-name">${escapeHtml(principal)}</span>${extra}</span>`
+  return `<span class="person" title="${escapeHtml(nomes.join(', '))}">${avatar(
+    primeiro,
+  )}<span class="person-name">${escapeHtml(nomeCurto(primeiro))}</span>${extra}</span>`
+}
+
+/** Baixa as fotos e reduz para 96px, para o HTML funcionar offline. */
+export async function carregarFotosCheckpoint(
+  pessoas: Array<{ nome: string; url: string | null }>,
+): Promise<Record<string, string>> {
+  const out: Record<string, string> = {}
+  await Promise.all(
+    pessoas.map(async ({ nome, url }) => {
+      const chave = nome.trim()
+      if (!chave || !url || out[chave]) return
+      try {
+        const res = await fetch(url)
+        if (!res.ok) return
+        const bmp = await createImageBitmap(await res.blob())
+        const lado = Math.min(bmp.width, bmp.height)
+        const sx = (bmp.width - lado) / 2
+        // Mesmo enquadramento do PersonAvatar (object-position: center 20%).
+        const sy = (bmp.height - lado) * 0.2
+        const canvas = document.createElement('canvas')
+        canvas.width = 96
+        canvas.height = 96
+        canvas.getContext('2d')?.drawImage(bmp, sx, sy, lado, lado, 0, 0, 96, 96)
+        out[chave] = canvas.toDataURL('image/jpeg', 0.85)
+      } catch {
+        // Sem foto: o relatório usa as iniciais.
+      }
+    }),
+  )
+  return out
 }
 
 /** Ícones no traço do lucide-react (o mesmo do sistema). */
@@ -479,35 +526,6 @@ const EMBEDDED_CSS = `
   --rose-bg: #fff1f2; --rose-fg: #be123c; --rose-ring: #fecdd3;
   --brand-bg: #fff4f0; --brand-fg: #c22e00; --brand-ring: #ffc4b3;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --ink: #e8eef4;
-    --muted: #94a3b8;
-    --line: rgb(255 255 255 / 0.1);
-    --line-soft: rgb(255 255 255 / 0.06);
-    --surface: #0f1419;
-    --panel: #151b22;
-    --panel-head: #18202a;
-    --glass-bg: rgb(22 28 36 / 0.78);
-    --glass-border: rgb(255 255 255 / 0.1);
-    --glass-inset: rgb(255 255 255 / 0.06);
-    --glass-shadow: rgb(0 0 0 / 0.45);
-    --mesh-g1: rgb(255 61 3 / 0.12);
-    --mesh-g2: rgb(255 98 51 / 0.08);
-    --mesh-g3: rgb(255 61 3 / 0.05);
-    --mesh-top: #121820;
-    --mesh-bot: #1a100c;
-    --row-hover: rgb(255 255 255 / 0.04);
-    --slate-bg: rgb(100 116 139 / 0.2); --slate-fg: #e2e8f0; --slate-ring: rgb(100 116 139 / 0.3);
-    --sky-bg: rgb(14 165 233 / 0.2); --sky-fg: #bae6fd; --sky-ring: rgb(14 165 233 / 0.3);
-    --amber-bg: rgb(245 158 11 / 0.2); --amber-fg: #fde68a; --amber-ring: rgb(245 158 11 / 0.3);
-    --teal-bg: rgb(20 184 166 / 0.2); --teal-fg: #99f6e4; --teal-ring: rgb(20 184 166 / 0.3);
-    --emerald-bg: rgb(16 185 129 / 0.2); --emerald-fg: #a7f3d0; --emerald-ring: rgb(16 185 129 / 0.3);
-    --rose-bg: rgb(244 63 94 / 0.2); --rose-fg: #fecdd3; --rose-ring: rgb(244 63 94 / 0.3);
-    --brand-bg: rgb(255 61 3 / 0.18); --brand-fg: #ffc4b3; --brand-ring: rgb(255 61 3 / 0.35);
-  }
-}
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
   font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif;
@@ -572,10 +590,6 @@ body {
 .ib-rose { background: rgb(244 63 94 / 0.15); color: #be123c; }
 .ib-brand { background: var(--brand-soft); color: var(--brand-600); }
 .ib-sky { background: rgb(14 165 233 / 0.15); color: #0369a1; }
-@media (prefers-color-scheme: dark) {
-  .ib-emerald { color: #6ee7b7; } .ib-amber { color: #fcd34d; } .ib-rose { color: #fda4af; }
-  .ib-brand { color: #ff9470; } .ib-sky { color: #7dd3fc; }
-}
 .verdict .eyebrow { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
 .verdict .title { margin-top: 2px; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
 .verdict .text { margin-top: 4px; color: var(--muted); max-width: 680px; }
@@ -596,9 +610,6 @@ body {
 .kpi .hint { margin-top: 6px; font-size: 12px; color: var(--muted); }
 .kpi .icon-box { width: 40px; height: 40px; }
 .v-emerald { color: #047857; } .v-rose { color: #be123c; } .v-brand { color: var(--brand-700); } .v-sky { color: #0369a1; }
-@media (prefers-color-scheme: dark) {
-  .v-emerald { color: #6ee7b7; } .v-rose { color: #fda4af; } .v-brand { color: #ff9470; } .v-sky { color: #7dd3fc; }
-}
 
 /* Distribuição */
 .dist { padding: 0 20px 20px; }
@@ -631,8 +642,15 @@ body {
 .tbl .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tbl .date { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--muted); }
 .n-rose { color: #be123c; font-weight: 700; } .n-brand { color: var(--brand-700); font-weight: 700; } .n-zero { color: var(--muted); opacity: 0.6; }
-@media (prefers-color-scheme: dark) { .n-rose { color: #fda4af; } .n-brand { color: #ff9470; } }
-.item-title { font-weight: 600; color: var(--ink); }
+.item-title { font-weight: 600; color: var(--ink); line-height: 1.4; }
+.tbl.fixed { table-layout: fixed; }
+.tbl.fixed td { overflow-wrap: anywhere; }
+.row-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 6px; }
+.row-meta .person { gap: 6px; }
+.row-meta .avatar { width: 20px; height: 20px; font-size: 9px; }
+.row-meta .person-name { font-weight: 500; color: var(--ink); }
+.row-meta .sep { color: var(--line); }
+.tbl-wrap:not(.x) { overflow-x: hidden; }
 .item-meta { margin-top: 2px; font-size: 12px; color: var(--muted); }
 .desc {
   margin-top: 6px; font-size: 12.5px; color: var(--muted); line-height: 1.5; max-width: 520px;
@@ -640,7 +658,7 @@ body {
   cursor: pointer; white-space: pre-line;
 }
 .desc.open { -webkit-line-clamp: unset; display: block; }
-.note { margin-top: 8px; font-size: 12px; padding: 6px 10px; border-radius: 10px; background: var(--line-soft); color: var(--ink); }
+.note { margin-top: 10px; line-height: 1.45; font-size: 12px; padding: 6px 10px; border-radius: 10px; background: var(--line-soft); color: var(--ink); }
 .note b { font-weight: 600; color: var(--muted); }
 .note.missing { background: var(--rose-bg); color: var(--rose-fg); }
 
@@ -663,8 +681,16 @@ body {
 .avatar {
   display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
   background: var(--brand-soft); color: var(--brand-700); font-size: 10.5px; font-weight: 700; letter-spacing: 0.02em;
+  overflow: hidden; box-shadow: 0 0 0 1px rgb(145 158 171 / 0.25);
 }
-@media (prefers-color-scheme: dark) { .avatar { color: #ff9470; } }
+.avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.head-main { display: flex; align-items: center; gap: 18px; min-width: 0; }
+.head-people { display: flex; flex-shrink: 0; }
+.head-people .avatar { width: 64px; height: 64px; font-size: 20px; box-shadow: 0 0 0 3px #fff, 0 8px 20px -8px rgb(33 43 54 / 0.35); }
+.head-people .avatar + .avatar { margin-left: -16px; }
+.head-people.many .avatar { width: 48px; height: 48px; font-size: 15px; }
+.head-people.many .avatar + .avatar { margin-left: -12px; }
+.head-people .more { background: var(--line-soft); color: var(--muted); }
 .person-name { font-weight: 500; }
 
 .progress-cell { white-space: nowrap; }
@@ -773,6 +799,21 @@ export function checkpointFilename(
 export function buildCheckpointHtml(input: CheckpointHtmlInput): string {
   const person = input.personName.trim() || 'Responsável'
   const dev = input.perfil === 'dev'
+  fotosAtuais = input.fotos ?? {}
+  const nomesCabecalho = person
+    .split(',')
+    .map((n) => n.trim())
+    .filter((n) => n && n !== 'Responsável')
+  const visiveis = nomesCabecalho.slice(0, 4)
+  const cabecalhoPessoas = visiveis.length
+    ? `<div class="head-people${visiveis.length > 1 ? ' many' : ''}">${visiveis
+        .map((n) => avatar(n))
+        .join('')}${
+        nomesCabecalho.length > visiveis.length
+          ? `<span class="avatar more">+${nomesCabecalho.length - visiveis.length}</span>`
+          : ''
+      }</div>`
+    : ''
   const hoje = isoLocal(input.generatedAt)
   const linhas = input.items.map((i) => montarLinha(i, hoje))
   const total = linhas.length
@@ -793,11 +834,11 @@ export function buildCheckpointHtml(input: CheckpointHtmlInput): string {
     .filter((l) => grupoFiltro(l) === 'entregue')
     .reduce((s, l) => s + l.minutos, 0)
 
-  // Farol: vermelho com atraso em aberto; amarelo com prazo curto ou entrega atrasada.
+  // Farol: vermelho com atraso em aberto; amarelo só com prazo a até 3 dias.
   const farol: 'g' | 'y' | 'r' =
-    atrasados > 0 ? 'r' : risco > 0 || comAtraso > 0 ? 'y' : 'g'
+    atrasados > 0 ? 'r' : risco > 0 ? 'y' : 'g'
   const farolInfo = {
-    g: { titulo: 'Em dia', box: 'ib-emerald', icone: 'check' },
+    g: { titulo: 'Saudável', box: 'ib-emerald', icone: 'check' },
     y: { titulo: 'Requer atenção', box: 'ib-amber', icone: 'alert' },
     r: { titulo: 'Crítico', box: 'ib-rose', icone: 'octagon' },
   }[farol]
@@ -816,7 +857,7 @@ export function buildCheckpointHtml(input: CheckpointHtmlInput): string {
   } else if (abertos === 0) {
     alerta = '<b>Todos os itens foram entregues.</b>'
   } else {
-    alerta = `Nenhum atraso em aberto e nada vencendo nos próximos ${JANELA_RISCO_DIAS} dias.`
+    alerta = `<b>Tudo no prazo.</b> Nenhum atraso em aberto e nada vencendo nos próximos ${JANELA_RISCO_DIAS} dias.`
   }
   const progresso =
     total === 0
@@ -941,6 +982,18 @@ export function buildCheckpointHtml(input: CheckpointHtmlInput): string {
     }`
   }
 
+  const celulaAtencao = (l: Linha) => {
+    const meta = [
+      l.responsavel !== '—' ? pessoa(l.responsavel) : '',
+      l.empresa !== '—' ? `<span>${escapeHtml(l.empresa)}</span>` : '',
+    ]
+      .filter(Boolean)
+      .join('<span class="sep">·</span>')
+    return `<div class="item-title">${escapeHtml(l.oQue)}</div>${
+      meta ? `<div class="item-meta row-meta">${meta}</div>` : ''
+    }`
+  }
+
   // Atrasos em aberto e entregas fora do prazo, com a justificativa.
   const atencao = linhas
     .filter((l) => l.situacao === 'atrasado' || l.situacao === 'entregue_atraso')
@@ -953,8 +1006,7 @@ export function buildCheckpointHtml(input: CheckpointHtmlInput): string {
           ? '<div class="note missing">Sem justificativa registrada</div>'
           : ''
       return `<tr>
-          <td>${celulaItem(l, {})}${motivo}</td>
-          <td>${pessoa(l.responsavel)}</td>
+          <td>${celulaAtencao(l)}${motivo}</td>
           <td class="date">${escapeHtml(formatDate(l.prazo))}</td>
           <td>${situacaoBadge(l)}</td>
         </tr>`
@@ -968,8 +1020,7 @@ export function buildCheckpointHtml(input: CheckpointHtmlInput): string {
   const proximosRows = proximos
     .map(
       (l) => `<tr>
-          <td>${celulaItem(l, {})}</td>
-          <td>${pessoa(l.responsavel)}</td>
+          <td>${celulaAtencao(l)}</td>
           <td class="date">${escapeHtml(formatDate(l.prazo))}</td>
           <td>${situacaoBadge(l)}</td>
         </tr>`,
@@ -982,7 +1033,7 @@ export function buildCheckpointHtml(input: CheckpointHtmlInput): string {
     vazioTexto: string,
   ) =>
     rows
-      ? `<div class="tbl-wrap" style="--h: 380px"><table class="tbl"><thead><tr><th>Item</th><th>Responsável</th><th>Prazo</th><th>Situação</th></tr></thead><tbody>${rows}</tbody></table></div>`
+      ? `<div class="tbl-wrap" style="--h: 380px"><table class="tbl fixed"><colgroup><col /><col style="width:108px" /><col style="width:168px" /></colgroup><thead><tr><th>Item</th><th>Prazo</th><th>Situação</th></tr></thead><tbody>${rows}</tbody></table></div>`
       : `<div class="empty"><b>${escapeHtml(vazioTitulo)}</b>${escapeHtml(vazioTexto)}</div>`
 
   const porResp = agrupar(linhas, (l) =>
@@ -1081,6 +1132,7 @@ export function buildCheckpointHtml(input: CheckpointHtmlInput): string {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light" />
   <title>Checkpoint · ${safePerson} · ${escapeHtml(compLabel)}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -1090,10 +1142,13 @@ export function buildCheckpointHtml(input: CheckpointHtmlInput): string {
 <body>
   <div class="page">
     <header class="page-head">
-      <div>
-        <span class="chip"><span class="dot"></span>Checkpoint</span>
-        <h1>${escapeHtml(compLabel)}</h1>
-        <p class="lead">${safePerson} · Gerado em ${escapeHtml(formatGeneratedDate(input.generatedAt))}</p>
+      <div class="head-main">
+        ${cabecalhoPessoas}
+        <div>
+          <span class="chip"><span class="dot"></span>Checkpoint</span>
+          <h1>${escapeHtml(compLabel)}</h1>
+          <p class="lead">${safePerson} · Gerado em ${escapeHtml(formatGeneratedDate(input.generatedAt))}</p>
+        </div>
       </div>
       <div class="wordmark">nstech<small>Your Logistics Advantage</small></div>
     </header>
@@ -1154,7 +1209,7 @@ export function buildCheckpointHtml(input: CheckpointHtmlInput): string {
         </div>
         <span class="shown" id="mostrando"></span>
       </div>
-      <div class="tbl-wrap" style="--h: 560px">
+      <div class="tbl-wrap x" style="--h: 560px">
         <table class="tbl wide">
           <thead><tr>
             <th>Item</th><th>Empresa</th><th>Responsável</th>
