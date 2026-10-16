@@ -323,9 +323,9 @@ function pessoa(nome: string): string {
   const nomes = nome.split(' / ').map((n) => n.trim()).filter(Boolean)
   const primeiro = nomes[0] ?? nome
   const extra = nomes.length > 1 ? ` <span class="muted">+${nomes.length - 1}</span>` : ''
-  return `<span class="person" title="${escapeHtml(nomes.join(', '))}">${avatar(
-    primeiro,
-  )}<span class="person-name">${escapeHtml(nomeCurto(primeiro))}</span>${extra}</span>`
+  return `<span class="person" title="${escapeHtml(nomes.join(', '))}"><span class="person-name">${escapeHtml(
+    nomeCurto(primeiro),
+  )}</span>${extra}</span>`
 }
 
 /** Baixa as fotos e reduz para 176px, para o HTML funcionar offline. */
