@@ -1,11 +1,26 @@
 import { formatDate, formatHorario, isEntregue } from './format'
+import { tarefaCategoriaLabel } from '../types'
 import type { StatusObrigacao, WorkItem } from '../types'
+
+/** 'dev': quebra por solicitante e tipo, com horas, no lugar de BU/empresa. */
+export type PerfilCheckpoint = 'padrao' | 'dev'
+
+const LOGINS_DESENVOLVEDOR = ['matheus.silva-oliveira@nstech.com.br']
+
+export function perfilCheckpointPorLogin(
+  email: string | null | undefined,
+): PerfilCheckpoint {
+  return LOGINS_DESENVOLVEDOR.includes((email ?? '').trim().toLowerCase())
+    ? 'dev'
+    : 'padrao'
+}
 
 export interface CheckpointHtmlInput {
   personName: string
   competenciaMonth: string
   generatedAt: Date
   items: WorkItem[]
+  perfil?: PerfilCheckpoint
 }
 
 /** Janela (dias) para considerar um item aberto como "vence em breve". */
@@ -25,6 +40,10 @@ interface Linha {
   empresa: string
   bu: string
   responsavel: string
+  solicitante: string
+  tipo: string
+  /** Minutos planejados (hora_inicio → hora_fim). */
+  minutos: number
   prazo: string | null
   entrega: string | null
   situacao: Situacao
@@ -129,6 +148,24 @@ function oQueDoItem(item: WorkItem): string {
   return item.title
 }
 
+function minutosPlanejados(item: WorkItem): number {
+  const toMin = (v: string | null | undefined) => {
+    if (!v) return null
+    const [h, m] = v.split(':').map(Number)
+    return Number.isNaN(h) ? null : h * 60 + (m || 0)
+  }
+  const a = toMin(item.horaInicio)
+  const b = toMin(item.horaFim)
+  return a !== null && b !== null && b > a ? b - a : 0
+}
+
+function formatHoras(minutos: number): string {
+  if (minutos <= 0) return '—'
+  const h = Math.floor(minutos / 60)
+  const m = minutos % 60
+  return m ? `${h}h${String(m).padStart(2, '0')}` : `${h}h`
+}
+
 function montarLinha(item: WorkItem, hoje: string): Linha {
   const prazo = item.prazo?.slice(0, 10) || null
   const entrega = dataEntrega(item)
@@ -166,6 +203,15 @@ function montarLinha(item: WorkItem, hoje: string): Linha {
     empresa: nomeEmpresa(item),
     bu: buEmpresa(item),
     responsavel: item.responsavelNome?.trim() || '—',
+    solicitante:
+      item.solicitanteNome?.trim() ||
+      item.tarefa?.solicitante_nome?.trim() ||
+      (item.origem === 'obrigacao' ? 'Obrigação fiscal' : 'Sem solicitante'),
+    tipo:
+      item.obrigacao?.atividade?.nome?.trim() ||
+      item.tarefa?.atividade?.nome?.trim() ||
+      tarefaCategoriaLabel(item.categoria),
+    minutos: minutosPlanejados(item),
     prazo,
     entrega,
     situacao,
@@ -236,6 +282,7 @@ interface Grupo {
   noPrazo: number
   atrasados: number
   risco: number
+  minutos: number
 }
 
 function agrupar(linhas: Linha[], chave: (l: Linha) => string[]): Grupo[] {
@@ -244,8 +291,9 @@ function agrupar(linhas: Linha[], chave: (l: Linha) => string[]): Grupo[] {
     for (const nome of chave(l)) {
       const g =
         map.get(nome) ??
-        { nome, total: 0, entregues: 0, noPrazo: 0, atrasados: 0, risco: 0 }
+        { nome, total: 0, entregues: 0, noPrazo: 0, atrasados: 0, risco: 0, minutos: 0 }
       g.total += 1
+      g.minutos += l.minutos
       if (l.situacao === 'entregue_prazo' || l.situacao === 'entregue_atraso') {
         g.entregues += 1
       }
@@ -264,7 +312,11 @@ function agrupar(linhas: Linha[], chave: (l: Linha) => string[]): Grupo[] {
   )
 }
 
-function tabelaGrupos(titulo: string, grupos: Grupo[]): string {
+function tabelaGrupos(
+  titulo: string,
+  grupos: Grupo[],
+  comHoras = false,
+): string {
   const rows = grupos
     .map((g) => {
       const p = pct(g.entregues, g.total)
@@ -274,6 +326,7 @@ function tabelaGrupos(titulo: string, grupos: Grupo[]): string {
           <td class="num">${g.entregues}</td>
           <td class="num ${g.atrasados ? 'late' : 'zero'}">${g.atrasados}</td>
           <td class="num ${g.risco ? 'warn' : 'zero'}">${g.risco}</td>
+          ${comHoras ? `<td class="num">${formatHoras(g.minutos)}</td>` : ''}
           <td class="bar-cell">
             <div class="mini"><span style="width:${p}%"></span></div>
             <b>${p}%</b>
@@ -290,6 +343,7 @@ function tabelaGrupos(titulo: string, grupos: Grupo[]): string {
           <th class="num">Entregues</th>
           <th class="num">Atrasados</th>
           <th class="num">Vencendo</th>
+          ${comHoras ? '<th class="num">Horas</th>' : ''}
           <th>Conclusão</th>
         </tr></thead>
         <tbody>${rows}</tbody>
@@ -364,7 +418,7 @@ h3 .count { color: var(--muted); font-weight: 600; }
 .ring .lbl { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
 .ring .lbl b { font-size: 1.5rem; font-weight: 800; display: block; line-height: 1; }
 .ring .lbl small { font-size: .66rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
-.kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
 .kpi { background: var(--card); border: 1px solid #EAECF0; border-radius: 12px; padding: 14px 16px; border-left: 4px solid var(--a, var(--laranja)); }
 .kpi .k { font-size: .74rem; color: var(--muted); font-weight: 600; }
 .kpi .v { font-size: 1.9rem; font-weight: 800; letter-spacing: -.03em; line-height: 1.15; margin-top: 2px; }
@@ -421,7 +475,7 @@ footer.foot { text-align: center; color: var(--muted); font-size: .72rem; paddin
   header.top { padding: 18px 0 64px; }
   .wrap { max-width: none; padding: 0; }
   .card, .kpi { box-shadow: none; break-inside: avoid; }
-  .kpis { grid-template-columns: repeat(5, 1fr); }
+  .kpis { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
   .two { grid-template-columns: 1fr 1fr; }
   .tbl tr { break-inside: avoid; }
 }
@@ -552,8 +606,7 @@ export function buildCheckpointHtml(input: CheckpointHtmlInput): string {
     )
     .join('')
 
-  const porEmpresa = agrupar(linhas, (l) => [l.empresa])
-  const porBu = agrupar(linhas, (l) => [l.bu])
+  const dev = input.perfil === 'dev'
   const porResp = agrupar(linhas, (l) =>
     l.responsavel === '—'
       ? ['Sem responsável']
@@ -562,8 +615,24 @@ export function buildCheckpointHtml(input: CheckpointHtmlInput): string {
 
   const blocosGrupo: string[] = []
   if (porResp.length > 1) blocosGrupo.push(tabelaGrupos('Por responsável', porResp))
-  if (porBu.length > 1) blocosGrupo.push(tabelaGrupos('Por BU', porBu))
-  blocosGrupo.push(tabelaGrupos('Por empresa', porEmpresa.slice(0, 15)))
+  if (dev) {
+    const porSolicitante = agrupar(linhas, (l) => [l.solicitante])
+    const porTipo = agrupar(linhas, (l) => [l.tipo])
+    blocosGrupo.push(tabelaGrupos('Por solicitante', porSolicitante, true))
+    blocosGrupo.push(tabelaGrupos('Por tipo de atividade', porTipo, true))
+  } else {
+    const porBu = agrupar(linhas, (l) => [l.bu])
+    const porEmpresa = agrupar(linhas, (l) => [l.empresa])
+    if (porBu.length > 1) blocosGrupo.push(tabelaGrupos('Por BU', porBu))
+    blocosGrupo.push(tabelaGrupos('Por empresa', porEmpresa.slice(0, 15)))
+  }
+  const minutosTotal = linhas.reduce((s, l) => s + l.minutos, 0)
+  const minutosEntregues = linhas
+    .filter((l) => l.situacao === 'entregue_prazo' || l.situacao === 'entregue_atraso')
+    .reduce((s, l) => s + l.minutos, 0)
+  const kpiHoras = dev
+    ? `<div class="kpi" style="--a: var(--azul)"><div class="k">Horas planejadas</div><div class="v">${formatHoras(minutosTotal)}</div><div class="s">${formatHoras(minutosEntregues)} já entregues</div></div>`
+    : ''
 
   const detalheRows = [...linhas]
     .sort(porCriticidade)
@@ -625,6 +694,7 @@ export function buildCheckpointHtml(input: CheckpointHtmlInput): string {
       <div class="kpi" style="--a: #12B76A"><div class="k">Pontualidade</div><div class="v">${entregues ? `${pontualidade}%` : '—'}</div><div class="s">${noPrazo} no prazo · ${comAtraso} com atraso</div></div>
       <div class="kpi" style="--a: #FDB022"><div class="k">Vencem em ${JANELA_RISCO_DIAS} dias</div><div class="v">${risco}</div><div class="s">${andamento + pendentes} demais em aberto</div></div>
       <div class="kpi" style="--a: var(--vermelho)"><div class="k">Atrasados</div><div class="v">${atrasados}</div><div class="s">em aberto hoje</div></div>
+      ${kpiHoras}
     </section>
 
     <section class="card" aria-label="Distribuição">

@@ -6,6 +6,7 @@ const AVATAR_PREVIEW: Record<string, string> = {
   flávia: '/avatars/flavia.jpg',
   flavia: '/avatars/flavia.jpg',
   viviane: '/avatars/viviane.jpg',
+  matheus: '/avatars/matheus.jpg',
 }
 
 /** Resolve URL da foto: `foto_url` do banco ou preview por primeiro nome. */

@@ -18,6 +18,7 @@ import {
   buildCheckpointHtml,
   checkpointFilename,
   downloadCheckpointHtml,
+  perfilCheckpointPorLogin,
 } from '../lib/checkpointHtml'
 import {
   currentCompetenciaMonth,
@@ -265,6 +266,7 @@ export default function MinhasTarefas() {
         competenciaMonth: filters.competencia,
         generatedAt: new Date(),
         items: workItems,
+        perfil: perfilCheckpointPorLogin(session?.user?.email),
       })
       downloadCheckpointHtml(
         html,
