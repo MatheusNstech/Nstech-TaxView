@@ -115,6 +115,29 @@ def test_entrega_parcial_grava_data_pede_motivo_se_vencida_e_nao_atrasa():
     assert row["data_entrega"] == (PRAZO_VENCIDO - timedelta(days=1)).isoformat()
 
 
+def test_concluir_parcial_registrada_apos_o_prazo_nao_pede_motivo():
+    # Caso real: prazo vencido, parcial registrada depois, sem motivo.
+    parcial = (PRAZO_VENCIDO + timedelta(days=3)).isoformat()
+    fake, oid = _obrigacao_db(status="ENTREGA_PARCIAL", data_entrega=parcial)
+    out = _patch_obrigacao(fake, oid, status="ENTREGUE")
+    row = fake.db["obrigacoes"][0]
+    assert out["status"] == "ENTREGUE"
+    assert row["data_entrega"] == parcial
+    assert not row.get("motivo_atraso")
+
+    entregue_em = f"{parcial}T15:00:00+00:00"
+    current = _current_row(
+        prazo=PRAZO_VENCIDO.isoformat(), status="ENTREGA_PARCIAL", entregue_em=entregue_em
+    )
+    client = FakeClient(current)
+    saved = client.store["tarefas"][str(TAREFA_ID)]
+    with patch("app.api.routes.tarefas.assert_tarefa_in_scope", side_effect=lambda *a: dict(saved)):
+        out = update_tarefa(TAREFA_ID, TarefaUpdate(status="ENTREGUE"), _user(), client)  # type: ignore[arg-type]
+    assert out["status"] == "ENTREGUE"
+    assert saved["entregue_em"] == entregue_em
+    assert not saved.get("motivo_atraso")
+
+
 def test_reabrir_tarefa_entregue_no_prazo_e_reentregar():
     entregue_em = f"{(PRAZO_VENCIDO - timedelta(days=1)).isoformat()}T15:00:00+00:00"
     current = _current_row(
@@ -143,3 +166,20 @@ def test_frases_de_parcial_e_reabertura():
     assert frase_acao_equipe("Flávia", ["Felipe"], "ENTREGUE", "EM_REVISAO") == (
         "Flávia reabriu a tarefa de Felipe"
     )
+
+
+def test_item_que_passou_pela_parcial_nunca_conta_fora_do_prazo():
+    from app.services.pptx_export import _late_delivery
+
+    atrasada = (PRAZO_VENCIDO + timedelta(days=3)).isoformat()
+    row = {"data_entrega": atrasada}
+    assert _late_delivery(row, PRAZO_VENCIDO, "obrigacao") is not None
+    assert _late_delivery({**row, "via_entrega_parcial": True}, PRAZO_VENCIDO, "obrigacao") is None
+
+    # Reaberta depois da parcial e entregue de novo: também sem motivo.
+    fake, oid = _obrigacao_db(
+        status="EM_ANDAMENTO", entrega_original=atrasada, via_entrega_parcial=True
+    )
+    out = _patch_obrigacao(fake, oid, status="ENTREGUE")
+    assert out["status"] == "ENTREGUE"
+    assert not fake.db["obrigacoes"][0].get("motivo_atraso")

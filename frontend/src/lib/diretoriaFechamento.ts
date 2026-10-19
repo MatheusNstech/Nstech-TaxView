@@ -73,6 +73,8 @@ export function fechamentoStatus(o: Obrigacao, today: Date = new Date()): Fecham
   const todayStr = todayIso(today)
 
   if (isEntregue(o.status)) {
+    // Entrega parcial nunca conta como fora do prazo (o resto depende de outros times).
+    if (o.via_entrega_parcial) return 'no_prazo'
     if (entrega && prazo && entrega > prazo) return 'fora_prazo'
     return 'no_prazo'
   }

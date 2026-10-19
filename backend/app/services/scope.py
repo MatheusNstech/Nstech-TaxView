@@ -133,7 +133,7 @@ def assert_tarefa_in_scope(
         client.table("tarefas")
         .select(
             "id,responsavel_id,created_by,status,prazo,hora_inicio,hora_fim,"
-            "motivo_atraso,entregue_em,entrega_original"
+            "motivo_atraso,entregue_em,entrega_original,via_entrega_parcial"
         )
         .eq("id", tarefa_id)
         .limit(1)

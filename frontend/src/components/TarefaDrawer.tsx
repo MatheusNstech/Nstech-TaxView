@@ -49,6 +49,8 @@ function isLateEntrega(
   tarefa: Tarefa,
 ): boolean {
   if (!isEntregue(status)) return false
+  // Parcial -> Entregue nunca é atraso: o prazo já foi medido na parcial.
+  if (tarefa.status === 'ENTREGA_PARCIAL' || tarefa.via_entrega_parcial) return false
   const prazo = prazoIso?.slice(0, 10)
   // Reaberta ou já entregue (parcial -> entregue): vale a data da entrega.
   const entrega =

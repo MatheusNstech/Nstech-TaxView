@@ -165,6 +165,8 @@ export interface Obrigacao {
   urgencia: string | null
   /** Data da entrega guardada ao reabrir; preenchida = reaberta. */
   entrega_original?: string | null
+  /** Passou por Entrega parcial: nunca conta como entregue fora do prazo. */
+  via_entrega_parcial?: boolean
   aprovado_por?: string | null
   aprovado_em?: string | null
   reprovado_motivo?: string | null
@@ -188,6 +190,8 @@ export interface Tarefa {
   motivo_atraso: string | null
   entregue_em: string | null
   entrega_original?: string | null
+  /** Passou por Entrega parcial: nunca conta como entregue fora do prazo. */
+  via_entrega_parcial?: boolean
   created_by: string | null
   created_at?: string | null
   updated_at?: string | null

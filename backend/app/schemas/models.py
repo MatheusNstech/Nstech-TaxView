@@ -273,6 +273,8 @@ class ObrigacaoOut(ObrigacaoBase):
     responsaveis: list[ResponsavelOut] = Field(default_factory=list)
     urgencia: str | None = None
     entrega_original: date | None = None
+    # Passou por Entrega parcial: nunca conta como entregue fora do prazo.
+    via_entrega_parcial: bool = False
     aprovado_por: UUID | None = None
     aprovado_em: datetime | None = None
     reprovado_motivo: str | None = None
@@ -506,6 +508,8 @@ class TarefaOut(BaseModel):
     motivo_atraso: str | None = None
     entregue_em: datetime | None = None
     entrega_original: datetime | None = None
+    # Passou por Entrega parcial: nunca conta como entregue fora do prazo.
+    via_entrega_parcial: bool = False
     created_by: UUID | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None

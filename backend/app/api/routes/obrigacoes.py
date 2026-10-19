@@ -566,7 +566,12 @@ def update_obrigacao(
         ja_entregue = entrega_original or as_br_date(before.get("data_entrega"))
         dia_entrega = ja_entregue or today
         late = before.get("status") == "ATRASADO" and not ja_entregue
-        if not late and ref:
+        # Concluir a parcial não é atraso: o prazo já foi medido na parcial,
+        # o que falta depende de outros times.
+        finalizando_parcial = before.get("status") == "ENTREGA_PARCIAL" or bool(
+            before.get("via_entrega_parcial")
+        )
+        if not late and ref and not finalizando_parcial:
             try:
                 late = date.fromisoformat(str(ref)[:10]) < dia_entrega
             except ValueError:

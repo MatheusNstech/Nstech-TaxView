@@ -57,6 +57,8 @@ function todayIsoLocal(): string {
 }
 
 function isLateWorkItem(item: WorkItem): boolean {
+  // Entrega parcial nunca conta como fora do prazo (o resto depende de outros times).
+  if (item.obrigacao?.via_entrega_parcial || item.tarefa?.via_entrega_parcial) return false
   const prazo = item.prazo?.slice(0, 10)
   // Reaberta ou já entregue (parcial -> entregue): vale a data da entrega.
   const entrega =
@@ -325,7 +327,14 @@ export default function MinhasTarefas() {
     }
 
     const motivoGravado = item.obrigacao?.motivo_atraso ?? item.tarefa?.motivo_atraso
-    if (isEntregue(status) && isLateWorkItem(item) && !motivoGravado?.trim()) {
+    // Parcial -> Entregue nunca é atraso: o prazo já foi medido na parcial.
+    const finalizandoParcial = item.status === 'ENTREGA_PARCIAL'
+    if (
+      isEntregue(status) &&
+      !finalizandoParcial &&
+      isLateWorkItem(item) &&
+      !motivoGravado?.trim()
+    ) {
       setPendingLateDelivery({ item, status })
       return
     }

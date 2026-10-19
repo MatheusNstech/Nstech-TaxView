@@ -196,6 +196,9 @@ def _title_tarefa(row: dict[str, Any]) -> str:
 
 
 def _late_delivery(row: dict[str, Any], prazo: date, kind: str) -> date | None:
+    # Entrega parcial nunca conta como fora do prazo (o resto depende de outros times).
+    if row.get("via_entrega_parcial"):
+        return None
     if kind == "tarefa":
         delivered = _as_date(row.get("entregue_em"))
     else:

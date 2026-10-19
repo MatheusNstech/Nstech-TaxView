@@ -449,7 +449,11 @@ def update_tarefa(
             patch["entrega_original"] = None
         # Já entregue (parcial -> entregue) ou reaberta: vale a data da entrega.
         dia_entrega = as_br_date(entrega_original or current.get("entregue_em"))
-        if dia_entrega:
+        if current.get("status") == "ENTREGA_PARCIAL" or current.get("via_entrega_parcial"):
+            # Concluir a parcial não é atraso: o prazo já foi medido na parcial,
+            # o que falta depende de outros times.
+            late = False
+        elif dia_entrega:
             late = bool(prazo and prazo < dia_entrega)
         else:
             late = _is_late_entrega(

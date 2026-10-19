@@ -166,7 +166,11 @@ function montarLinha(item: WorkItem, hoje: string): Linha {
   let diasParaPrazo: number | null = null
 
   if (isEntregue(item.status)) {
-    const atrasou = Boolean(prazo && entrega && entrega > prazo)
+    // Entrega parcial nunca conta como fora do prazo (o resto depende de outros times).
+    const viaParcial = Boolean(
+      item.obrigacao?.via_entrega_parcial ?? item.tarefa?.via_entrega_parcial,
+    )
+    const atrasou = !viaParcial && Boolean(prazo && entrega && entrega > prazo)
     situacao = atrasou ? 'entregue_atraso' : 'entregue_prazo'
     if (atrasou && prazo && entrega) diasAtraso = diffDias(prazo, entrega)
   } else if (
