@@ -40,10 +40,15 @@ function formatPct(pct: number): string {
 
 export default function PainelFiscalValorComposite({
   totalValor,
+  totalEntregue = 0,
+  pendenciasEntregues = 0,
   porOrgao,
   onSelect,
 }: {
+  /** Em aberto (débitos entregues já saíram). */
   totalValor: number
+  totalEntregue?: number
+  pendenciasEntregues?: number
   porOrgao: Record<string, number>
   onSelect: (orgao: OrgaoModalKey) => void
 }) {
@@ -67,12 +72,20 @@ export default function PainelFiscalValorComposite({
           className="cursor-pointer text-left transition hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
         >
           <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--color-muted)]">
-            Valor total
+            Valor em aberto
           </p>
           <p className="mt-3 text-3xl font-bold tracking-tight tabular-nums text-brand-600 sm:text-4xl">
             {formatMoneyBRL(totalValor)}
           </p>
           <p className="mt-2 text-xs text-[color:var(--color-muted)]">
+            {pendenciasEntregues > 0 ? (
+              <>
+                <span className="font-semibold text-emerald-700 dark:text-emerald-300">
+                  {formatMoneyBRL(totalEntregue)} entregue
+                </span>
+                {` em ${pendenciasEntregues} ${pendenciasEntregues === 1 ? 'débito' : 'débitos'} · `}
+              </>
+            ) : null}
             Ver detalhes
           </p>
         </button>

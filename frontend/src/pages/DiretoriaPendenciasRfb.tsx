@@ -6,7 +6,6 @@ import PainelFiscalCndModal, {
   type CndFilter,
   type CndModalRow,
 } from '../components/painel-fiscal/PainelFiscalCndModal'
-import PainelFiscalEmpresaSheet from '../components/painel-fiscal/PainelFiscalEmpresaSheet'
 import PainelFiscalObservacoesPanel, {
   buildObservacoesFromPivot,
 } from '../components/painel-fiscal/PainelFiscalObservacoesPanel'
@@ -15,10 +14,13 @@ import PainelFiscalOrgaoModal, {
 } from '../components/painel-fiscal/PainelFiscalOrgaoModal'
 import PainelFiscalStatusComposite from '../components/painel-fiscal/PainelFiscalStatusComposite'
 import PainelFiscalValorComposite from '../components/painel-fiscal/PainelFiscalValorComposite'
+import PendenciaDetalheModal, {
+  type NovaPendencia,
+} from '../components/painel-fiscal/PendenciaDetalheModal'
+import PendenciasEmpresaModal from '../components/painel-fiscal/PendenciasEmpresaModal'
 import { AuthSkeleton } from '../components/ui/PageSkeletons'
 import { useAuth } from '../context/AuthContext'
 import { apiFetch, buildQuery } from '../lib/api'
-import { formatMoneyBRL } from '../lib/format'
 import type { PainelFiscalPendencia, PainelFiscalSummary } from '../types'
 
 type EmpresaPivot = {
@@ -26,7 +28,9 @@ type EmpresaPivot = {
   cadin: number
   pgfn: number
   rfb: number
+  /** Valores em aberto: débito entregue não soma. */
   total: number
+  entregues: number
   rows: PainelFiscalPendencia[]
 }
 
@@ -87,6 +91,9 @@ export default function DiretoriaPendenciasRfb() {
   const [selectedCndFilter, setSelectedCndFilter] = useState<CndFilter | null>(
     null,
   )
+  const [selectedPendencia, setSelectedPendencia] =
+    useState<PainelFiscalPendencia | null>(null)
+  const [novaPendencia, setNovaPendencia] = useState<NovaPendencia | null>(null)
 
   const loadData = useCallback(async (opts?: { silent?: boolean }) => {
     if (!opts?.silent) setLoading(true)
@@ -125,7 +132,14 @@ export default function DiretoriaPendenciasRfb() {
         pgfn: 0,
         rfb: 0,
         total: 0,
+        entregues: 0,
         rows: [],
+      }
+      current.rows.push(row)
+      map.set(key, current)
+      if (row.entregue_em) {
+        current.entregues += 1
+        continue
       }
       const valor = Number(row.total ?? 0)
       const bucket = orgaoBucket(row.orgao)
@@ -133,8 +147,6 @@ export default function DiretoriaPendenciasRfb() {
       if (bucket === 'PGFN') current.pgfn += valor
       if (bucket === 'RFB') current.rfb += valor
       current.total += valor
-      current.rows.push(row)
-      map.set(key, current)
     }
     return [...map.values()].sort((a, b) => b.total - a.total)
   }, [rows])
@@ -148,6 +160,7 @@ export default function DiretoriaPendenciasRfb() {
         pgfn: 0,
         rfb: 0,
         total: 0,
+        entregues: 0,
         rows: [] as PainelFiscalPendencia[],
       }
     )
@@ -257,25 +270,26 @@ export default function DiretoriaPendenciasRfb() {
     setSelectedEmpresa(null)
   }
 
-  const confirmPicker = () => {
-    const name = pickerEmpresa.trim()
-    if (!name) return
-    setPickerOpen(false)
-    setPickerEmpresa('')
-    openEmpresa(name)
-  }
-
-  const sheetDefaults = useMemo(() => {
-    const first = selectedPivot?.rows[0]
+  /** Dados da empresa (e competência do filtro) para uma pendência nova. */
+  const novaPara = (empresa: string): NovaPendencia => {
+    const first = pivot.find((item) => item.empresa === empresa)?.rows[0]
     return {
-      empresa: selectedPivot?.empresa ?? '',
+      empresa,
       razao_social: first?.razao_social ?? '',
       cnpj: first?.cnpj ?? '',
       uf: first?.uf ?? '',
       ano: ano ? Number(ano) : (first?.ano ?? null),
       mes: mes ? Number(mes) : (first?.mes ?? null),
     }
-  }, [selectedPivot, ano, mes])
+  }
+
+  const confirmPicker = () => {
+    const name = pickerEmpresa.trim()
+    if (!name) return
+    setPickerOpen(false)
+    setPickerEmpresa('')
+    setNovaPendencia(novaPara(name))
+  }
 
   if (loading && !summary) {
     return <AuthSkeleton fullScreen={false} />
@@ -301,7 +315,7 @@ export default function DiretoriaPendenciasRfb() {
               }}
             >
               <Plus className="h-4 w-4" strokeWidth={1.75} />
-              Nova linha
+              Nova pendência
             </button>
           )}
         </div>
@@ -345,6 +359,8 @@ export default function DiretoriaPendenciasRfb() {
           />
           <PainelFiscalValorComposite
             totalValor={summary.total_valor}
+            totalEntregue={summary.total_entregue}
+            pendenciasEntregues={summary.pendencias_entregues}
             porOrgao={summary.por_orgao_valor}
             onSelect={setSelectedOrgao}
           />
@@ -388,11 +404,11 @@ export default function DiretoriaPendenciasRfb() {
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-3xl border border-[color:var(--color-line)] bg-white p-6 shadow-2xl dark:bg-[color:var(--color-panel)]">
             <h2 className="text-lg font-semibold text-[color:var(--color-ink)]">
-              Nova linha
+              Nova pendência
             </h2>
             <p className="mt-1 text-sm text-[color:var(--color-muted)]">
-              Escolha uma empresa existente ou digite um nome novo. A planilha
-              abre com uma linha em branco.
+              Escolha uma empresa existente ou digite um nome novo. Em seguida
+              você preenche o débito.
             </p>
             <label className="mt-4 block text-xs text-[color:var(--color-muted)]">
               Empresa
@@ -424,7 +440,7 @@ export default function DiretoriaPendenciasRfb() {
                 disabled={!pickerEmpresa.trim()}
                 onClick={confirmPicker}
               >
-                Abrir planilha
+                Continuar
               </button>
             </div>
           </div>
@@ -432,39 +448,32 @@ export default function DiretoriaPendenciasRfb() {
       )}
 
       {selectedPivot && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-2 sm:p-3 backdrop-blur-sm">
-          <div className="flex max-h-[94vh] w-full max-w-[min(96rem,calc(100vw-1rem))] flex-col overflow-hidden rounded-3xl border border-[color:var(--color-line)] bg-white shadow-2xl dark:bg-[color:var(--color-panel)]">
-            <div className="flex shrink-0 flex-wrap items-start justify-between gap-3 border-b border-[color:var(--color-line)] px-5 py-4">
-              <div>
-                <h2 className="text-lg font-semibold text-[color:var(--color-ink)]">
-                  {selectedPivot.empresa}
-                </h2>
-                <p className="text-xs text-[color:var(--color-muted)]">
-                  {sheetDefaults.razao_social
-                    ? `${sheetDefaults.razao_social} · `
-                    : ''}
-                  {selectedPivot.rows.length} linha(s) ·{' '}
-                  {formatMoneyBRL(selectedPivot.total)}
-                  {painelFiscalEditor
-                    ? ' · edição estilo planilha'
-                    : ''}
-                </p>
-              </div>
-              <button type="button" className="btn-ghost" onClick={closeEmpresa}>
-                Fechar
-              </button>
-            </div>
-            <PainelFiscalEmpresaSheet
-              key={selectedPivot.empresa}
-              rows={selectedPivot.rows}
-              defaults={sheetDefaults}
-              editable={painelFiscalEditor}
-              onChanged={async () => {
-                await loadData({ silent: true })
-              }}
-            />
-          </div>
-        </div>
+        <PendenciasEmpresaModal
+          empresa={selectedPivot.empresa}
+          rows={selectedPivot.rows}
+          editable={painelFiscalEditor}
+          bloqueado={Boolean(selectedPendencia || novaPendencia)}
+          onClose={closeEmpresa}
+          onAbrir={setSelectedPendencia}
+          onNova={() => setNovaPendencia(novaPara(selectedPivot.empresa))}
+        />
+      )}
+
+      {(selectedPendencia || novaPendencia) && (
+        <PendenciaDetalheModal
+          pendencia={selectedPendencia}
+          novo={novaPendencia}
+          editable={painelFiscalEditor}
+          onClose={() => {
+            setSelectedPendencia(null)
+            setNovaPendencia(null)
+          }}
+          onSaved={(saved) => {
+            void loadData({ silent: true })
+            // Pendência nova: abre a empresa para ver o débito na lista.
+            if (novaPendencia) setSelectedEmpresa(saved.empresa)
+          }}
+        />
       )}
     </div>
   )

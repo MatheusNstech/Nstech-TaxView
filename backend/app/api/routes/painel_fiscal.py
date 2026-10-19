@@ -15,7 +15,9 @@ from app.core.auth import (
     require_painel_fiscal_editor,
     require_painel_fiscal_reader,
 )
+from app.services import fiscal_entrega
 from app.services.db import fetch_all, reject_nulls
+from app.services.fiscal_entrega import EntregarBody, FiscalAuditOut, ReabrirBody
 
 router = APIRouter(prefix="/painel-fiscal", tags=["painel-fiscal"])
 
@@ -43,6 +45,25 @@ TEXT_FIELDS = (
     "nota_01",
     "nota_02",
 )
+
+# Rótulos do histórico de edição.
+ROTULOS = {
+    "empresa": "Empresa",
+    "orgao": "Órgão",
+    "total": "Total",
+    "principal": "Principal",
+    "multa": "Multa",
+    "juros": "Juros",
+    "vencimento": "Vencimento",
+    "status_cnd": "Status CND",
+    "cnd": "CND",
+    "validade_cnd": "Validade CND",
+    "nota_01": "Nota 01",
+    "nota_02": "Nota 02",
+    "motivo": "Motivo",
+    "numero_processo": "Nº do processo",
+    "situacao": "Situação",
+}
 
 # Cadastro Tax: 34 empresas, das quais 3 baixadas.
 CADASTRO_TOTAL_EMPRESAS = 34
@@ -88,6 +109,8 @@ class PainelFiscalOut(BaseModel):
     status_cnd: str = ""
     nota_01: str = ""
     nota_02: str = ""
+    entregue_em: date | None = None
+    entrega_obs: str = ""
 
 
 class PainelFiscalCreate(BaseModel):
@@ -167,7 +190,11 @@ class PainelFiscalSummary(BaseModel):
     com_observacao: int
     por_orgao_count: dict[str, int]
     por_orgao_valor: dict[str, float]
+    # Valores em aberto: débito entregue sai do total e dos órgãos.
     total_valor: float
+    total_entregue: float
+    pendencias_abertas: int
+    pendencias_entregues: int
     anos: list[int]
     meses: list[int]
 
@@ -245,7 +272,7 @@ def summary(
 ):
     def build():
         query = client.table(TABLE).select(
-            "id,empresa,cnpj,situacao_cnpj,orgao,total,status_cnd,nota_01,nota_02,ano,mes"
+            "id,empresa,cnpj,situacao_cnpj,orgao,total,status_cnd,nota_01,nota_02,ano,mes,entregue_em"
         )
         if ano is not None:
             query = query.eq("ano", ano)
@@ -286,10 +313,20 @@ def summary(
     # Contagem de empresas distintas por órgão (não linhas)
     orgao_companies: dict[str, set[str]] = {}
     total_valor = 0.0
+    total_entregue = 0.0
+    entregues = 0
     anos: set[int] = set()
     meses: set[int] = set()
 
     for row in rows:
+        if row.get("ano") is not None:
+            anos.add(int(row["ano"]))
+        if row.get("mes") is not None:
+            meses.add(int(row["mes"]))
+        if fiscal_entrega.is_entregue(row):
+            entregues += 1
+            total_entregue += _money(row.get("total"))
+            continue
         orgao = _normalize_orgao(str(row.get("orgao") or ""))
         key = _empresa_nome(row) or _company_key(row)
         orgao_companies.setdefault(orgao, set()).add(key)
@@ -298,10 +335,6 @@ def summary(
         # TOTAL R$ do painel: só CADIN + PGFN + RFB
         if orgao in {"CADIN", "PGFN", "RFB"}:
             total_valor += valor
-        if row.get("ano") is not None:
-            anos.add(int(row["ano"]))
-        if row.get("mes") is not None:
-            meses.add(int(row["mes"]))
 
     for orgao, keys in orgao_companies.items():
         por_count[orgao] = len(keys)
@@ -321,6 +354,9 @@ def summary(
         por_orgao_count=por_count,
         por_orgao_valor={k: round(v, 2) for k, v in por_valor.items()},
         total_valor=round(total_valor, 2),
+        total_entregue=round(total_entregue, 2),
+        pendencias_abertas=len(rows) - entregues,
+        pendencias_entregues=entregues,
         anos=sorted(anos, reverse=True),
         meses=sorted(meses),
     )
@@ -371,6 +407,7 @@ def create_pendencia(
     result = client.table(TABLE).insert(payload).execute().data or []
     if not result:
         raise HTTPException(status_code=400, detail="Falha ao criar registro")
+    fiscal_entrega.registrar(client, "pendencia", result[0]["id"], user, "Pendência criada")
     return PainelFiscalOut.model_validate(result[0])
 
 
@@ -384,6 +421,7 @@ def update_pendencia(
     payload = _payload(body, user_id=user.id)
     if set(payload) <= {"updated_by"}:
         raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
+    antes = _get_row(client, item_id)
     result = (
         client.table(TABLE)
         .update(payload)
@@ -394,4 +432,67 @@ def update_pendencia(
     )
     if not result:
         raise HTTPException(status_code=404, detail="Registro não encontrado")
+    acao = fiscal_entrega.acao_edicao(ROTULOS, antes, result[0])
+    if acao:
+        fiscal_entrega.registrar(client, "pendencia", str(item_id), user, acao)
     return PainelFiscalOut.model_validate(result[0])
+
+
+def _get_row(client: Client, item_id: UUID) -> dict[str, Any]:
+    rows = client.table(TABLE).select("*").eq("id", str(item_id)).limit(1).execute().data or []
+    if not rows:
+        raise HTTPException(status_code=404, detail="Registro não encontrado")
+    return rows[0]
+
+
+def _gravar(
+    client: Client, item_id: UUID, data: dict[str, Any], user: AuthUser
+) -> PainelFiscalOut:
+    result = (
+        client.table(TABLE)
+        .update({**data, "updated_by": user.id})
+        .eq("id", str(item_id))
+        .execute()
+        .data
+        or []
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail="Registro não encontrado")
+    return PainelFiscalOut.model_validate(result[0])
+
+
+@router.post("/{item_id}/entregar", response_model=PainelFiscalOut)
+def entregar_pendencia(
+    item_id: UUID,
+    body: EntregarBody,
+    user: Annotated[AuthUser, Depends(require_painel_fiscal_editor)],
+    client: Annotated[Client, Depends(get_db_client)],
+):
+    """Débito regularizado: sai do valor em aberto da empresa e do órgão."""
+    _get_row(client, item_id)
+    data, acao = fiscal_entrega.payload_entrega(body, user)
+    out = _gravar(client, item_id, data, user)
+    fiscal_entrega.registrar(client, "pendencia", str(item_id), user, acao)
+    return out
+
+
+@router.post("/{item_id}/reabrir", response_model=PainelFiscalOut)
+def reabrir_pendencia(
+    item_id: UUID,
+    body: ReabrirBody,
+    user: Annotated[AuthUser, Depends(require_painel_fiscal_editor)],
+    client: Annotated[Client, Depends(get_db_client)],
+):
+    data, acao = fiscal_entrega.payload_reabertura(_get_row(client, item_id), body)
+    out = _gravar(client, item_id, data, user)
+    fiscal_entrega.registrar(client, "pendencia", str(item_id), user, acao)
+    return out
+
+
+@router.get("/{item_id}/audit", response_model=list[FiscalAuditOut])
+def audit_pendencia(
+    item_id: UUID,
+    _: Annotated[AuthUser, Depends(require_painel_fiscal_reader)],
+    client: Annotated[Client, Depends(get_db_client)],
+):
+    return fiscal_entrega.listar(client, "pendencia", str(item_id))

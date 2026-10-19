@@ -21,6 +21,20 @@ export function statusColor(status: string): string {
   return '#FF3D03'
 }
 
+/** Pílula do status do processo, na cor do gráfico. */
+export function PerdcompStatusPill({ status }: { status: string }) {
+  const label = status || 'Sem status'
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold"
+      style={{ background: `${statusColor(label)}1f`, color: statusColor(label) }}
+    >
+      <span className="h-1.5 w-1.5 rounded-full" style={{ background: statusColor(label) }} aria-hidden />
+      {label}
+    </span>
+  )
+}
+
 function compactMoney(v: number): string {
   if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`
   if (v >= 1000) return `${(v / 1000).toFixed(0)}k`

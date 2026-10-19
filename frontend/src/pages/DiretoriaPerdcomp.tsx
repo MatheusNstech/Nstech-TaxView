@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   AlertOctagon,
   Building2,
-  FileStack,
+  CheckCircle2,
   Plus,
   Search,
   Tags,
@@ -16,7 +16,7 @@ import DiretoriaChartCard from '../components/diretoria/DiretoriaChartCard'
 import PerdcompDrawer from '../components/perdcomp/PerdcompDrawer'
 import PerdcompPrazoChip from '../components/perdcomp/PerdcompPrazoChip'
 import PerdcompStatusChart, {
-  statusColor,
+  PerdcompStatusPill,
 } from '../components/perdcomp/PerdcompStatusChart'
 import { TableSkeleton } from '../components/ui/PageSkeletons'
 import { useAuth } from '../context/AuthContext'
@@ -35,10 +35,11 @@ function KpiCard({
   value: string
   hint?: string
   icon: LucideIcon
-  tone: 'brand' | 'slate' | 'rose' | 'alert'
+  tone: 'brand' | 'slate' | 'rose' | 'alert' | 'emerald'
 }) {
   const iconClass = {
     brand: 'bg-brand-500/15 text-brand-600',
+    emerald: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
     slate: 'bg-slate-500/10 text-slate-600 dark:text-slate-300',
     rose: 'bg-rose-500/15 text-rose-600 dark:text-rose-400',
     alert: 'bg-rose-600 text-white',
@@ -76,25 +77,13 @@ function KpiCard({
   )
 }
 
-function StatusPill({ status }: { status: string }) {
-  const label = status || 'Sem status'
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold"
-      style={{
-        background: `${statusColor(label)}1f`,
-        color: statusColor(label),
-      }}
-    >
-      <span
-        className="h-1.5 w-1.5 rounded-full"
-        style={{ background: statusColor(label) }}
-        aria-hidden
-      />
-      {label}
-    </span>
-  )
-}
+type Situacao = 'aberto' | 'entregue' | 'todos'
+
+const SITUACOES: { id: Situacao; label: string }[] = [
+  { id: 'aberto', label: 'Em aberto' },
+  { id: 'entregue', label: 'Entregues' },
+  { id: 'todos', label: 'Todos' },
+]
 
 export default function DiretoriaPerdcomp() {
   const { painelFiscalEditor } = useAuth()
@@ -105,6 +94,7 @@ export default function DiretoriaPerdcomp() {
   const [statusFiltro, setStatusFiltro] = useState('')
   const [empresaFiltro, setEmpresaFiltro] = useState('')
   const [busca, setBusca] = useState('')
+  const [situacao, setSituacao] = useState<Situacao>('aberto')
   const [drawer, setDrawer] = useState<{
     mode: 'view' | 'edit' | 'create'
     processo: PerdcompProcesso | null
@@ -143,6 +133,8 @@ export default function DiretoriaPerdcomp() {
   const filtered = useMemo(() => {
     const q = busca.trim().toLocaleLowerCase('pt-BR')
     return rows.filter((r) => {
+      if (situacao === 'aberto' && r.entregue_em) return false
+      if (situacao === 'entregue' && !r.entregue_em) return false
       if (statusFiltro && (r.status || 'Sem status') !== statusFiltro) return false
       if (empresaFiltro && r.empresa !== empresaFiltro) return false
       if (!q) return true
@@ -151,15 +143,25 @@ export default function DiretoriaPerdcomp() {
         .toLocaleLowerCase('pt-BR')
         .includes(q)
     })
-  }, [rows, statusFiltro, empresaFiltro, busca])
+  }, [rows, statusFiltro, empresaFiltro, busca, situacao])
 
   const proximosPrazos = useMemo(
     () =>
       rows
-        .filter((r) => r.data_limite)
+        .filter((r) => r.data_limite && !r.entregue_em)
         .sort((a, b) => (a.data_limite ?? '').localeCompare(b.data_limite ?? '')),
     [rows],
   )
+
+  const pctEntregue =
+    summary && summary.valor_total > 0
+      ? Math.round((summary.valor_entregue / summary.valor_total) * 100)
+      : 0
+  const contagem = {
+    aberto: rows.filter((r) => !r.entregue_em).length,
+    entregue: rows.filter((r) => r.entregue_em).length,
+    todos: rows.length,
+  }
 
   const openRow = (processo: PerdcompProcesso) =>
     setDrawer({ mode: painelFiscalEditor ? 'edit' : 'view', processo })
@@ -193,24 +195,29 @@ export default function DiretoriaPerdcomp() {
         <>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <KpiCard
-              title="Valor total pedido"
-              value={formatMoneyBRL(summary.valor_total)}
+              title="Valor em aberto"
+              value={formatMoneyBRL(summary.valor_aberto)}
+              hint={`${summary.processos_abertos} ${summary.processos_abertos === 1 ? 'processo' : 'processos'} · de ${formatMoneyBRL(summary.valor_total)} pedidos`}
               icon={Wallet}
               tone="brand"
             />
             <KpiCard
-              title="Processos"
-              value={String(summary.total_processos)}
-              hint={`${summary.por_empresa.length} ${summary.por_empresa.length === 1 ? 'empresa' : 'empresas'}`}
-              icon={FileStack}
-              tone="slate"
+              title="Entregue"
+              value={formatMoneyBRL(summary.valor_entregue)}
+              hint={
+                summary.processos_entregues > 0
+                  ? `${summary.processos_entregues} de ${summary.total_processos} processos · ${pctEntregue}% do valor`
+                  : 'Nenhum processo entregue ainda'
+              }
+              icon={CheckCircle2}
+              tone="emerald"
             />
             <KpiCard
               title="Valor indeferido"
               value={formatMoneyBRL(summary.valor_indeferido)}
               hint={
                 summary.valor_total > 0
-                  ? `${((summary.valor_indeferido / summary.valor_total) * 100).toFixed(0)}% do total pedido`
+                  ? `Em aberto · ${((summary.valor_indeferido / summary.valor_total) * 100).toFixed(0)}% do total pedido`
                   : undefined
               }
               icon={XCircle}
@@ -268,6 +275,28 @@ export default function DiretoriaPerdcomp() {
           </div>
 
           <div className="glass-panel sticky top-3 z-20 flex flex-wrap items-center gap-2 px-3 py-2">
+            <div
+              role="group"
+              aria-label="Situação"
+              className="flex shrink-0 items-center gap-1 rounded-xl bg-[color:var(--color-surface)] p-1"
+            >
+              {SITUACOES.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  aria-pressed={situacao === s.id}
+                  onClick={() => setSituacao(s.id)}
+                  className={[
+                    'rounded-lg px-3 py-1.5 text-xs font-semibold transition',
+                    situacao === s.id
+                      ? 'bg-brand-500 text-white shadow-sm'
+                      : 'text-[color:var(--color-muted)] hover:text-[color:var(--color-ink)]',
+                  ].join(' ')}
+                >
+                  {s.label} · {contagem[s.id]}
+                </button>
+              ))}
+            </div>
             <GlassSelect
               className="w-[12rem] shrink-0"
               icon={Tags}
@@ -328,7 +357,9 @@ export default function DiretoriaPerdcomp() {
                         colSpan={6}
                         className="px-4 py-8 text-center text-sm text-[color:var(--color-muted)]"
                       >
-                        Nenhum processo com esses filtros.
+                        {situacao === 'aberto' && contagem.aberto === 0
+                          ? 'Todos os processos foram entregues.'
+                          : 'Nenhum processo com esses filtros.'}
                       </td>
                     </tr>
                   ) : (
@@ -336,7 +367,10 @@ export default function DiretoriaPerdcomp() {
                       <tr
                         key={r.id}
                         onClick={() => openRow(r)}
-                        className="cursor-pointer border-b border-[color:var(--color-line)] transition last:border-0 hover:bg-[color:var(--nav-hover)]"
+                        className={[
+                          'cursor-pointer border-b border-[color:var(--color-line)] transition last:border-0 hover:bg-[color:var(--nav-hover)]',
+                          r.entregue_em ? 'opacity-70' : '',
+                        ].join(' ')}
                       >
                         <td className="px-4 py-3">
                           <div className="font-medium text-[color:var(--color-ink)]">
@@ -356,10 +390,15 @@ export default function DiretoriaPerdcomp() {
                           {formatMoneyBRL(r.valor_pedido)}
                         </td>
                         <td className="px-4 py-3">
-                          <StatusPill status={r.status} />
+                          <PerdcompStatusPill status={r.status} />
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-[color:var(--color-muted)]">
                           {formatDate(r.data_limite)}
+                          {r.entregue_em ? (
+                            <div className="mt-0.5 text-[11px] text-emerald-700 dark:text-emerald-300">
+                              Entregue em {formatDate(r.entregue_em)}
+                            </div>
+                          ) : null}
                         </td>
                         <td className="px-4 py-3">
                           <PerdcompPrazoChip

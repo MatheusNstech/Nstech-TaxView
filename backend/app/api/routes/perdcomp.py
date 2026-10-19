@@ -17,13 +17,15 @@ from app.core.auth import (
     require_perdcomp_reader,
 )
 from app.core.clock import today_br
+from app.services import fiscal_entrega
 from app.services.db import constraint_errors, fetch_all
+from app.services.fiscal_entrega import EntregarBody, FiscalAuditOut, ReabrirBody
 
 router = APIRouter(prefix="/perdcomp", tags=["perdcomp"])
 
 TABLE = "perdcomp_processos"
 SEM_STATUS = "Sem status"
-DUPLICADO = "JÃ¡ existe um processo com esse PER/DCOMP"
+DUPLICADO = "Já existe um processo com esse PER/DCOMP"
 TEXT_FIELDS = (
     "processo",
     "empresa",
@@ -44,11 +46,28 @@ def _strip_perdcomp_value(value: str | None) -> str | None:
         return None
     text = value.strip()
     if not text:
-        raise ValueError("Informe o nÃºmero do PER/DCOMP")
+        raise ValueError("Informe o número do PER/DCOMP")
     return text
 
-PrazoSituacao = Literal["vencido", "vence_7d", "no_prazo", "sem_prazo"]
+PrazoSituacao = Literal["vencido", "vence_7d", "no_prazo", "sem_prazo", "entregue"]
 PrazoFiltro = Literal["vencido", "7d", "30d", "sem_prazo"]
+Situacao = Literal["aberto", "entregue"]
+
+# Rótulos do histórico de edição.
+ROTULOS = {
+    "perdcomp": "PER/DCOMP",
+    "processo": "Processo",
+    "empresa": "Empresa",
+    "tributo_credito": "Tributo/Crédito",
+    "periodo": "Período",
+    "valor_pedido": "Valor do pedido",
+    "status": "Status",
+    "observacoes": "Observações",
+    "prazo_cumprimento": "Prazo para cumprimento",
+    "data_base_ciencia": "Data-base/Ciência",
+    "data_limite": "Data limite",
+    "providencia": "Providência",
+}
 
 
 class PerdcompBase(BaseModel):
@@ -100,6 +119,8 @@ class PerdcompOut(PerdcompBase):
     valor_pedido: Decimal | None = None
     prazo_situacao: PrazoSituacao
     dias_para_prazo: int | None = None
+    entregue_em: date | None = None
+    entrega_obs: str = ""
     updated_at: str | None = None
 
 
@@ -124,7 +145,13 @@ class PrazosAgg(BaseModel):
 
 class PerdcompSummary(BaseModel):
     total_processos: int
+    processos_abertos: int
+    processos_entregues: int
+    # valor_total = pedido de todos; aberto/entregue dividem esse total.
     valor_total: float
+    valor_aberto: float
+    valor_entregue: float
+    # Indeferido e prazos contam só os processos em aberto.
     valor_indeferido: float
     por_status: list[StatusAgg]
     por_empresa: list[EmpresaAgg]
@@ -156,7 +183,13 @@ def status_label(raw: Any) -> str:
     return text or SEM_STATUS
 
 
-def prazo_situacao(data_limite: date | None, today: date | None = None) -> PrazoSituacao:
+def prazo_situacao(
+    data_limite: date | None,
+    today: date | None = None,
+    entregue_em: date | None = None,
+) -> PrazoSituacao:
+    if entregue_em is not None:
+        return "entregue"
     if data_limite is None:
         return "sem_prazo"
     today = today or today_br()
@@ -183,6 +216,7 @@ def _matches_prazo(
 def _to_out(row: dict[str, Any], today: date | None = None) -> PerdcompOut:
     today = today or today_br()
     limite = _parse_date(row.get("data_limite"))
+    entregue_em = _parse_date(row.get("entregue_em"))
     return PerdcompOut(
         id=row["id"],
         perdcomp=str(row.get("perdcomp") or ""),
@@ -197,8 +231,10 @@ def _to_out(row: dict[str, Any], today: date | None = None) -> PerdcompOut:
         data_base_ciencia=str(row.get("data_base_ciencia") or ""),
         data_limite=limite,
         providencia=str(row.get("providencia") or ""),
-        prazo_situacao=prazo_situacao(limite, today),
-        dias_para_prazo=(limite - today).days if limite else None,
+        prazo_situacao=prazo_situacao(limite, today, entregue_em),
+        dias_para_prazo=(limite - today).days if limite and not entregue_em else None,
+        entregue_em=entregue_em,
+        entrega_obs=str(row.get("entrega_obs") or ""),
         updated_at=row.get("updated_at"),
     )
 
@@ -208,24 +244,32 @@ def build_summary(rows: list[dict[str, Any]], today: date | None = None) -> Perd
     por_status: dict[str, list[float]] = {}
     por_empresa: dict[str, list[float]] = {}
     valor_total = 0.0
+    valor_entregue = 0.0
+    entregues = 0
     valor_indeferido = 0.0
     prazos = {"vencidos": 0, "vence_7d": 0, "vence_30d": 0, "sem_prazo": 0}
 
     for row in rows:
         valor = _money(row.get("valor_pedido"))
         valor_total += valor
+        entregue = fiscal_entrega.is_entregue(row)
+        if entregue:
+            entregues += 1
+            valor_entregue += valor
         label = status_label(row.get("status"))
-        if label.casefold().startswith("indeferid"):
+        if not entregue and label.casefold().startswith("indeferid"):
             valor_indeferido += valor
         bucket = por_status.setdefault(label, [0, 0.0])
         bucket[0] += 1
         bucket[1] += valor
 
-        empresa = str(row.get("empresa") or "").strip() or "â€”"
+        empresa = str(row.get("empresa") or "").strip() or "—"
         emp_bucket = por_empresa.setdefault(empresa, [0, 0.0])
         emp_bucket[0] += 1
         emp_bucket[1] += valor
 
+        if entregue:
+            continue
         limite = _parse_date(row.get("data_limite"))
         if limite is None:
             prazos["sem_prazo"] += 1
@@ -239,7 +283,11 @@ def build_summary(rows: list[dict[str, Any]], today: date | None = None) -> Perd
 
     return PerdcompSummary(
         total_processos=len(rows),
+        processos_abertos=len(rows) - entregues,
+        processos_entregues=entregues,
         valor_total=round(valor_total, 2),
+        valor_aberto=round(valor_total - valor_entregue, 2),
+        valor_entregue=round(valor_entregue, 2),
         valor_indeferido=round(valor_indeferido, 2),
         por_status=sorted(
             (
@@ -297,6 +345,7 @@ def list_processos(
     status_filtro: Annotated[str | None, Query(alias="status")] = None,
     empresa: str | None = None,
     prazo: PrazoFiltro | None = None,
+    situacao: Situacao | None = None,
 ):
     today = today_br()
     rows = _fetch_all(client)
@@ -307,6 +356,8 @@ def list_processos(
         if status_key and status_label(row.get("status")).casefold() != status_key:
             continue
         if empresa_key and empresa_key not in str(row.get("empresa") or "").casefold():
+            continue
+        if situacao and fiscal_entrega.is_entregue(row) != (situacao == "entregue"):
             continue
         if prazo and not _matches_prazo(_parse_date(row.get("data_limite")), prazo, today):
             continue
@@ -342,6 +393,7 @@ def create_processo(
         result = client.table(TABLE).insert(_payload(body, user_id=user.id)).execute().data or []
     if not result:
         raise HTTPException(status_code=400, detail="Falha ao criar processo")
+    fiscal_entrega.registrar(client, "perdcomp", result[0]["id"], user, "Processo criado")
     return _to_out(result[0])
 
 
@@ -355,13 +407,75 @@ def update_processo(
     payload = _payload(body, user_id=user.id)
     if set(payload) <= {"updated_by"}:
         raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
+    antes = _get_row(client, item_id)
     with constraint_errors(duplicate=DUPLICADO):
         result = (
             client.table(TABLE).update(payload).eq("id", str(item_id)).execute().data or []
         )
     if not result:
-        raise HTTPException(status_code=404, detail="Processo nÃ£o encontrado")
+        raise HTTPException(status_code=404, detail="Processo não encontrado")
+    acao = fiscal_entrega.acao_edicao(ROTULOS, antes, result[0])
+    if acao:
+        fiscal_entrega.registrar(client, "perdcomp", str(item_id), user, acao)
     return _to_out(result[0])
+
+
+def _get_row(client: Client, item_id: UUID) -> dict[str, Any]:
+    rows = client.table(TABLE).select("*").eq("id", str(item_id)).limit(1).execute().data or []
+    if not rows:
+        raise HTTPException(status_code=404, detail="Processo não encontrado")
+    return rows[0]
+
+
+def _gravar(client: Client, item_id: UUID, data: dict[str, Any], user: AuthUser) -> PerdcompOut:
+    result = (
+        client.table(TABLE)
+        .update({**data, "updated_by": user.id})
+        .eq("id", str(item_id))
+        .execute()
+        .data
+        or []
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail="Processo não encontrado")
+    return _to_out(result[0])
+
+
+@router.post("/{item_id}/entregar", response_model=PerdcompOut)
+def entregar_processo(
+    item_id: UUID,
+    body: EntregarBody,
+    user: Annotated[AuthUser, Depends(require_perdcomp_editor)],
+    client: Annotated[Client, Depends(get_db_client)],
+):
+    """Providência cumprida: o valor do processo sai do total em aberto."""
+    _get_row(client, item_id)
+    data, acao = fiscal_entrega.payload_entrega(body, user)
+    out = _gravar(client, item_id, data, user)
+    fiscal_entrega.registrar(client, "perdcomp", str(item_id), user, acao)
+    return out
+
+
+@router.post("/{item_id}/reabrir", response_model=PerdcompOut)
+def reabrir_processo(
+    item_id: UUID,
+    body: ReabrirBody,
+    user: Annotated[AuthUser, Depends(require_perdcomp_editor)],
+    client: Annotated[Client, Depends(get_db_client)],
+):
+    data, acao = fiscal_entrega.payload_reabertura(_get_row(client, item_id), body)
+    out = _gravar(client, item_id, data, user)
+    fiscal_entrega.registrar(client, "perdcomp", str(item_id), user, acao)
+    return out
+
+
+@router.get("/{item_id}/audit", response_model=list[FiscalAuditOut])
+def audit_processo(
+    item_id: UUID,
+    _: Annotated[AuthUser, Depends(require_perdcomp_reader)],
+    client: Annotated[Client, Depends(get_db_client)],
+):
+    return fiscal_entrega.listar(client, "perdcomp", str(item_id))
 
 
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -372,4 +486,5 @@ def delete_processo(
 ):
     result = client.table(TABLE).delete().eq("id", str(item_id)).execute().data or []
     if not result:
-        raise HTTPException(status_code=404, detail="Processo nÃ£o encontrado")
+        raise HTTPException(status_code=404, detail="Processo não encontrado")
+    fiscal_entrega.apagar_historico(client, "perdcomp", str(item_id))

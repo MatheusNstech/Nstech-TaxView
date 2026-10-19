@@ -5,12 +5,14 @@ const STYLES: Record<PerdcompPrazoSituacao, string> = {
   vence_7d: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
   no_prazo: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
   sem_prazo: 'bg-slate-500/10 text-slate-500 dark:text-slate-400',
+  entregue: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
 }
 
 export function prazoLabel(
   situacao: PerdcompPrazoSituacao,
   dias: number | null,
 ): string {
+  if (situacao === 'entregue') return 'Entregue'
   if (situacao === 'sem_prazo' || dias == null) return 'Sem prazo'
   if (situacao === 'vencido') {
     const n = Math.abs(dias)

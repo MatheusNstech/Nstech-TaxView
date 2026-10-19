@@ -1,11 +1,13 @@
-import { Trash2, X } from 'lucide-react'
+import { FileText, History, Trash2 } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
-import { createPortal } from 'react-dom'
 import { apiFetch } from '../../lib/api'
 import { formatDate, formatMoneyBRL } from '../../lib/format'
 import type { PerdcompFields, PerdcompProcesso } from '../../types'
+import DetalheModal, { Bloco, Campo, Indicador, ROTULO } from '../DetalheModal'
+import { AbaHistorico, BlocoEntrega, useEmpresaPorNome, useFiscalAudit } from '../fiscal/EntregaFiscal'
 import GlassDatePicker from '../GlassDatePicker'
 import PerdcompPrazoChip from './PerdcompPrazoChip'
+import { PerdcompStatusPill } from './PerdcompStatusChart'
 
 const STATUS_SUGESTOES = [
   'Em análise',
@@ -30,12 +32,6 @@ const EMPTY: PerdcompFields = {
   data_limite: null,
   providencia: '',
 }
-
-const scrollClass = [
-  'min-h-0 flex-1 overflow-y-auto overscroll-contain',
-  '[scrollbar-width:thin]',
-  '[scrollbar-color:#cbd5e1_transparent]',
-].join(' ')
 
 function moneyToInput(value: number | null): string {
   if (value == null) return ''
@@ -63,28 +59,11 @@ interface PerdcompDrawerProps {
   onDeleted: (id: string) => void
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div>
-      <label className="mb-1.5 block text-xs font-medium text-slate-500">
-        {label}
-      </label>
-      {children}
-    </div>
-  )
+function Texto({ children }: { children: ReactNode }) {
+  return children ? <span className="whitespace-pre-wrap">{children}</span> : null
 }
 
-function ReadRow({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className="grid grid-cols-[8rem_1fr] gap-3 border-b border-slate-100 py-3 last:border-0">
-      <dt className="text-xs font-medium text-slate-500">{label}</dt>
-      <dd className="min-w-0 whitespace-pre-wrap break-words text-sm text-slate-800">
-        {value || '—'}
-      </dd>
-    </div>
-  )
-}
-
+/** Detalhe do processo PER/DCOMP no mesmo modal das tarefas. */
 export default function PerdcompDrawer({
   processo,
   mode,
@@ -94,31 +73,30 @@ export default function PerdcompDrawer({
   onSaved,
   onDeleted,
 }: PerdcompDrawerProps) {
+  const [atual, setAtual] = useState<PerdcompProcesso | null>(null)
   const [form, setForm] = useState<PerdcompFields>(EMPTY)
   const [valorText, setValorText] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [versao, setVersao] = useState(0)
+
+  const criando = mode === 'create'
+  const readOnly = mode === 'view'
 
   useEffect(() => {
     if (!open) return
-    const base = processo && mode !== 'create' ? processo : EMPTY
+    const base = processo && !criando ? processo : EMPTY
+    setAtual(processo && !criando ? processo : null)
     setForm({ ...EMPTY, ...base })
     setValorText(moneyToInput(base.valor_pedido))
     setError('')
-  }, [open, processo, mode])
+  }, [open, processo, criando])
 
-  useEffect(() => {
-    if (!open) return
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = prev
-    }
-  }, [open])
+  const empresa = useEmpresaPorNome(open ? form.empresa : null)
+  const audit = useFiscalAudit(open && atual ? `/api/perdcomp/${atual.id}/audit` : null, versao)
 
-  if (!open || (mode !== 'create' && !processo)) return null
+  if (!open || (!criando && !processo)) return null
 
-  const readOnly = mode === 'view'
   const set = <K extends keyof PerdcompFields>(key: K, value: PerdcompFields[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }))
 
@@ -146,16 +124,15 @@ export default function PerdcompDrawer({
     setSaving(true)
     setError('')
     try {
-      const saved =
-        mode === 'create'
-          ? await apiFetch<PerdcompProcesso>('/api/perdcomp', {
-              method: 'POST',
-              body: JSON.stringify(payload),
-            })
-          : await apiFetch<PerdcompProcesso>(`/api/perdcomp/${processo!.id}`, {
-              method: 'PATCH',
-              body: JSON.stringify(payload),
-            })
+      const saved = criando
+        ? await apiFetch<PerdcompProcesso>('/api/perdcomp', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          })
+        : await apiFetch<PerdcompProcesso>(`/api/perdcomp/${atual!.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(payload),
+          })
       onSaved(saved)
       onClose()
     } catch (err) {
@@ -166,13 +143,13 @@ export default function PerdcompDrawer({
   }
 
   const remove = async () => {
-    if (!processo) return
-    if (!window.confirm(`Excluir o PER/DCOMP ${processo.perdcomp}?`)) return
+    if (!atual) return
+    if (!window.confirm(`Excluir o PER/DCOMP ${atual.perdcomp}?`)) return
     setSaving(true)
     setError('')
     try {
-      await apiFetch(`/api/perdcomp/${processo.id}`, { method: 'DELETE' })
-      onDeleted(processo.id)
+      await apiFetch(`/api/perdcomp/${atual.id}`, { method: 'DELETE' })
+      onDeleted(atual.id)
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao excluir')
@@ -181,189 +158,237 @@ export default function PerdcompDrawer({
     }
   }
 
-  const title =
-    mode === 'create' ? 'Novo processo' : readOnly ? 'Detalhes do processo' : 'Editar processo'
-
-  return createPortal(
-    <>
-      <div
-        className="fixed inset-0 z-[80] bg-slate-900/45 backdrop-blur-sm"
-        onClick={onClose}
-        aria-hidden
-      />
-      <aside className="fixed inset-y-3 right-3 z-[90] flex w-[min(100%-1.5rem,30rem)] flex-col overflow-hidden rounded-2xl bg-white shadow-[0_24px_64px_rgb(15_23_42_/_0.28)] ring-1 ring-slate-200">
-        <header className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
-          <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-              {readOnly ? 'Somente leitura' : 'PER/DCOMP'}
-            </p>
-            <h2 className="mt-0.5 text-base font-semibold text-slate-900">{title}</h2>
-            {processo && mode !== 'create' ? (
-              <p className="mt-0.5 truncate font-mono text-xs text-slate-500">
-                {processo.perdcomp}
-              </p>
-            ) : null}
+  const blocoProcesso = (
+    <Bloco icon={FileText} titulo="Processo" className={criando ? 'lg:col-span-3' : 'lg:col-span-2'}>
+      {readOnly && atual ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Campo rotulo="PER/DCOMP">
+            <span className="font-mono">{atual.perdcomp}</span>
+          </Campo>
+          <Campo rotulo="Processo">{atual.processo}</Campo>
+          <Campo rotulo="Tributo / Crédito">{atual.tributo_credito}</Campo>
+          <Campo rotulo="Período">{atual.periodo}</Campo>
+          <Campo rotulo="Prazo para cumprimento">{atual.prazo_cumprimento}</Campo>
+          <Campo rotulo="Data-base / Ciência">{atual.data_base_ciencia}</Campo>
+          <div className="sm:col-span-2">
+            <Campo rotulo="Providência">
+              <Texto>{atual.providencia}</Texto>
+            </Campo>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="shrink-0 rounded-full p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
-            aria-label="Fechar"
-          >
-            <X className="h-4 w-4" strokeWidth={1.75} />
-          </button>
-        </header>
-
-        <div className={`${scrollClass} px-5 py-4`}>
-          {readOnly && processo ? (
-            <div className="space-y-4">
-              <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
-                <p className="text-sm font-semibold text-slate-900">{processo.empresa || '—'}</p>
-                <p className="mt-1 text-xs text-slate-500">{processo.tributo_credito || '—'}</p>
-                <p className="mt-2 text-lg font-bold text-slate-900">
-                  {formatMoneyBRL(processo.valor_pedido)}
-                </p>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-slate-200/70 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
-                    {processo.status || 'Sem status'}
-                  </span>
-                  <PerdcompPrazoChip
-                    situacao={processo.prazo_situacao}
-                    dias={processo.dias_para_prazo}
-                  />
-                </div>
-              </div>
-              <dl>
-                <ReadRow label="Processo" value={processo.processo} />
-                <ReadRow label="Período" value={processo.periodo} />
-                <ReadRow label="Data limite" value={formatDate(processo.data_limite)} />
-                <ReadRow label="Prazo" value={processo.prazo_cumprimento} />
-                <ReadRow label="Data-base / Ciência" value={processo.data_base_ciencia} />
-                <ReadRow label="Providência" value={processo.providencia} />
-                <ReadRow label="Observações" value={processo.observacoes} />
-              </dl>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <Field label="PER/DCOMP *">
-                <input
-                  value={form.perdcomp}
-                  onChange={(e) => set('perdcomp', e.target.value)}
-                  className="glass-input font-mono"
-                  placeholder="00000.00000.000000.0.0.00-0000"
-                />
-              </Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Processo">
-                  <input
-                    value={form.processo}
-                    onChange={(e) => set('processo', e.target.value)}
-                    className="glass-input"
-                  />
-                </Field>
-                <Field label="Valor do pedido (R$)">
-                  <input
-                    value={valorText}
-                    onChange={(e) => setValorText(e.target.value)}
-                    className="glass-input"
-                    inputMode="decimal"
-                    placeholder="0,00"
-                  />
-                </Field>
-              </div>
-              <Field label="Empresa">
-                <input
-                  value={form.empresa}
-                  onChange={(e) => set('empresa', e.target.value)}
-                  className="glass-input"
-                />
-              </Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Tributo / Crédito">
-                  <input
-                    value={form.tributo_credito}
-                    onChange={(e) => set('tributo_credito', e.target.value)}
-                    className="glass-input"
-                  />
-                </Field>
-                <Field label="Período">
-                  <input
-                    value={form.periodo}
-                    onChange={(e) => set('periodo', e.target.value)}
-                    className="glass-input"
-                  />
-                </Field>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Status">
-                  <input
-                    value={form.status}
-                    onChange={(e) => set('status', e.target.value)}
-                    className="glass-input"
-                    list="perdcomp-status-options"
-                  />
-                  <datalist id="perdcomp-status-options">
-                    {suggestions.map((s) => (
-                      <option key={s} value={s} />
-                    ))}
-                  </datalist>
-                </Field>
-                <Field label="Data limite">
-                  <GlassDatePicker
-                    ariaLabel="Data limite"
-                    value={form.data_limite ?? ''}
-                    onChange={(v) => set('data_limite', v || null)}
-                  />
-                </Field>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Prazo para cumprimento">
-                  <input
-                    value={form.prazo_cumprimento}
-                    onChange={(e) => set('prazo_cumprimento', e.target.value)}
-                    className="glass-input"
-                    placeholder="Ex.: 30 dias da ciência"
-                  />
-                </Field>
-                <Field label="Data-base / Ciência">
-                  <input
-                    value={form.data_base_ciencia}
-                    onChange={(e) => set('data_base_ciencia', e.target.value)}
-                    className="glass-input"
-                  />
-                </Field>
-              </div>
-              <Field label="Providência">
-                <textarea
-                  value={form.providencia}
-                  onChange={(e) => set('providencia', e.target.value)}
-                  rows={3}
-                  className="glass-input resize-none"
-                />
-              </Field>
-              <Field label="Observações">
-                <textarea
-                  value={form.observacoes}
-                  onChange={(e) => set('observacoes', e.target.value)}
-                  rows={5}
-                  className="glass-input resize-none"
-                />
-              </Field>
-            </div>
-          )}
-
-          {error ? (
-            <p className="mt-4 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>
-          ) : null}
+          <div className="sm:col-span-2">
+            <Campo rotulo="Observações">
+              <Texto>{atual.observacoes}</Texto>
+            </Campo>
+          </div>
         </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <label className={ROTULO}>PER/DCOMP *</label>
+            <input
+              value={form.perdcomp}
+              onChange={(e) => set('perdcomp', e.target.value)}
+              className="glass-input font-mono"
+              placeholder="00000.00000.000000.0.0.00-0000"
+            />
+          </div>
+          <div>
+            <label className={ROTULO}>Processo</label>
+            <input
+              value={form.processo}
+              onChange={(e) => set('processo', e.target.value)}
+              className="glass-input"
+            />
+          </div>
+          <div>
+            <label className={ROTULO}>Valor do pedido (R$)</label>
+            <input
+              value={valorText}
+              onChange={(e) => setValorText(e.target.value)}
+              className="glass-input"
+              inputMode="decimal"
+              placeholder="0,00"
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <label className={ROTULO}>Empresa</label>
+            <input
+              value={form.empresa}
+              onChange={(e) => set('empresa', e.target.value)}
+              className="glass-input"
+            />
+          </div>
+          <div>
+            <label className={ROTULO}>Tributo / Crédito</label>
+            <input
+              value={form.tributo_credito}
+              onChange={(e) => set('tributo_credito', e.target.value)}
+              className="glass-input"
+            />
+          </div>
+          <div>
+            <label className={ROTULO}>Período</label>
+            <input
+              value={form.periodo}
+              onChange={(e) => set('periodo', e.target.value)}
+              className="glass-input"
+            />
+          </div>
+          <div>
+            <label className={ROTULO}>Status</label>
+            <input
+              value={form.status}
+              onChange={(e) => set('status', e.target.value)}
+              className="glass-input"
+              list="perdcomp-status-options"
+            />
+            <datalist id="perdcomp-status-options">
+              {suggestions.map((s) => (
+                <option key={s} value={s} />
+              ))}
+            </datalist>
+          </div>
+          <div>
+            <label className={ROTULO}>Data limite</label>
+            <GlassDatePicker
+              ariaLabel="Data limite"
+              value={form.data_limite ?? ''}
+              onChange={(v) => set('data_limite', v || null)}
+            />
+          </div>
+          <div>
+            <label className={ROTULO}>Prazo para cumprimento</label>
+            <input
+              value={form.prazo_cumprimento}
+              onChange={(e) => set('prazo_cumprimento', e.target.value)}
+              className="glass-input"
+              placeholder="Ex.: 30 dias da ciência"
+            />
+          </div>
+          <div>
+            <label className={ROTULO}>Data-base / Ciência</label>
+            <input
+              value={form.data_base_ciencia}
+              onChange={(e) => set('data_base_ciencia', e.target.value)}
+              className="glass-input"
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <label className={ROTULO}>Providência</label>
+            <textarea
+              value={form.providencia}
+              onChange={(e) => set('providencia', e.target.value)}
+              rows={3}
+              className="glass-input resize-none"
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <label className={ROTULO}>Observações</label>
+            <textarea
+              value={form.observacoes}
+              onChange={(e) => set('observacoes', e.target.value)}
+              rows={4}
+              className="glass-input resize-none"
+            />
+          </div>
+        </div>
+      )}
+    </Bloco>
+  )
 
-        <footer className="flex shrink-0 flex-col gap-2 border-t border-slate-100 px-5 py-4">
-          {readOnly ? (
-            <button type="button" className="btn-ghost w-full" onClick={onClose}>
-              Fechar
-            </button>
-          ) : (
-            <div className="flex items-center justify-end gap-2">
+  const abaDados = (
+    <>
+      {blocoProcesso}
+      {atual ? (
+        <BlocoEntrega<PerdcompProcesso>
+          baseUrl={`/api/perdcomp/${atual.id}`}
+          entregueEm={atual.entregue_em}
+          entregaObs={atual.entrega_obs}
+          podeEditar={!readOnly}
+          textoAberto="Ao entregar a providência, o valor do pedido sai do total em aberto."
+          onErro={setError}
+          onAtualizado={(item) => {
+            setAtual(item)
+            setVersao((v) => v + 1)
+            onSaved(item)
+          }}
+        />
+      ) : null}
+    </>
+  )
+
+  const vencido = atual?.prazo_situacao === 'vencido'
+
+  return (
+    <DetalheModal
+      aberto={open}
+      onClose={onClose}
+      empresa={empresa}
+      titulo={criando ? 'Novo processo' : atual?.empresa || 'Processo PER/DCOMP'}
+      chips={
+        <>
+          <span className="rounded-full bg-brand-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-700 dark:text-brand-300">
+            PER/DCOMP
+          </span>
+          {atual ? <PerdcompStatusPill status={atual.status} /> : null}
+          {atual ? (
+            <PerdcompPrazoChip situacao={atual.prazo_situacao} dias={atual.dias_para_prazo} />
+          ) : null}
+        </>
+      }
+      subtitulo={
+        atual ? (
+          <>
+            <span className="font-mono">{atual.perdcomp}</span>
+            {atual.tributo_credito ? ` · ${atual.tributo_credito}` : ''}
+          </>
+        ) : (
+          'Cadastre o pedido e acompanhe o prazo da providência'
+        )
+      }
+      indicadores={
+        atual ? (
+          <>
+            <Indicador rotulo="Valor do pedido">{formatMoneyBRL(atual.valor_pedido)}</Indicador>
+            <Indicador rotulo="Data limite" alerta={vencido}>
+              {formatDate(atual.data_limite)}
+            </Indicador>
+            <Indicador rotulo="Status">{atual.status || 'Sem status'}</Indicador>
+            <Indicador rotulo="Entrega">
+              {atual.entregue_em ? formatDate(atual.entregue_em) : 'Em aberto'}
+            </Indicador>
+          </>
+        ) : undefined
+      }
+      abas={
+        criando
+          ? undefined
+          : [
+              { id: 'dados', rotulo: 'Dados', icon: FileText, conteudo: abaDados },
+              {
+                id: 'historico',
+                rotulo: 'Histórico',
+                icon: History,
+                contador: audit.length,
+                conteudo: <AbaHistorico rows={audit} />,
+              },
+            ]
+      }
+      rodape={
+        readOnly ? undefined : (
+          <>
+            {!criando ? (
+              <button
+                type="button"
+                className="btn-ghost text-rose-600"
+                disabled={saving}
+                onClick={() => void remove()}
+              >
+                <Trash2 className="h-4 w-4" />
+                Excluir processo
+              </button>
+            ) : null}
+            <div className="ml-auto flex gap-2">
               <button type="button" className="btn-ghost" onClick={onClose}>
                 Cancelar
               </button>
@@ -373,24 +398,17 @@ export default function PerdcompDrawer({
                 disabled={saving}
                 onClick={() => void handleSave()}
               >
-                {saving ? 'Salvando...' : 'Salvar'}
+                {saving ? 'Salvando...' : criando ? 'Criar processo' : 'Salvar'}
               </button>
             </div>
-          )}
-          {mode === 'edit' ? (
-            <button
-              type="button"
-              className="btn-ghost w-full text-rose-600"
-              disabled={saving}
-              onClick={() => void remove()}
-            >
-              <Trash2 className="h-4 w-4" />
-              Excluir processo
-            </button>
-          ) : null}
-        </footer>
-      </aside>
-    </>,
-    document.body,
+          </>
+        )
+      }
+    >
+      {error && (
+        <p className="rounded-xl bg-rose-50/90 px-3 py-2 text-sm text-rose-700 lg:col-span-3">{error}</p>
+      )}
+      {criando ? blocoProcesso : null}
+    </DetalheModal>
   )
 }

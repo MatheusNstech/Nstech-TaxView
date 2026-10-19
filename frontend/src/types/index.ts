@@ -407,9 +407,25 @@ export interface PainelFiscalPendencia {
   status_cnd: string
   nota_01: string
   nota_02: string
+  /** Preenchida = débito regularizado (sai do valor em aberto). */
+  entregue_em: string | null
+  entrega_obs: string
 }
 
-export type PerdcompPrazoSituacao = 'vencido' | 'vence_7d' | 'no_prazo' | 'sem_prazo'
+/** Linha do histórico de pendências e PER/DCOMP. */
+export interface FiscalAudit {
+  id: string
+  acao: string
+  user_email: string
+  created_at: string
+}
+
+export type PerdcompPrazoSituacao =
+  | 'vencido'
+  | 'vence_7d'
+  | 'no_prazo'
+  | 'sem_prazo'
+  | 'entregue'
 
 export interface PerdcompFields {
   perdcomp: string
@@ -430,12 +446,19 @@ export interface PerdcompProcesso extends PerdcompFields {
   id: string
   prazo_situacao: PerdcompPrazoSituacao
   dias_para_prazo: number | null
+  /** Preenchida = providência cumprida (sai do valor em aberto). */
+  entregue_em: string | null
+  entrega_obs: string
   updated_at: string | null
 }
 
 export interface PerdcompSummary {
   total_processos: number
+  processos_abertos: number
+  processos_entregues: number
   valor_total: number
+  valor_aberto: number
+  valor_entregue: number
   valor_indeferido: number
   por_status: { status: string; quantidade: number; valor: number }[]
   por_empresa: { empresa: string; quantidade: number; valor: number }[]
@@ -456,7 +479,11 @@ export interface PainelFiscalSummary {
   com_observacao: number
   por_orgao_count: Record<string, number>
   por_orgao_valor: Record<string, number>
+  /** Em aberto; débitos entregues ficam em total_entregue. */
   total_valor: number
+  total_entregue: number
+  pendencias_abertas: number
+  pendencias_entregues: number
   anos: number[]
   meses: number[]
 }
