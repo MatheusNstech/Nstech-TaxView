@@ -11,6 +11,7 @@ import EsqueciSenha from './pages/EsqueciSenha'
 import DiretoriaFechamento from './pages/DiretoriaFechamento'
 import DiretoriaPendencias from './pages/DiretoriaPendencias'
 import DiretoriaPendenciasRfb from './pages/DiretoriaPendenciasRfb'
+import DiretoriaCreditos from './pages/DiretoriaCreditos'
 import DiretoriaPerdcomp from './pages/DiretoriaPerdcomp'
 import DiretoriaValores from './pages/DiretoriaValores'
 import Empresas from './pages/Empresas'
@@ -138,6 +139,14 @@ export default function App() {
           element={
             <PainelFiscalRoute>
               <DiretoriaPerdcomp />
+            </PainelFiscalRoute>
+          }
+        />
+        <Route
+          path="diretoria/creditos"
+          element={
+            <PainelFiscalRoute>
+              <DiretoriaCreditos />
             </PainelFiscalRoute>
           }
         />

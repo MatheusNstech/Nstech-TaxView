@@ -135,8 +135,13 @@ export async function apiUpload<T>(
   if (!response.ok) {
     let message = `Erro ${response.status}`
     try {
-      const body = (await response.json()) as { detail?: string }
-      if (body.detail) message = body.detail
+      const body = (await response.json()) as {
+        detail?: string | { message?: string; msg?: string }
+      }
+      if (typeof body.detail === 'string' && body.detail) message = body.detail
+      else if (body.detail && typeof body.detail === 'object') {
+        message = body.detail.message || body.detail.msg || message
+      }
     } catch {
       // ignore parse errors
     }

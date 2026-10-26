@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import (
     atividades,
     auth_token,
+    creditos,
     dashboard,
     empresas,
     importacao,
@@ -80,6 +81,8 @@ app.include_router(usuarios.router, prefix="/api")
 app.include_router(notificacoes.router, prefix="/api")
 app.include_router(painel_fiscal.router, prefix="/api")
 app.include_router(perdcomp.router, prefix="/api")
+app.include_router(creditos.router, prefix="/api")
+app.include_router(creditos.selic_router, prefix="/api")
 
 
 @app.get("/api/health")

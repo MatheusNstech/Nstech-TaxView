@@ -18,6 +18,7 @@ import {
   Upload,
   UserCog,
   Users,
+  Wallet,
   type LucideIcon,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -47,6 +48,7 @@ const adminMainNav: NavItem[] = [
     icon: FileWarning,
   },
   { to: '/diretoria/perdcomp', label: 'PER/DCOMP', end: false, icon: Scale },
+  { to: '/diretoria/creditos', label: 'Créditos', end: false, icon: Wallet },
   { to: '/diretoria/fechamento', label: 'Fechamento', end: false, icon: CalendarCheck },
   { to: '/diretoria/valores', label: 'Valores', end: false, icon: CircleDollarSign },
   { to: '/minhas-tarefas', label: 'Minhas tarefas', end: false, icon: ListTodo },
@@ -78,6 +80,13 @@ const otherNav: NavItem[] = [
     label: 'PER/DCOMP',
     end: false,
     icon: Scale,
+    painelFiscal: true,
+  },
+  {
+    to: '/diretoria/creditos',
+    label: 'Créditos',
+    end: false,
+    icon: Wallet,
     painelFiscal: true,
   },
   { to: '/diretoria/fechamento', label: 'Fechamento', end: false, icon: CalendarCheck, diretorOnly: true },

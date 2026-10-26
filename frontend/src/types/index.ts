@@ -491,3 +491,122 @@ export interface PainelFiscalSummary {
   anos: number[]
   meses: number[]
 }
+
+export type CreditoStatus =
+  | 'em_uso'
+  | 'disponivel'
+  | 'esgotado'
+  | 'fora_consolidada'
+
+export interface CreditoMovimento {
+  competencia: string
+  selic_mensal: number
+  selic_acumulada: number
+  credito_original: number
+  saldo_atualizado: number
+  principal: number
+  juros: number
+  total_compensado: number
+  credito_remanescente: number
+  credito_original_utilizado: number
+  credito_original_remanescente: number
+  atualiz_mes: number
+}
+
+export interface CreditoCompensacao {
+  id: string
+  credito_id: string
+  competencia: string
+  valor: number
+  multa: number
+  juros_evento: number
+  data_compensacao: string | null
+  numero_dcomp: string
+  cod_receita: string
+  debito_compensado: string
+}
+
+export interface CreditoCadastro {
+  id: string
+  controle_id: string
+  codigo_interno: number
+  tipo_credito: string
+  tributo: string
+  ano_calendario: number | null
+  credito_original_inicial: number
+  data_inicio_atualizacao: string | null
+  na_consolidada: boolean
+  ativo: boolean
+  observacao: string
+  status: CreditoStatus
+  movimento_ref: CreditoMovimento | null
+  movimentos: CreditoMovimento[]
+  compensacoes: CreditoCompensacao[]
+}
+
+export interface CreditoControle {
+  id: string
+  empresa_id: string
+  conta_contabil: string
+  descricao_conta: string
+  competencia_atual: string | null
+  updated_at: string | null
+}
+
+export interface CreditoConsolidada {
+  competencia: string
+  total_compensado: number
+  credito_remanescente: number
+  selic_mes: number
+  credito_original: number
+  saldo_atualizado: number
+  percentual_utilizado: number | null
+  pct_hint?: string
+  por_tributo: Record<
+    string,
+    { original: number; compensado: number; remanescente: number; saldo: number }
+  >
+  linhas: {
+    codigo_interno: number
+    tipo_credito: string
+    tributo: string
+    ano_calendario: number | null
+    movimento: CreditoMovimento | null
+  }[]
+}
+
+export interface CreditosDashboard {
+  empresa: {
+    id: string
+    razao_social: string
+    cnpj: string
+    logo_url?: string | null
+    logo_url_escuro?: string | null
+  }
+  controle: CreditoControle | null
+  competencia: string
+  consolidada: CreditoConsolidada | null
+  creditos: CreditoCadastro[]
+  selic: {
+    competencia: string
+    taxa_mensal: number
+    taxa_percentual: number
+  }[]
+}
+
+export interface CreditosImportResult {
+  ok: boolean
+  imported: number
+  selic: number
+  na_consolidada: number[]
+  conta_contabil: string
+  warnings: string[]
+  diffs: {
+    codigo: number
+    campo: string
+    engine: number
+    excel: number
+    delta: number
+  }[]
+  cnpj_arquivo: string
+}
