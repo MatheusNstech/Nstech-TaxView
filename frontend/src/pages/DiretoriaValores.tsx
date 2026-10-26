@@ -303,7 +303,7 @@ export default function DiretoriaValores() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <h1 className="text-2xl font-bold tracking-tight text-[color:var(--color-ink)]">
-          Valores
+          Impostos
         </h1>
         <NotificationBell />
       </div>

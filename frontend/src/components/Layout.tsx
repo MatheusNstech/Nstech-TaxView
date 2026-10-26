@@ -9,6 +9,7 @@ import {
   CircleDollarSign,
   ClipboardList,
   FileWarning,
+  Gavel,
   LayoutDashboard,
   ListChecks,
   ListTodo,
@@ -38,36 +39,29 @@ type NavItem = {
 }
 
 const adminMainNav: NavItem[] = [
-  { to: '/diretoria', label: 'Visão Tax', end: true, icon: BriefcaseBusiness },
-  { to: '/', label: 'Analytics', end: true, icon: LayoutDashboard },
-  { to: '/diretoria/pendencias', label: 'Pendências', end: false, icon: AlertTriangle },
-  {
-    to: '/diretoria/pendencias-rfb',
-    label: 'RFB / PGFN',
-    end: false,
-    icon: FileWarning,
-  },
-  { to: '/diretoria/perdcomp', label: 'PER/DCOMP', end: false, icon: Scale },
-  { to: '/diretoria/creditos', label: 'Créditos', end: false, icon: Wallet },
-  { to: '/diretoria/fechamento', label: 'Fechamento', end: false, icon: CalendarCheck },
-  { to: '/diretoria/valores', label: 'Valores', end: false, icon: CircleDollarSign },
-  { to: '/minhas-tarefas', label: 'Minhas tarefas', end: false, icon: ListTodo },
-  { to: '/calendario', label: 'Calendário', end: false, icon: CalendarDays },
   { to: '/empresas', label: 'Empresas', end: false, icon: Building2 },
 ]
 
-const adminConfigNav: NavItem[] = [
-  { to: '/obrigacoes', label: 'Obrigações', end: false, icon: ListChecks },
-  { to: '/cadastro-empresas', label: 'Cadastro de empresas', end: false, icon: Building },
-  { to: '/atividades', label: 'Atividades', end: false, icon: ClipboardList },
-  { to: '/responsaveis', label: 'Responsáveis', end: false, icon: Users },
-  { to: '/usuarios', label: 'Usuários', end: false, icon: UserCog },
-  { to: '/importacao', label: 'Importação', end: false, icon: Upload },
+/** Submenu Dashboards: Visão Tax + Analytics. */
+const dashboardsNav: NavItem[] = [
+  {
+    to: '/diretoria',
+    label: 'Visão Tax',
+    end: true,
+    icon: BriefcaseBusiness,
+    diretorOnly: true,
+  },
+  {
+    to: '/',
+    label: 'Analytics',
+    end: true,
+    icon: LayoutDashboard,
+    hideForDiretor: true,
+  },
 ]
 
-const otherNav: NavItem[] = [
-  { to: '/diretoria', label: 'Visão Tax', end: true, icon: BriefcaseBusiness, diretorOnly: true },
-  { to: '/diretoria/pendencias', label: 'Pendências', end: false, icon: AlertTriangle, diretorOnly: true },
+/** Submenu Contencioso: RFB/PGFN + PER/DCOMP. */
+const contenciosoNav: NavItem[] = [
   {
     to: '/diretoria/pendencias-rfb',
     label: 'RFB / PGFN',
@@ -82,6 +76,36 @@ const otherNav: NavItem[] = [
     icon: Scale,
     painelFiscal: true,
   },
+]
+
+/** Submenu Tarefas: Minhas tarefas, Pendências, Fechamento, Calendário. */
+const tarefasNav: NavItem[] = [
+  {
+    to: '/minhas-tarefas',
+    label: 'Minhas tarefas',
+    end: false,
+    icon: ListTodo,
+    hideForDiretor: true,
+  },
+  {
+    to: '/diretoria/pendencias',
+    label: 'Pendências',
+    end: false,
+    icon: AlertTriangle,
+    diretorOnly: true,
+  },
+  {
+    to: '/diretoria/fechamento',
+    label: 'Fechamento',
+    end: false,
+    icon: CalendarCheck,
+    diretorOnly: true,
+  },
+  { to: '/calendario', label: 'Calendário', end: false, icon: CalendarDays },
+]
+
+/** Submenu Valores: Créditos + Impostos (ex-Valores). */
+const valoresNav: NavItem[] = [
   {
     to: '/diretoria/creditos',
     label: 'Créditos',
@@ -89,17 +113,25 @@ const otherNav: NavItem[] = [
     icon: Wallet,
     painelFiscal: true,
   },
-  { to: '/diretoria/fechamento', label: 'Fechamento', end: false, icon: CalendarCheck, diretorOnly: true },
   {
     to: '/diretoria/valores',
-    label: 'Valores',
+    label: 'Impostos',
     end: false,
     icon: CircleDollarSign,
     diretorOnly: true,
   },
-  { to: '/', label: 'Analytics', end: true, icon: LayoutDashboard, hideForDiretor: true },
-  { to: '/minhas-tarefas', label: 'Minhas tarefas', end: false, icon: ListTodo, hideForDiretor: true },
-  { to: '/calendario', label: 'Calendário', end: false, icon: CalendarDays },
+]
+
+const adminConfigNav: NavItem[] = [
+  { to: '/obrigacoes', label: 'Obrigações', end: false, icon: ListChecks },
+  { to: '/cadastro-empresas', label: 'Cadastro de empresas', end: false, icon: Building },
+  { to: '/atividades', label: 'Atividades', end: false, icon: ClipboardList },
+  { to: '/responsaveis', label: 'Responsáveis', end: false, icon: Users },
+  { to: '/usuarios', label: 'Usuários', end: false, icon: UserCog },
+  { to: '/importacao', label: 'Importação', end: false, icon: Upload },
+]
+
+const otherNav: NavItem[] = [
   { to: '/obrigacoes', label: 'Obrigações', end: false, icon: ListChecks, hideForDiretor: true },
   { to: '/empresas', label: 'Empresas', end: false, icon: Building2 },
 ]
@@ -156,13 +188,132 @@ function NavItemLink({
   )
 }
 
+function NavSubmenu({
+  label,
+  icon: Icon,
+  items,
+  open,
+  setOpen,
+  active,
+  expanded,
+  isNarrow,
+  onExpandNarrow,
+  onSelect,
+}: {
+  label: string
+  icon: LucideIcon
+  items: NavItem[]
+  open: boolean
+  setOpen: (value: boolean | ((prev: boolean) => boolean)) => void
+  active: boolean
+  expanded: boolean
+  isNarrow: boolean
+  onExpandNarrow: () => void
+  onSelect: () => void
+}) {
+  if (!items.length) return null
+
+  return (
+    <div className="pt-2">
+      <button
+        type="button"
+        onClick={() => {
+          if (!expanded && isNarrow) {
+            onExpandNarrow()
+            setOpen(true)
+            return
+          }
+          setOpen((v) => !v)
+        }}
+        title={label}
+        aria-label={label}
+        className={[
+          'glass-nav-item w-full',
+          expanded ? '' : 'sidebar-icon-only',
+          active && !open ? 'glass-nav-item-active' : '',
+        ].join(' ')}
+        aria-expanded={expanded && open}
+      >
+        <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+        <span
+          className={[
+            'flex-1 whitespace-nowrap text-left transition-opacity duration-200',
+            expanded ? 'opacity-100' : 'hidden',
+          ].join(' ')}
+        >
+          {label}
+        </span>
+        {expanded && (
+          <ChevronDown
+            className={[
+              'h-4 w-4 shrink-0 transition-transform',
+              open ? 'rotate-180' : '',
+            ].join(' ')}
+            strokeWidth={1.75}
+          />
+        )}
+      </button>
+      {expanded && open && (
+        <div className="mt-1 space-y-1 border-l border-[color:var(--color-line)] pl-3">
+          {items.map((item) => (
+            <NavItemLink
+              key={item.to}
+              item={item}
+              expanded={expanded}
+              onSelect={onSelect}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function filterNavItem(
+  item: NavItem,
+  opts: { isDiretor: boolean; canReadPainelFiscal: boolean },
+): boolean {
+  if (item.painelFiscal) return opts.canReadPainelFiscal
+  if (item.diretorOnly && !opts.isDiretor) return false
+  if (item.hideForDiretor && opts.isDiretor) return false
+  return true
+}
+
 export default function Layout() {
   const { signOut, session, isAdmin, isDiretor, canReadPainelFiscal } = useAuth()
   const location = useLocation()
-  const configActive = adminConfigNav.some((item) =>
-    location.pathname.startsWith(item.to),
-  )
+  const access = { isDiretor, canReadPainelFiscal }
+
+  const pathMatchesItem = (item: NavItem) => {
+    if (item.end) return location.pathname === item.to
+    return (
+      location.pathname === item.to || location.pathname.startsWith(`${item.to}/`)
+    )
+  }
+
+  const configActive = adminConfigNav.some((item) => pathMatchesItem(item))
+  const dashboardsItems = isAdmin
+    ? dashboardsNav
+    : dashboardsNav.filter((item) => filterNavItem(item, access))
+  const dashboardsActive = dashboardsItems.some((item) => pathMatchesItem(item))
+  const contenciosoItems = isAdmin
+    ? contenciosoNav
+    : contenciosoNav.filter((item) => filterNavItem(item, access))
+  const contenciosoActive = contenciosoItems.some((item) => pathMatchesItem(item))
+  const tarefasItems = isAdmin
+    ? tarefasNav
+    : tarefasNav.filter((item) => filterNavItem(item, access))
+  const tarefasActive = tarefasItems.some((item) => pathMatchesItem(item))
+  const valoresItems = isAdmin
+    ? valoresNav
+    : valoresNav.filter((item) => filterNavItem(item, access))
+  const valoresActive = valoresItems.some((item) => pathMatchesItem(item))
+
   const [configOpen, setConfigOpen] = useState(configActive)
+  const [dashboardsOpen, setDashboardsOpen] = useState(dashboardsActive)
+  const [contenciosoOpen, setContenciosoOpen] = useState(contenciosoActive)
+  const [tarefasOpen, setTarefasOpen] = useState(tarefasActive)
+  const [valoresOpen, setValoresOpen] = useState(valoresActive)
   const [hovered, setHovered] = useState(false)
   const [focused, setFocused] = useState(false)
   const [pinned, setPinned] = useState(false)
@@ -177,18 +328,33 @@ export default function Layout() {
     if (isNarrow) setPinned(false)
   }, [location.pathname, isNarrow])
 
+  useEffect(() => {
+    if (dashboardsActive) setDashboardsOpen(true)
+  }, [dashboardsActive])
+
+  useEffect(() => {
+    if (contenciosoActive) setContenciosoOpen(true)
+  }, [contenciosoActive])
+
+  useEffect(() => {
+    if (tarefasActive) setTarefasOpen(true)
+  }, [tarefasActive])
+
+  useEffect(() => {
+    if (valoresActive) setValoresOpen(true)
+  }, [valoresActive])
+
+  useEffect(() => {
+    if (configActive) setConfigOpen(true)
+  }, [configActive])
+
   const closeIfNarrow = () => {
     if (isNarrow) setPinned(false)
   }
 
   const visibleNav = isAdmin
     ? adminMainNav
-    : otherNav.filter((item) => {
-        if (item.painelFiscal) return canReadPainelFiscal
-        if (item.diretorOnly && !isDiretor) return false
-        if (item.hideForDiretor && isDiretor) return false
-        return true
-      })
+    : otherNav.filter((item) => filterNavItem(item, access))
 
   return (
     <div className="mesh-bg flex min-h-screen">
@@ -274,63 +440,75 @@ export default function Layout() {
         </div>
 
         <nav className={['min-h-0 flex-1 space-y-1 overflow-y-auto py-4', expanded ? 'px-3' : 'px-2'].join(' ')}>
+          <NavSubmenu
+            label="Dashboards"
+            icon={LayoutDashboard}
+            items={dashboardsItems}
+            open={dashboardsOpen}
+            setOpen={setDashboardsOpen}
+            active={dashboardsActive}
+            expanded={expanded}
+            isNarrow={isNarrow}
+            onExpandNarrow={() => setPinned(true)}
+            onSelect={closeIfNarrow}
+          />
+
+          <NavSubmenu
+            label="Valores"
+            icon={CircleDollarSign}
+            items={valoresItems}
+            open={valoresOpen}
+            setOpen={setValoresOpen}
+            active={valoresActive}
+            expanded={expanded}
+            isNarrow={isNarrow}
+            onExpandNarrow={() => setPinned(true)}
+            onSelect={closeIfNarrow}
+          />
+
+          <NavSubmenu
+            label="Contencioso"
+            icon={Gavel}
+            items={contenciosoItems}
+            open={contenciosoOpen}
+            setOpen={setContenciosoOpen}
+            active={contenciosoActive}
+            expanded={expanded}
+            isNarrow={isNarrow}
+            onExpandNarrow={() => setPinned(true)}
+            onSelect={closeIfNarrow}
+          />
+
+          <NavSubmenu
+            label="Tarefas"
+            icon={ListTodo}
+            items={tarefasItems}
+            open={tarefasOpen}
+            setOpen={setTarefasOpen}
+            active={tarefasActive}
+            expanded={expanded}
+            isNarrow={isNarrow}
+            onExpandNarrow={() => setPinned(true)}
+            onSelect={closeIfNarrow}
+          />
+
           {visibleNav.map((item) => (
             <NavItemLink key={item.to} item={item} expanded={expanded} onSelect={closeIfNarrow} />
           ))}
 
           {isAdmin && (
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={() => {
-                  if (!expanded && isNarrow) {
-                    setPinned(true)
-                    setConfigOpen(true)
-                    return
-                  }
-                  setConfigOpen((open) => !open)
-                }}
-                title="Configurações"
-                aria-label="Configurações"
-                className={[
-                  'glass-nav-item w-full',
-                  expanded ? '' : 'sidebar-icon-only',
-                  configActive && !configOpen ? 'glass-nav-item-active' : '',
-                ].join(' ')}
-                aria-expanded={expanded && configOpen}
-              >
-                <Settings className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-                <span
-                  className={[
-                    'flex-1 whitespace-nowrap text-left transition-opacity duration-200',
-                    expanded ? 'opacity-100' : 'hidden',
-                  ].join(' ')}
-                >
-                  Configurações
-                </span>
-                {expanded && (
-                  <ChevronDown
-                    className={[
-                      'h-4 w-4 shrink-0 transition-transform',
-                      configOpen ? 'rotate-180' : '',
-                    ].join(' ')}
-                    strokeWidth={1.75}
-                  />
-                )}
-              </button>
-              {expanded && configOpen && (
-                <div className="mt-1 space-y-1 border-l border-[color:var(--color-line)] pl-3">
-                  {adminConfigNav.map((item) => (
-                    <NavItemLink
-                      key={item.to}
-                      item={item}
-                      expanded={expanded}
-                      onSelect={closeIfNarrow}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
+            <NavSubmenu
+              label="Configurações"
+              icon={Settings}
+              items={adminConfigNav}
+              open={configOpen}
+              setOpen={setConfigOpen}
+              active={configActive}
+              expanded={expanded}
+              isNarrow={isNarrow}
+              onExpandNarrow={() => setPinned(true)}
+              onSelect={closeIfNarrow}
+            />
           )}
         </nav>
 
