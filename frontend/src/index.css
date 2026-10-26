@@ -231,12 +231,14 @@ html.dark {
     -webkit-backdrop-filter: blur(28px) saturate(1.55);
   }
 
+  /* Cards dos dashboards — hover sutil (lift + leve expansão) */
   .kpi-card {
-    @apply transition-all duration-300 ease-out;
+    @apply transition-[transform,box-shadow] duration-300 ease-out;
+    will-change: transform;
   }
 
   .kpi-card:hover {
-    transform: translateY(-2px);
+    transform: translateY(-2px) scale(1.015);
     box-shadow:
       0 1px 0 var(--glass-inset) inset,
       0 16px 32px -12px rgb(255 61 3 / 0.22);
@@ -250,6 +252,18 @@ html.dark {
     box-shadow:
       0 0 2px rgb(145 158 171 / 0.2),
       0 12px 24px -4px rgb(145 158 171 / 0.12);
+    transition:
+      transform 0.3s ease-out,
+      box-shadow 0.3s ease-out;
+    will-change: transform;
+  }
+
+  /* Lift só em cards de KPI/gráfico — tabelas ficam estáticas */
+  .diretoria-card:hover:not(:has(table)):not(.no-lift) {
+    transform: translateY(-2px) scale(1.012);
+    box-shadow:
+      0 0 2px rgb(145 158 171 / 0.28),
+      0 16px 28px -4px rgb(145 158 171 / 0.18);
   }
 
   html.dark .diretoria-card {
@@ -257,6 +271,12 @@ html.dark {
       0 0 2px rgb(0 0 0 / 0.4),
       0 12px 24px -4px rgb(0 0 0 / 0.35);
     outline: 1px solid rgb(255 255 255 / 0.06);
+  }
+
+  html.dark .diretoria-card:hover:not(:has(table)):not(.no-lift) {
+    box-shadow:
+      0 0 2px rgb(0 0 0 / 0.5),
+      0 18px 32px -4px rgb(0 0 0 / 0.45);
   }
 
   .btn-primary {
@@ -357,6 +377,15 @@ html.dark {
     }
     .sidebar-rail {
       transition: none;
+    }
+    .kpi-card,
+    .diretoria-card {
+      transition: none;
+      will-change: auto;
+    }
+    .kpi-card:hover,
+    .diretoria-card:hover:not(:has(table)):not(.no-lift) {
+      transform: none;
     }
   }
 

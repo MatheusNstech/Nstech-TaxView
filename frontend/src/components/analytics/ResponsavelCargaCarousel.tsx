@@ -84,6 +84,7 @@ export default function ResponsavelCargaCarousel({
   const current = items[safeIndex]
   const rank = safeIndex + 1
   const atividades = current.atividades
+  const canNavigate = items.length > 1
 
   const go = (next: number) => {
     const len = items.length
@@ -92,7 +93,7 @@ export default function ResponsavelCargaCarousel({
 
   return (
     <div
-      className="relative flex h-full min-h-[320px] overflow-hidden rounded-2xl bg-cover bg-center bg-no-repeat shadow-sm ring-1 ring-black/20 dark:ring-white/15"
+      className="relative flex h-full min-h-[320px] overflow-hidden rounded-2xl bg-cover bg-center bg-no-repeat shadow-sm ring-1 ring-black/20 transition-[transform,box-shadow] duration-300 ease-out will-change-transform motion-safe:hover:-translate-y-0.5 motion-safe:hover:scale-[1.015] motion-safe:hover:shadow-lg dark:ring-white/15"
       style={{ backgroundImage: `url(${midiaBg})` }}
     >
       <div className="pointer-events-none absolute inset-0 bg-black/35" />
@@ -104,42 +105,46 @@ export default function ResponsavelCargaCarousel({
             <p className="text-[11px] font-semibold tracking-[0.12em] text-brand-300 uppercase">
               Carga por responsável
             </p>
-            <div className="mt-3 flex items-center gap-1.5">
-              {items.map((item, i) => (
-                <button
-                  key={item.id ?? item.nome}
-                  type="button"
-                  aria-label={`Ver ${item.nome}`}
-                  onClick={() => setIndex(i)}
-                  className={[
-                    'h-1.5 rounded-full transition-all',
-                    i === safeIndex
-                      ? 'w-5 bg-brand-500'
-                      : 'w-1.5 bg-brand-300/50 hover:bg-brand-400',
-                  ].join(' ')}
-                />
-              ))}
-            </div>
+            {canNavigate ? (
+              <div className="mt-3 flex items-center gap-1.5">
+                {items.map((item, i) => (
+                  <button
+                    key={item.id ?? item.nome}
+                    type="button"
+                    aria-label={`Ver ${item.nome}`}
+                    onClick={() => setIndex(i)}
+                    className={[
+                      'h-1.5 rounded-full transition-all',
+                      i === safeIndex
+                        ? 'w-5 bg-brand-500'
+                        : 'w-1.5 bg-brand-300/50 hover:bg-brand-400',
+                    ].join(' ')}
+                  />
+                ))}
+              </div>
+            ) : null}
           </div>
 
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              aria-label="Anterior"
-              onClick={() => go(safeIndex - 1)}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur-md transition hover:bg-white/25"
-            >
-              <ChevronLeft className="h-4 w-4" strokeWidth={2} />
-            </button>
-            <button
-              type="button"
-              aria-label="Próximo"
-              onClick={() => go(safeIndex + 1)}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur-md transition hover:bg-white/25"
-            >
-              <ChevronRight className="h-4 w-4" strokeWidth={2} />
-            </button>
-          </div>
+          {canNavigate ? (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                aria-label="Anterior"
+                onClick={() => go(safeIndex - 1)}
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur-md transition hover:bg-white/25"
+              >
+                <ChevronLeft className="h-4 w-4" strokeWidth={2} />
+              </button>
+              <button
+                type="button"
+                aria-label="Próximo"
+                onClick={() => go(safeIndex + 1)}
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur-md transition hover:bg-white/25"
+              >
+                <ChevronRight className="h-4 w-4" strokeWidth={2} />
+              </button>
+            </div>
+          ) : null}
         </div>
 
         <div className="mt-6 flex items-center gap-4">

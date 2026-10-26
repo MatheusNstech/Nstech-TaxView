@@ -348,7 +348,7 @@ export default function Dashboard() {
             <AnalyticsSkeleton variant="charts" />
           ) : (            <>
               <div className="grid gap-6 lg:grid-cols-2">
-                <div className="glass-panel flex flex-col p-5">
+                <div className="kpi-card glass-panel flex flex-col p-5">
                   <div className="mb-1 flex items-start justify-between gap-3">
                     <div>
                       <h3 className="text-sm font-semibold text-[color:var(--color-ink)]">
@@ -457,7 +457,7 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              <div className="glass-panel p-5">
+              <div className="kpi-card glass-panel p-5">
                 <div className="mb-4 flex items-start justify-between gap-3">
                   <div>
                     <h3 className="text-sm font-semibold text-[color:var(--color-ink)]">
