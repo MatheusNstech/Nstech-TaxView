@@ -52,6 +52,7 @@ from app.services.obrigacao_responsaveis import (
     RESPONSAVEIS_EMBED,
     apply_responsavel_filter,
     pop_responsaveis,
+    responsavel_ids_of,
     select_with_responsavel_filter,
     set_responsaveis,
 )
@@ -462,14 +463,17 @@ def copiar_obrigacao(
     # Se quiser limpar, o cliente omite e mantém origem. OK.
 
     destinos, ignoradas = carregar_destinos(
-        client, [str(e) for e in body.empresa_ids], str(origem["empresa_id"])
+        client,
+        [str(e) for e in body.empresa_ids],
+        str(origem["empresa_id"]) if origem.get("empresa_id") else None,
+        permitir_mesma_empresa=True,
     )
     duplicada = "Já existe essa obrigação para a empresa nesta competência"
-    existentes: set[str] = set()
+    existentes: dict[str, str] = {}
     if destinos:
         rows = (
             client.table("obrigacoes")
-            .select("empresa_id")
+            .select("id,empresa_id")
             .eq("atividade_id", str(origem["atividade_id"]))
             .eq("competencia", str(origem["competencia"]))
             .in_("empresa_id", list(destinos))
@@ -477,11 +481,41 @@ def copiar_obrigacao(
             .data
             or []
         )
-        existentes = {str(r["empresa_id"]) for r in rows}
+        existentes = {str(r["empresa_id"]): str(r["id"]) for r in rows if r.get("id")}
 
     criadas = 0
     for eid in destinos:
         if eid in existentes:
+            # Mesma empresa/competência: user normal entra como responsável na existente.
+            if user.role != "admin" and principal:
+                oid_existente = existentes[eid]
+                atuais = responsavel_ids_of(client, oid_existente)
+                if principal in atuais:
+                    ignoradas.append(
+                        {
+                            "empresa_id": eid,
+                            "motivo": "Você já é responsável nesta obrigação",
+                        }
+                    )
+                    continue
+                set_responsaveis(client, oid_existente, atuais | {principal}, None)
+                write_audit(
+                    client,
+                    obrigacao_id=oid_existente,
+                    user_id=user.id,
+                    acao="UPDATE",
+                    campo="responsaveis",
+                    valor_novo=principal,
+                )
+                criadas += 1
+                notify_responsavel_of_obrigacao(
+                    client,
+                    obrigacao_id=oid_existente,
+                    tipo="ATRIBUICAO",
+                    titulo="Obrigação compartilhada com você",
+                    corpo="Você foi incluído como responsável ao copiar uma obrigação.",
+                )
+                continue
             ignoradas.append({"empresa_id": eid, "motivo": duplicada})
             continue
         payload = {

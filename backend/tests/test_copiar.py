@@ -155,6 +155,46 @@ def test_user_copia_obrigacao_para_si(monkeypatch):
     assert vinculos and vinculos[0][2] == [ME_RESP]
 
 
+def test_user_copia_obrigacao_mesma_empresa_entra_como_responsavel(monkeypatch):
+    outro = str(uuid4())
+    oid = str(uuid4())
+    origem = {
+        "id": oid,
+        "empresa_id": ORIGEM,
+        "atividade_id": str(uuid4()),
+        "competencia": "2026-09-01",
+        "prazo_legal": "2026-10-20",
+        "prazo_fiscal": None,
+        "categoria": "fechamento",
+        "responsavel_id": outro,
+        "responsaveis": [{"id": outro}],
+        "status": "PENDENTE",
+    }
+    vinculos: list[tuple] = []
+    monkeypatch.setattr(obrigacoes, "assert_obrigacao_in_scope", lambda *a: origem)
+    monkeypatch.setattr(obrigacoes, "_fetch_full", lambda _c, _id: origem)
+    monkeypatch.setattr(obrigacoes, "set_responsaveis", lambda *a: vinculos.append(a))
+    monkeypatch.setattr(obrigacoes, "write_audit", lambda *a, **k: None)
+    monkeypatch.setattr(obrigacoes, "notify_responsavel_of_obrigacao", lambda *a, **k: None)
+    monkeypatch.setattr(obrigacoes, "effective_responsavel_id", lambda *_: UUID(ME_RESP))
+    monkeypatch.setattr(obrigacoes, "responsavel_ids_of", lambda *_: {outro})
+    client = _Client(
+        {"empresas": _empresas(), "obrigacoes": [{"id": oid, "empresa_id": ORIGEM}]}
+    )
+
+    resp = _post(
+        USER,
+        client,
+        f"/api/obrigacoes/{oid}/copiar",
+        {"empresa_ids": [ORIGEM]},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["criadas"] == 1
+    assert not client.inserted.get("obrigacoes")
+    assert vinculos and ME_RESP in vinculos[0][2]
+
+
 def test_copia_obrigacao_ignora_origem_duplicada_e_inexistente(monkeypatch):
     resp_id = str(uuid4())
     origem = {
@@ -175,7 +215,12 @@ def test_copia_obrigacao_ignora_origem_duplicada_e_inexistente(monkeypatch):
     monkeypatch.setattr(obrigacoes, "set_responsaveis", lambda *a: vinculos.append(a))
     monkeypatch.setattr(obrigacoes, "write_audit", lambda *a, **k: None)
     monkeypatch.setattr(obrigacoes, "notify_responsavel_of_obrigacao", lambda *a, **k: None)
-    client = _Client({"empresas": _empresas(), "obrigacoes": [{"empresa_id": DUPLICADA}]})
+    client = _Client(
+        {
+            "empresas": _empresas(),
+            "obrigacoes": [{"id": str(uuid4()), "empresa_id": DUPLICADA}],
+        }
+    )
 
     resp = _post(
         ADMIN,
@@ -186,13 +231,15 @@ def test_copia_obrigacao_ignora_origem_duplicada_e_inexistente(monkeypatch):
 
     assert resp.status_code == 200
     body = resp.json()
-    assert body["criadas"] == 1
-    assert {i["empresa_id"] for i in body["ignoradas"]} == {ORIGEM, DUPLICADA, INEXISTENTE}
-    [nova] = client.inserted["obrigacoes"]
-    assert nova["empresa_id"] == NOVA
-    assert nova["status"] == "PENDENTE"
-    assert (nova["prazo_fiscal"], nova["responsavel_id"]) == ("2026-10-15", resp_id)
-    assert len(vinculos) == 1
+    # Admin pode repetir a empresa origem (cria outra só se não houver duplicata);
+    # DUPLICADA já existe na competência e INEXISTENTE não é empresa válida.
+    assert body["criadas"] == 2
+    assert {i["empresa_id"] for i in body["ignoradas"]} == {DUPLICADA, INEXISTENTE}
+    empresas_criadas = {n["empresa_id"] for n in client.inserted["obrigacoes"]}
+    assert empresas_criadas == {ORIGEM, NOVA}
+    assert all(n["status"] == "PENDENTE" for n in client.inserted["obrigacoes"])
+    assert all(n["responsavel_id"] == resp_id for n in client.inserted["obrigacoes"])
+    assert len(vinculos) == 2
 
 
 def test_copia_tarefa_troca_titulo_e_volta_para_pendente(monkeypatch):

@@ -149,10 +149,7 @@ export default function CopiarModal({
     setTituloManual(null)
     setSelecionadas((prev) => {
       const set = new Set(prev)
-      for (const e of filtradas) {
-        if (!ehTarefa && e.id === origem?.id) continue
-        set.add(e.id)
-      }
+      for (const e of filtradas) set.add(e.id)
       return [...set]
     })
   }
@@ -309,20 +306,17 @@ export default function CopiarModal({
               )}
               {filtradas.map((e) => {
                 const ehOrigem = e.id === origem?.id
-                const bloqueada = ehOrigem && !ehTarefa
                 const marcada = selecionadas.includes(e.id)
                 return (
                   <li key={e.id}>
                     <button
                       type="button"
-                      disabled={bloqueada}
                       onClick={() => alternar(e.id)}
                       className={[
                         'flex w-full items-center gap-3 rounded-xl border px-3 py-2 text-left text-sm transition',
                         marcada
                           ? 'border-brand-500/60 bg-brand-500/10'
                           : 'border-transparent hover:bg-[color:var(--nav-hover)]',
-                        bloqueada ? 'cursor-not-allowed opacity-50' : '',
                       ].join(' ')}
                     >
                       <span
@@ -423,8 +417,8 @@ export default function CopiarModal({
               )}
               {!ehTarefa && (
                 <p className="text-xs text-[color:var(--color-muted)]">
-                  Copia atividade e competência. Escolha outra empresa (a mesma já tem essa obrigação).
-                  As cópias começam como Pendente.
+                  Copia atividade e competência. Na empresa de origem, se a obrigação já existir, você
+                  entra como responsável nela. Novas cópias começam como Pendente.
                 </p>
               )}
               {erro && <p className="rounded-xl bg-rose-50/90 px-3 py-2 text-sm text-rose-700">{erro}</p>}
