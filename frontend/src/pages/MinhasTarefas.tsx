@@ -557,7 +557,7 @@ export default function MinhasTarefas() {
           onCardClick={openItem}
           readOnly={!canWrite}
           onCopiar={canWrite ? setCopiando : undefined}
-          podeCopiar={(item) => item.origem === 'tarefa' || isAdmin}
+          podeCopiar={() => true}
         />
       ) : (
         <div className="card-surface overflow-hidden">

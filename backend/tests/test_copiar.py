@@ -32,6 +32,9 @@ class _Query:
     def in_(self, *_a, **_k):
         return self
 
+    def limit(self, *_a, **_k):
+        return self
+
     def insert(self, payload):
         self.payload = payload
         return self
@@ -107,11 +110,49 @@ def test_viewer_nao_copia_tarefa():
     assert resp.status_code == 403
 
 
-@pytest.mark.parametrize("role", ["user", "diretor"])
-def test_so_admin_copia_obrigacao(role: str):
-    user = AuthUser(id="u", email="u@x.com", access_token="t", role=role)
-    resp = _post(user, object(), f"/api/obrigacoes/{uuid4()}/copiar", {"empresa_ids": [NOVA]})
+def test_diretor_nao_copia_obrigacao():
+    diretor = AuthUser(id="d", email="d@x.com", access_token="t", role="diretor")
+    resp = _post(diretor, object(), f"/api/obrigacoes/{uuid4()}/copiar", {"empresa_ids": [NOVA]})
     assert resp.status_code == 403
+
+
+def test_user_copia_obrigacao_para_si(monkeypatch):
+    outro = str(uuid4())
+    origem = {
+        "id": str(uuid4()),
+        "empresa_id": ORIGEM,
+        "atividade_id": str(uuid4()),
+        "competencia": "2026-09-01",
+        "prazo_legal": "2026-10-20",
+        "prazo_fiscal": "2026-10-15",
+        "categoria": "fechamento",
+        "responsavel_id": outro,
+        "responsaveis": [{"id": outro}],
+        "status": "PENDENTE",
+    }
+    vinculos: list[tuple] = []
+    monkeypatch.setattr(obrigacoes, "assert_obrigacao_in_scope", lambda *a: origem)
+    monkeypatch.setattr(obrigacoes, "_fetch_full", lambda _c, _id: origem)
+    monkeypatch.setattr(obrigacoes, "set_responsaveis", lambda *a: vinculos.append(a))
+    monkeypatch.setattr(obrigacoes, "write_audit", lambda *a, **k: None)
+    monkeypatch.setattr(obrigacoes, "notify_responsavel_of_obrigacao", lambda *a, **k: None)
+    monkeypatch.setattr(obrigacoes, "effective_responsavel_id", lambda *_: UUID(ME_RESP))
+    client = _Client({"empresas": _empresas(), "obrigacoes": []})
+
+    resp = _post(
+        USER,
+        client,
+        f"/api/obrigacoes/{origem['id']}/copiar",
+        {"empresa_ids": [NOVA], "prazo_legal": "2026-11-30"},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["criadas"] == 1
+    [nova] = client.inserted["obrigacoes"]
+    assert nova["responsavel_id"] == ME_RESP
+    assert nova["empresa_id"] == NOVA
+    assert nova["prazo_legal"] == "2026-11-30"
+    assert vinculos and vinculos[0][2] == [ME_RESP]
 
 
 def test_copia_obrigacao_ignora_origem_duplicada_e_inexistente(monkeypatch):
@@ -129,6 +170,7 @@ def test_copia_obrigacao_ignora_origem_duplicada_e_inexistente(monkeypatch):
         "status": "ENTREGUE",
     }
     vinculos: list[tuple] = []
+    monkeypatch.setattr(obrigacoes, "assert_obrigacao_in_scope", lambda *a: origem)
     monkeypatch.setattr(obrigacoes, "_fetch_full", lambda _c, _id: origem)
     monkeypatch.setattr(obrigacoes, "set_responsaveis", lambda *a: vinculos.append(a))
     monkeypatch.setattr(obrigacoes, "write_audit", lambda *a, **k: None)

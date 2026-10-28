@@ -447,7 +447,7 @@ export default function ObrigacaoDrawer({
             />
             <AcoesEmpresa
               empresa={empresa}
-              onCopiar={isAdmin ? () => setCopiando(true) : undefined}
+              onCopiar={canWrite ? () => setCopiando(true) : undefined}
               onNavegar={onClose}
             />
           </>

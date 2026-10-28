@@ -63,6 +63,8 @@ export default function CopiarModal({
   const [selecionadas, setSelecionadas] = useState<string[]>([])
   const [tituloManual, setTituloManual] = useState<string | null>(null)
   const [prazo, setPrazo] = useState('')
+  const [prazoLegal, setPrazoLegal] = useState('')
+  const [prazoFiscal, setPrazoFiscal] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState('')
   const [resultado, setResultado] = useState<CopiarResultado | null>(null)
@@ -70,6 +72,7 @@ export default function CopiarModal({
   const origem = item ? empresaDoItem(item) : null
   const ehTarefa = item?.origem === 'tarefa'
   const itemKey = item?.key
+  const paraMim = !isAdmin
 
   useEffect(() => {
     if (!itemKey) return
@@ -77,6 +80,16 @@ export default function CopiarModal({
     setSelecionadas([])
     setTituloManual(null)
     setPrazo(item?.prazo ? String(item.prazo).slice(0, 10) : '')
+    setPrazoLegal(
+      item?.obrigacao?.prazo_legal
+        ? String(item.obrigacao.prazo_legal).slice(0, 10)
+        : '',
+    )
+    setPrazoFiscal(
+      item?.obrigacao?.prazo_fiscal
+        ? String(item.obrigacao.prazo_fiscal).slice(0, 10)
+        : '',
+    )
     setErro('')
     setResultado(null)
     if (empresas.length) return
@@ -85,7 +98,13 @@ export default function CopiarModal({
       .then((rows) => setEmpresas(rows.filter((e) => e.ativa)))
       .catch(() => setErro('Não foi possível carregar as empresas'))
       .finally(() => setCarregando(false))
-  }, [itemKey, empresas.length, item?.prazo])
+  }, [
+    itemKey,
+    empresas.length,
+    item?.prazo,
+    item?.obrigacao?.prazo_legal,
+    item?.obrigacao?.prazo_fiscal,
+  ])
 
   useEffect(() => {
     if (!itemKey) return
@@ -144,11 +163,21 @@ export default function CopiarModal({
     setErro('')
     try {
       const titulo = ehTarefa && unica && tituloManual?.trim() ? tituloManual.trim() : undefined
-      const body: { empresa_ids: string[]; titulo?: string; prazo?: string } = {
+      const body: {
+        empresa_ids: string[]
+        titulo?: string
+        prazo?: string
+        prazo_legal?: string
+        prazo_fiscal?: string | null
+      } = {
         empresa_ids: selecionadas,
         titulo,
       }
       if (ehTarefa && prazo) body.prazo = prazo
+      if (!ehTarefa) {
+        if (prazoLegal) body.prazo_legal = prazoLegal
+        body.prazo_fiscal = prazoFiscal || null
+      }
       const res = await apiFetch<CopiarResultado>(
         `/api/${ehTarefa ? 'tarefas' : 'obrigacoes'}/${item.id}/copiar`,
         { method: 'POST', body: JSON.stringify(body) },
@@ -188,7 +217,7 @@ export default function CopiarModal({
             <div className="min-w-0">
               <h2 id="copiar-titulo" className="text-lg font-semibold text-[color:var(--color-ink)]">
                 Copiar {ehTarefa ? 'tarefa' : 'obrigação'}
-                {ehTarefa && !isAdmin ? ' para mim' : ' para empresas'}
+                {paraMim ? ' para mim' : ' para empresas'}
               </h2>
               <p className="truncate text-sm font-medium text-[color:var(--color-ink)]">
                 {ehTarefa ? item.title : item.subtitle}
@@ -200,7 +229,7 @@ export default function CopiarModal({
                   ? ` · competência ${formatCompetencia(item.obrigacao.competencia)}`
                   : ''}
               </p>
-              {ehTarefa && !isAdmin ? (
+              {paraMim ? (
                 <p className="mt-1 text-[11px] text-[color:var(--color-muted)]">
                   A cópia fica com você. Pode mudar empresa e prazo.
                 </p>
@@ -337,6 +366,32 @@ export default function CopiarModal({
                   />
                 </label>
               )}
+              {!ehTarefa && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="mb-1 block text-xs font-medium text-[color:var(--color-muted)]">
+                      Prazo legal
+                    </span>
+                    <input
+                      type="date"
+                      value={prazoLegal}
+                      onChange={(e) => setPrazoLegal(e.target.value)}
+                      className="glass-input"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-xs font-medium text-[color:var(--color-muted)]">
+                      Prazo fiscal
+                    </span>
+                    <input
+                      type="date"
+                      value={prazoFiscal}
+                      onChange={(e) => setPrazoFiscal(e.target.value)}
+                      className="glass-input"
+                    />
+                  </label>
+                </div>
+              )}
               {ehTarefa && selecionadas.length > 0 && (
                 unica ? (
                   <label className="block">
@@ -368,7 +423,8 @@ export default function CopiarModal({
               )}
               {!ehTarefa && (
                 <p className="text-xs text-[color:var(--color-muted)]">
-                  Copia atividade, competência, prazos e responsáveis. As cópias começam como Pendente.
+                  Copia atividade e competência. Escolha outra empresa (a mesma já tem essa obrigação).
+                  As cópias começam como Pendente.
                 </p>
               )}
               {erro && <p className="rounded-xl bg-rose-50/90 px-3 py-2 text-sm text-rose-700">{erro}</p>}
@@ -385,7 +441,7 @@ export default function CopiarModal({
                   <Copy className="h-4 w-4" strokeWidth={1.75} />
                   {enviando
                     ? 'Copiando…'
-                    : ehTarefa && !isAdmin
+                    : paraMim
                       ? `Copiar para mim · ${plural(selecionadas.length, 'empresa', 'empresas')}`
                       : `Copiar para ${plural(selecionadas.length, 'empresa', 'empresas')}`}
                 </button>

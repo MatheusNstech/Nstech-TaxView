@@ -428,10 +428,39 @@ def create_obrigacao(
 def copiar_obrigacao(
     obrigacao_id: UUID,
     body: CopiarRequest,
-    user: Annotated[AuthUser, Depends(require_admin)],
+    user: Annotated[AuthUser, Depends(require_not_viewer)],
     client: Annotated[Client, Depends(get_db_client)],
 ):
+    assert_obrigacao_in_scope(user, client, str(obrigacao_id))
     origem = _fetch_full(client, str(obrigacao_id))
+
+    # User: cópia fica com quem copia. Admin: mantém responsáveis da origem.
+    if user.role == "admin":
+        principal = str(origem["responsavel_id"]) if origem.get("responsavel_id") else None
+        co_ids = [str(r["id"]) for r in origem.get("responsaveis") or [] if r.get("id")]
+    else:
+        me = effective_responsavel_id(user, client)
+        if not me:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Vincule um responsável ao seu login para copiar obrigações para você",
+            )
+        principal = str(me)
+        co_ids = [principal]
+
+    prazo_legal = (
+        body.prazo_legal.isoformat()
+        if body.prazo_legal
+        else origem.get("prazo_legal")
+    )
+    prazo_fiscal = (
+        body.prazo_fiscal.isoformat()
+        if body.prazo_fiscal is not None
+        else origem.get("prazo_fiscal")
+    )
+    # body.prazo_fiscal explícito como null não — só sobrescreve se enviado; None no pydantic = não enviado.
+    # Se quiser limpar, o cliente omite e mantém origem. OK.
+
     destinos, ignoradas = carregar_destinos(
         client, [str(e) for e in body.empresa_ids], str(origem["empresa_id"])
     )
@@ -450,8 +479,6 @@ def copiar_obrigacao(
         )
         existentes = {str(r["empresa_id"]) for r in rows}
 
-    principal = str(origem["responsavel_id"]) if origem.get("responsavel_id") else None
-    co_ids = [str(r["id"]) for r in origem.get("responsaveis") or [] if r.get("id")]
     criadas = 0
     for eid in destinos:
         if eid in existentes:
@@ -461,8 +488,8 @@ def copiar_obrigacao(
             "empresa_id": eid,
             "atividade_id": str(origem["atividade_id"]),
             "competencia": origem["competencia"],
-            "prazo_legal": origem.get("prazo_legal"),
-            "prazo_fiscal": origem.get("prazo_fiscal"),
+            "prazo_legal": prazo_legal,
+            "prazo_fiscal": prazo_fiscal,
             "categoria": origem.get("categoria") or "fechamento",
             "responsavel_id": principal,
             "status": "PENDENTE",
@@ -495,7 +522,7 @@ def copiar_obrigacao(
                 obrigacao_id=oid,
                 tipo="ATRIBUICAO",
                 titulo="Nova obrigação atribuída",
-                corpo="Uma obrigação foi copiada para outra empresa e atribuída a você.",
+                corpo="Uma obrigação foi copiada e atribuída a você.",
             )
     return CopiarResponse(criadas=criadas, ignoradas=ignoradas)
 

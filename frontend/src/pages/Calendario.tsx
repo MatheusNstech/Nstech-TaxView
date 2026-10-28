@@ -458,7 +458,7 @@ export default function Calendario() {
                   setSelectedTarefa(null)
                   setSelected(o)
                 }}
-                onCopiar={isAdmin ? () => setCopiando(workItemFromObrigacao(o)) : undefined}
+                onCopiar={canWrite ? () => setCopiando(workItemFromObrigacao(o)) : undefined}
               />
             ))}
           </div>

@@ -357,6 +357,8 @@ class CopiarRequest(BaseModel):
     empresa_ids: list[UUID] = Field(min_length=1, max_length=200)
     titulo: str | None = Field(default=None, max_length=200)
     prazo: date | None = None
+    prazo_legal: date | None = None
+    prazo_fiscal: date | None = None
 
 
 class TransferirRequest(BaseModel):
