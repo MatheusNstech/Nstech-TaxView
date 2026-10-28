@@ -1,5 +1,6 @@
 import { Check, CheckCircle2, Copy, Search, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { useAuth } from '../context/AuthContext'
 import { apiFetch } from '../lib/api'
 import { formatCompetencia, formatDate } from '../lib/format'
 import type { Empresa, WorkItem } from '../types'
@@ -55,11 +56,13 @@ export default function CopiarModal({
   onClose: () => void
   onCopiado?: () => void
 }) {
+  const { isAdmin } = useAuth()
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [carregando, setCarregando] = useState(false)
   const [busca, setBusca] = useState('')
   const [selecionadas, setSelecionadas] = useState<string[]>([])
   const [tituloManual, setTituloManual] = useState<string | null>(null)
+  const [prazo, setPrazo] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState('')
   const [resultado, setResultado] = useState<CopiarResultado | null>(null)
@@ -73,6 +76,7 @@ export default function CopiarModal({
     setBusca('')
     setSelecionadas([])
     setTituloManual(null)
+    setPrazo(item?.prazo ? String(item.prazo).slice(0, 10) : '')
     setErro('')
     setResultado(null)
     if (empresas.length) return
@@ -81,7 +85,7 @@ export default function CopiarModal({
       .then((rows) => setEmpresas(rows.filter((e) => e.ativa)))
       .catch(() => setErro('Não foi possível carregar as empresas'))
       .finally(() => setCarregando(false))
-  }, [itemKey, empresas.length])
+  }, [itemKey, empresas.length, item?.prazo])
 
   useEffect(() => {
     if (!itemKey) return
@@ -126,7 +130,10 @@ export default function CopiarModal({
     setTituloManual(null)
     setSelecionadas((prev) => {
       const set = new Set(prev)
-      for (const e of filtradas) if (e.id !== origem?.id) set.add(e.id)
+      for (const e of filtradas) {
+        if (!ehTarefa && e.id === origem?.id) continue
+        set.add(e.id)
+      }
       return [...set]
     })
   }
@@ -137,9 +144,14 @@ export default function CopiarModal({
     setErro('')
     try {
       const titulo = ehTarefa && unica && tituloManual?.trim() ? tituloManual.trim() : undefined
+      const body: { empresa_ids: string[]; titulo?: string; prazo?: string } = {
+        empresa_ids: selecionadas,
+        titulo,
+      }
+      if (ehTarefa && prazo) body.prazo = prazo
       const res = await apiFetch<CopiarResultado>(
         `/api/${ehTarefa ? 'tarefas' : 'obrigacoes'}/${item.id}/copiar`,
-        { method: 'POST', body: JSON.stringify({ empresa_ids: selecionadas, titulo }) },
+        { method: 'POST', body: JSON.stringify(body) },
       )
       setResultado(res)
       if (res.criadas > 0) onCopiado?.()
@@ -175,7 +187,8 @@ export default function CopiarModal({
             <EmpresaLogo empresa={origem} size="md" />
             <div className="min-w-0">
               <h2 id="copiar-titulo" className="text-lg font-semibold text-[color:var(--color-ink)]">
-                Copiar {ehTarefa ? 'tarefa' : 'obrigação'} para outras empresas
+                Copiar {ehTarefa ? 'tarefa' : 'obrigação'}
+                {ehTarefa && !isAdmin ? ' para mim' : ' para empresas'}
               </h2>
               <p className="truncate text-sm font-medium text-[color:var(--color-ink)]">
                 {ehTarefa ? item.title : item.subtitle}
@@ -187,6 +200,11 @@ export default function CopiarModal({
                   ? ` · competência ${formatCompetencia(item.obrigacao.competencia)}`
                   : ''}
               </p>
+              {ehTarefa && !isAdmin ? (
+                <p className="mt-1 text-[11px] text-[color:var(--color-muted)]">
+                  A cópia fica com você. Pode mudar empresa e prazo.
+                </p>
+              ) : null}
             </div>
           </div>
           <button type="button" className="btn-ghost !p-2" onClick={onClose} disabled={enviando}>
@@ -262,19 +280,20 @@ export default function CopiarModal({
               )}
               {filtradas.map((e) => {
                 const ehOrigem = e.id === origem?.id
+                const bloqueada = ehOrigem && !ehTarefa
                 const marcada = selecionadas.includes(e.id)
                 return (
                   <li key={e.id}>
                     <button
                       type="button"
-                      disabled={ehOrigem}
+                      disabled={bloqueada}
                       onClick={() => alternar(e.id)}
                       className={[
                         'flex w-full items-center gap-3 rounded-xl border px-3 py-2 text-left text-sm transition',
                         marcada
                           ? 'border-brand-500/60 bg-brand-500/10'
                           : 'border-transparent hover:bg-[color:var(--nav-hover)]',
-                        ehOrigem ? 'cursor-not-allowed opacity-50' : '',
+                        bloqueada ? 'cursor-not-allowed opacity-50' : '',
                       ].join(' ')}
                     >
                       <span
@@ -305,6 +324,19 @@ export default function CopiarModal({
             </ul>
 
             <div className="space-y-3 border-t border-[color:var(--color-line)] p-5">
+              {ehTarefa && (
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium text-[color:var(--color-muted)]">
+                    Prazo da cópia
+                  </span>
+                  <input
+                    type="date"
+                    value={prazo}
+                    onChange={(e) => setPrazo(e.target.value)}
+                    className="glass-input"
+                  />
+                </label>
+              )}
               {ehTarefa && selecionadas.length > 0 && (
                 unica ? (
                   <label className="block">
@@ -353,7 +385,9 @@ export default function CopiarModal({
                   <Copy className="h-4 w-4" strokeWidth={1.75} />
                   {enviando
                     ? 'Copiando…'
-                    : `Copiar para ${plural(selecionadas.length, 'empresa', 'empresas')}`}
+                    : ehTarefa && !isAdmin
+                      ? `Copiar para mim · ${plural(selecionadas.length, 'empresa', 'empresas')}`
+                      : `Copiar para ${plural(selecionadas.length, 'empresa', 'empresas')}`}
                 </button>
               </div>
             </div>

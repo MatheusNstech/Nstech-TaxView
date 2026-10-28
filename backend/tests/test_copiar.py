@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from types import SimpleNamespace
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -14,7 +14,9 @@ from app.main import app
 from app.services.copia import trocar_nome_empresa
 
 ORIGEM, NOVA, DUPLICADA, INEXISTENTE, ATIVIDADE = (str(uuid4()) for _ in range(5))
+ME_RESP = str(uuid4())
 ADMIN = AuthUser(id="a", email="a@x.com", access_token="t", role="admin")
+USER = AuthUser(id="u", email="u@x.com", access_token="t", role="user")
 
 
 class _Query:
@@ -53,9 +55,32 @@ class _Client:
 
 def _empresas():
     return [
+        {"id": ORIGEM, "razao_social": "ACME Origem", "nome_fantasia": "ACME", "ativa": True},
         {"id": NOVA, "razao_social": "KMM Logística", "nome_fantasia": "KMM", "ativa": True},
         {"id": DUPLICADA, "razao_social": "ACME", "ativa": True},
     ]
+
+
+def _tarefa_origem(responsavel_id: str | None = None) -> dict:
+    resp_id = responsavel_id or str(uuid4())
+    return {
+        "id": str(uuid4()),
+        "titulo": "Fechamento ACME - outubro",
+        "solicitante_nome": "Danilo",
+        "descricao": "Conferir notas",
+        "categoria": "fechamento",
+        "status": "ENTREGUE",
+        "competencia": "2026-09-01",
+        "prazo": "2026-10-10",
+        "hora_inicio": "09:00:00",
+        "hora_fim": "10:00:00",
+        "empresa_id": ORIGEM,
+        "empresa": {"id": ORIGEM, "razao_social": "ACME", "nome_fantasia": "ACME"},
+        "atividade_id": ATIVIDADE,
+        "responsavel_id": resp_id,
+        "entregue_em": "2026-10-09T12:00:00+00:00",
+        "motivo_atraso": "x" * 30,
+    }
 
 
 def _post(user: AuthUser, client: object, url: str, body: dict):
@@ -130,24 +155,7 @@ def test_copia_obrigacao_ignora_origem_duplicada_e_inexistente(monkeypatch):
 
 def test_copia_tarefa_troca_titulo_e_volta_para_pendente(monkeypatch):
     resp_id = str(uuid4())
-    origem = {
-        "id": str(uuid4()),
-        "titulo": "Fechamento ACME - outubro",
-        "solicitante_nome": "Danilo",
-        "descricao": "Conferir notas",
-        "categoria": "fechamento",
-        "status": "ENTREGUE",
-        "competencia": "2026-09-01",
-        "prazo": "2026-10-10",
-        "hora_inicio": "09:00:00",
-        "hora_fim": "10:00:00",
-        "empresa_id": ORIGEM,
-        "empresa": {"id": ORIGEM, "razao_social": "ACME"},
-        "atividade_id": ATIVIDADE,
-        "responsavel_id": resp_id,
-        "entregue_em": "2026-10-09T12:00:00+00:00",
-        "motivo_atraso": "x" * 30,
-    }
+    origem = _tarefa_origem(resp_id)
     monkeypatch.setattr(tarefas, "assert_tarefa_in_scope", lambda *a: origem)
     monkeypatch.setattr(tarefas, "_fetch_full", lambda _c, _id: origem)
     monkeypatch.setattr(tarefas, "_notify_assignee", lambda *a, **k: None)
@@ -169,7 +177,83 @@ def test_copia_tarefa_troca_titulo_e_volta_para_pendente(monkeypatch):
     assert nova["status"] == "PENDENTE"
     assert nova["empresa_id"] == NOVA
     assert nova["atividade_id"] == ATIVIDADE
+    assert nova["responsavel_id"] == resp_id  # admin mantém o da origem
     assert "entregue_em" not in nova and "motivo_atraso" not in nova
+
+
+def test_user_copia_tarefa_para_si_mesmo(monkeypatch):
+    outro = str(uuid4())
+    origem = _tarefa_origem(outro)
+    monkeypatch.setattr(tarefas, "assert_tarefa_in_scope", lambda *a: origem)
+    monkeypatch.setattr(tarefas, "_fetch_full", lambda _c, _id: origem)
+    monkeypatch.setattr(tarefas, "_notify_assignee", lambda *a, **k: None)
+    monkeypatch.setattr(tarefas, "effective_responsavel_id", lambda *_: UUID(ME_RESP))
+    client = _Client({"empresas": _empresas(), "tarefas": []})
+
+    resp = _post(USER, client, f"/api/tarefas/{origem['id']}/copiar", {"empresa_ids": [NOVA]})
+
+    assert resp.status_code == 200
+    [nova] = client.inserted["tarefas"]
+    assert nova["responsavel_id"] == ME_RESP
+    assert nova["empresa_id"] == NOVA
+    assert nova["prazo"] == "2026-10-10"
+
+
+def test_user_sem_responsavel_nao_copia(monkeypatch):
+    origem = _tarefa_origem()
+    monkeypatch.setattr(tarefas, "assert_tarefa_in_scope", lambda *a: origem)
+    monkeypatch.setattr(tarefas, "_fetch_full", lambda _c, _id: origem)
+    monkeypatch.setattr(tarefas, "effective_responsavel_id", lambda *_: None)
+    client = _Client({"empresas": _empresas()})
+
+    resp = _post(USER, client, f"/api/tarefas/{origem['id']}/copiar", {"empresa_ids": [NOVA]})
+
+    assert resp.status_code == 400
+    assert "responsável" in resp.json()["detail"].lower()
+
+
+def test_copia_mesma_empresa_com_novo_prazo(monkeypatch):
+    origem = _tarefa_origem(ME_RESP)
+    monkeypatch.setattr(tarefas, "assert_tarefa_in_scope", lambda *a: origem)
+    monkeypatch.setattr(tarefas, "_fetch_full", lambda _c, _id: origem)
+    monkeypatch.setattr(tarefas, "_notify_assignee", lambda *a, **k: None)
+    monkeypatch.setattr(tarefas, "effective_responsavel_id", lambda *_: UUID(ME_RESP))
+    client = _Client({"empresas": _empresas(), "tarefas": []})
+
+    resp = _post(
+        USER,
+        client,
+        f"/api/tarefas/{origem['id']}/copiar",
+        {"empresa_ids": [ORIGEM], "prazo": "2026-11-15"},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["criadas"] == 1
+    [nova] = client.inserted["tarefas"]
+    assert nova["empresa_id"] == ORIGEM
+    assert nova["prazo"] == "2026-11-15"
+    assert nova["responsavel_id"] == ME_RESP
+
+
+def test_admin_prazo_no_body_sobrescreve(monkeypatch):
+    resp_id = str(uuid4())
+    origem = _tarefa_origem(resp_id)
+    monkeypatch.setattr(tarefas, "assert_tarefa_in_scope", lambda *a: origem)
+    monkeypatch.setattr(tarefas, "_fetch_full", lambda _c, _id: origem)
+    monkeypatch.setattr(tarefas, "_notify_assignee", lambda *a, **k: None)
+    client = _Client({"empresas": _empresas(), "tarefas": []})
+
+    resp = _post(
+        ADMIN,
+        client,
+        f"/api/tarefas/{origem['id']}/copiar",
+        {"empresa_ids": [NOVA], "prazo": "2026-12-01"},
+    )
+
+    assert resp.status_code == 200
+    [nova] = client.inserted["tarefas"]
+    assert nova["prazo"] == "2026-12-01"
+    assert nova["responsavel_id"] == resp_id
 
 
 def test_titulo_manual_so_com_uma_empresa(monkeypatch):

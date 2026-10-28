@@ -514,10 +514,33 @@ def copiar_tarefa(
 ):
     assert_tarefa_in_scope(user, client, str(tarefa_id))
     origem = _fetch_full(client, str(tarefa_id))
+
+    # User/diretor: cópia fica com quem copia. Admin: mantém o responsável da origem.
+    if user.role == "admin":
+        responsavel_destino = str(origem["responsavel_id"]) if origem.get("responsavel_id") else None
+    else:
+        me = effective_responsavel_id(user, client)
+        if not me:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Vincule um responsável ao seu login para copiar tarefas para você",
+            )
+        responsavel_destino = str(me)
+    if not responsavel_destino:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tarefa de origem sem responsável",
+        )
+
+    prazo_destino = body.prazo.isoformat() if body.prazo else origem.get("prazo")
+    if prazo_destino is not None and not isinstance(prazo_destino, str):
+        prazo_destino = str(prazo_destino)
+
     destinos, ignoradas = carregar_destinos(
         client,
         [str(e) for e in body.empresa_ids],
         str(origem["empresa_id"]) if origem.get("empresa_id") else None,
+        permitir_mesma_empresa=True,
     )
     titulo_manual = (body.titulo or "").strip()
     if titulo_manual and len(body.empresa_ids) > 1:
@@ -533,12 +556,12 @@ def copiar_tarefa(
         for eid, emp in destinos.items()
     }
     existentes: set[tuple[str, str]] = set()
-    if destinos and origem.get("prazo"):
+    if destinos and prazo_destino:
         rows = (
             client.table("tarefas")
             .select("empresa_id, titulo")
-            .eq("prazo", str(origem["prazo"]))
-            .eq("responsavel_id", str(origem["responsavel_id"]))
+            .eq("prazo", str(prazo_destino)[:10])
+            .eq("responsavel_id", responsavel_destino)
             .in_("empresa_id", list(destinos))
             .execute()
             .data
@@ -559,13 +582,13 @@ def copiar_tarefa(
                 "categoria": origem["categoria"],
                 "status": "PENDENTE",
                 "competencia": origem.get("competencia"),
-                "prazo": origem.get("prazo"),
+                "prazo": prazo_destino,
                 "hora_inicio": origem.get("hora_inicio"),
                 "hora_fim": origem.get("hora_fim"),
                 "empresa_id": eid,
                 "atividade_id": origem.get("atividade_id"),
                 "obrigacao_id": None,
-                "responsavel_id": str(origem["responsavel_id"]),
+                "responsavel_id": responsavel_destino,
                 "created_by": user.id,
             }
         )
@@ -575,9 +598,9 @@ def copiar_tarefa(
         n = len(payloads)
         _notify_assignee(
             client,
-            responsavel_id=str(origem["responsavel_id"]),
+            responsavel_id=responsavel_destino,
             titulo=f"{n} nova(s) tarefa(s): {origem['titulo']}",
-            corpo="Tarefas copiadas para outras empresas foram atribuídas a você.",
+            corpo="Tarefas copiadas foram atribuídas a você.",
             actor_user_id=user.id,
         )
     return CopiarResponse(criadas=len(payloads), ignoradas=ignoradas)

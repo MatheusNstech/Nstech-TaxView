@@ -35,11 +35,17 @@ def carregar_destinos(
     client: Client,
     empresa_ids: list[str],
     origem_empresa_id: str | None,
+    *,
+    permitir_mesma_empresa: bool = False,
 ) -> tuple[dict[str, dict[str, Any]], list[dict[str, str]]]:
-    """Empresas de destino válidas (ativas, sem repetir, sem a origem) e as ignoradas."""
+    """Empresas de destino válidas (ativas, sem repetir) e as ignoradas.
+
+    Por padrão a empresa de origem é ignorada (cópia entre empresas).
+    Em cópia de tarefa o usuário pode manter a mesma empresa e só mudar o prazo.
+    """
     ids = list(dict.fromkeys(empresa_ids))
     ignoradas: list[dict[str, str]] = []
-    if origem_empresa_id in ids:
+    if not permitir_mesma_empresa and origem_empresa_id in ids:
         ids.remove(origem_empresa_id)
         ignoradas.append({"empresa_id": origem_empresa_id, "motivo": MESMA_EMPRESA})
     if not ids:
