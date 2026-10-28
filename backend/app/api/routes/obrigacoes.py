@@ -583,14 +583,13 @@ def update_obrigacao(
     if "responsavel_ids" in body:
         raw_ids = body.pop("responsavel_ids")
         new_responsavel_ids = [str(r) for r in (raw_ids or [])]
-    # Não-admin não pode reatribuir responsável
+    # Não-admin não reatribui responsável nem muda empresa/atividade/competência.
+    # Pode ajustar prazos (ex.: corrigir prazo fiscal) na obrigação do próprio escopo.
     if user.role != "admin":
         new_responsavel_ids = None
         body.pop("responsavel_id", None)
         body.pop("empresa_id", None)
         body.pop("atividade_id", None)
-        body.pop("prazo_legal", None)
-        body.pop("prazo_fiscal", None)
         body.pop("competencia", None)
     if new_responsavel_ids is not None:
         principal = body.get("responsavel_id", before.get("responsavel_id"))
@@ -615,9 +614,9 @@ def update_obrigacao(
             original = entrega_original or as_br_date(before.get("data_entrega")) or today_br()
             body["entrega_original"] = original.isoformat()
     if is_delivered(new_status):
-        # Atraso usa o prazo já gravado, não o prazo enviado neste PATCH.
-        prazo_fiscal = before.get("prazo_fiscal")
-        prazo_legal = before.get("prazo_legal")
+        # Usa prazos deste PATCH quando vierem; senão os já gravados.
+        prazo_fiscal = body.get("prazo_fiscal", before.get("prazo_fiscal"))
+        prazo_legal = body.get("prazo_legal", before.get("prazo_legal"))
         ref = prazo_fiscal or prazo_legal
         today = today_br()
         if entrega_original:
