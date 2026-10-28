@@ -120,7 +120,7 @@ export default function Calendario() {
   const [filtroStatus, setFiltroStatus] = useState<StatusObrigacao | ''>('')
   const [filtroBu, setFiltroBu] = useState('')
   const [copiando, setCopiando] = useState<WorkItem | null>(null)
-  const { canWrite, isAdmin } = useAuth()
+  const { canWrite } = useAuth()
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     if (!opts?.silent) setLoading(true)
