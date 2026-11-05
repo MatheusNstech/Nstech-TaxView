@@ -19,6 +19,19 @@ export interface EmpresaOption {
   cnpj: string
   alias: string
   razao: string
+  logo_url?: string | null
+  logo_url_escuro?: string | null
+  bu?: string | null
+}
+
+/** Cadastro TaxView — depara por CNPJ; o desktop pode seguir enviando o alias dele. */
+export interface CadastroEmpresaRef {
+  cnpj: string
+  razao_social: string
+  nome_fantasia?: string | null
+  logo_url?: string | null
+  logo_url_escuro?: string | null
+  bu?: string | null
 }
 
 export interface EmpresaMonthMetrics {
@@ -78,10 +91,23 @@ function competenciaKey(value: string): string {
   return value.slice(0, 7)
 }
 
+function cnpjDigits(value: string): string {
+  return value.replace(/\D/g, '')
+}
+
+function cnpjRaiz(digits: string): string {
+  return digits.slice(0, 8)
+}
+
+function filialLabel(digits: string): string {
+  if (digits.length < 14) return digits
+  return `${digits.slice(8, 12)}-${digits.slice(12)}`
+}
+
 export function groupEmpresas(rows: ValorRow[]): EmpresaOption[] {
   const map = new Map<string, EmpresaOption>()
   for (const row of rows) {
-    const cnpj = row.empresa_cnpj.replace(/\D/g, '')
+    const cnpj = cnpjDigits(row.empresa_cnpj)
     if (!cnpj) continue
     const prev = map.get(cnpj)
     if (!prev) {
@@ -98,6 +124,70 @@ export function groupEmpresas(rows: ValorRow[]): EmpresaOption[] {
   return [...map.values()].sort((a, b) =>
     a.alias.localeCompare(b.alias, 'pt-BR'),
   )
+}
+
+/**
+ * Troca alias/razão/logo do payload desktop pelos dados do cadastro (CNPJ).
+ * Filial sem fantasia herda a da matriz e ganha sufixo 000X-XX.
+ */
+export function enrichEmpresasFromCadastro(
+  options: EmpresaOption[],
+  cadastro: CadastroEmpresaRef[],
+): EmpresaOption[] {
+  const byCnpj = new Map<string, CadastroEmpresaRef>()
+  const fantasiaPorRaiz = new Map<string, string>()
+  const logoPorRaiz = new Map<
+    string,
+    { logo_url?: string | null; logo_url_escuro?: string | null }
+  >()
+
+  for (const emp of cadastro) {
+    const cnpj = cnpjDigits(emp.cnpj)
+    if (!cnpj) continue
+    byCnpj.set(cnpj, emp)
+    const raiz = cnpjRaiz(cnpj)
+    const fantasia = (emp.nome_fantasia || '').trim()
+    if (fantasia) {
+      const isMatriz = cnpj.length >= 12 && cnpj.slice(8, 12) === '0001'
+      if (isMatriz || !fantasiaPorRaiz.has(raiz)) {
+        fantasiaPorRaiz.set(raiz, fantasia)
+      }
+    }
+    if (emp.logo_url || emp.logo_url_escuro) {
+      const prev = logoPorRaiz.get(raiz)
+      if (!prev?.logo_url || emp.logo_url) {
+        logoPorRaiz.set(raiz, {
+          logo_url: emp.logo_url ?? prev?.logo_url,
+          logo_url_escuro: emp.logo_url_escuro ?? prev?.logo_url_escuro,
+        })
+      }
+    }
+  }
+
+  return options
+    .map((opt) => {
+      const cad = byCnpj.get(opt.cnpj)
+      if (!cad) return opt
+      const raiz = cnpjRaiz(opt.cnpj)
+      const ownFantasia = (cad.nome_fantasia || '').trim()
+      const inherited = fantasiaPorRaiz.get(raiz) || ''
+      const isMatriz = opt.cnpj.length >= 12 && opt.cnpj.slice(8, 12) === '0001'
+      let alias = ownFantasia
+      if (!alias && inherited && !isMatriz) {
+        alias = `${inherited} · ${filialLabel(opt.cnpj)}`
+      }
+      if (!alias) alias = (cad.razao_social || '').trim() || opt.alias
+      const logos = logoPorRaiz.get(raiz)
+      return {
+        ...opt,
+        alias,
+        razao: cad.razao_social || opt.razao,
+        logo_url: cad.logo_url || logos?.logo_url || null,
+        logo_url_escuro: cad.logo_url_escuro || logos?.logo_url_escuro || null,
+        bu: cad.bu ?? null,
+      }
+    })
+    .sort((a, b) => a.alias.localeCompare(b.alias, 'pt-BR'))
 }
 
 export function metricsForEmpresaMonth(

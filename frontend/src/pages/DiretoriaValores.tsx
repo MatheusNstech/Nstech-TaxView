@@ -28,9 +28,12 @@ import {
   formatMoneyBRL,
   monthToCompetencia,
 } from '../lib/format'
+import EmpresaLogo from '../components/empresas/EmpresaLogo'
+import type { Empresa } from '../types'
 import {
   buildFaturamentoSeries,
   deltaPercent,
+  enrichEmpresasFromCadastro,
   groupEmpresas,
   metricsForEmpresaMonth,
   previousCompetenciaIso,
@@ -194,6 +197,7 @@ export default function DiretoriaValores() {
   const [empresaCnpj, setEmpresaCnpj] = useState('')
   const [monthRows, setMonthRows] = useState<ValorRow[]>([])
   const [historyRows, setHistoryRows] = useState<ValorRow[]>([])
+  const [cadastro, setCadastro] = useState<Empresa[]>([])
   const [loading, setLoading] = useState(true)
   const [historyLoading, setHistoryLoading] = useState(false)
   const [error, setError] = useState('')
@@ -222,7 +226,25 @@ export default function DiretoriaValores() {
     void loadMonth()
   }, [loadMonth])
 
-  const empresas = useMemo(() => groupEmpresas(monthRows), [monthRows])
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const data = await apiFetch<Empresa[]>('/api/empresas')
+        if (!cancelled) setCadastro(data)
+      } catch {
+        if (!cancelled) setCadastro([])
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const empresas = useMemo(
+    () => enrichEmpresasFromCadastro(groupEmpresas(monthRows), cadastro),
+    [monthRows, cadastro],
+  )
 
   useEffect(() => {
     if (empresas.length === 0) {
@@ -309,13 +331,40 @@ export default function DiretoriaValores() {
       </div>
 
       <div className="glass-panel sticky top-3 z-20 flex flex-wrap items-center gap-2 px-3 py-2">
+        {empresa?.logo_url || empresa?.logo_url_escuro ? (
+          <div className="flex h-[2.35rem] w-[7.5rem] shrink-0 items-center justify-center rounded-xl border border-[color:var(--control-border)] bg-[color:var(--control-bg)] px-3 sm:w-[9rem]">
+            <img
+              src={empresa.logo_url || empresa.logo_url_escuro || ''}
+              alt={empresa.alias}
+              className={`max-h-7 w-auto max-w-full object-contain ${
+                empresa.logo_url_escuro ? 'dark:hidden' : ''
+              }`}
+            />
+            {empresa.logo_url_escuro ? (
+              <img
+                src={empresa.logo_url_escuro}
+                alt={empresa.alias}
+                className="hidden max-h-7 w-auto max-w-full object-contain dark:block"
+              />
+            ) : null}
+          </div>
+        ) : empresa ? (
+          <EmpresaLogo
+            empresa={{
+              nome_fantasia: empresa.alias,
+              razao_social: empresa.razao,
+              bu: empresa.bu,
+            }}
+            size="md"
+          />
+        ) : null}
         <GlassMonthPicker
           className="w-[8.25rem] shrink-0"
           value={competencia}
           onChange={setCompetencia}
         />
         <GlassSelect
-          className="w-[11.5rem] shrink-0"
+          className="min-w-[14rem] flex-1 basis-[14rem] sm:max-w-[18rem]"
           icon={Building2}
           ariaLabel="Empresa"
           value={empresaCnpj}
