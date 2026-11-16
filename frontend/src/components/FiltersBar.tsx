@@ -25,6 +25,8 @@ interface FiltersBarProps {
   showSearch?: boolean
   /** Filtro de responsável com checkboxes, gravado em `responsavel_ids`. */
   multiResponsavel?: boolean
+  /** Permite marcar vários meses no seletor (tarefas por prazo). */
+  multiMes?: boolean
 }
 
 const statusOptions: { value: StatusObrigacao | ''; label: string }[] = [
@@ -48,6 +50,7 @@ export default function FiltersBar({
   showStatus = true,
   showSearch = true,
   multiResponsavel = false,
+  multiMes = false,
 }: FiltersBarProps) {
   const update = (patch: Partial<FilterValues>) =>
     onChange({ ...filters, ...patch })
@@ -67,17 +70,41 @@ export default function FiltersBar({
     ...(atividades ?? []).map((a) => ({ value: a.id, label: a.nome })),
   ]
 
+  const multiMesValues =
+    filters.competencias && filters.competencias.length > 0
+      ? filters.competencias
+      : [filters.competencia]
+
   return (
     <div className="glass-panel sticky top-3 z-20 flex flex-wrap items-center gap-2 px-3 py-2">
       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-500/10 text-brand-600">
         <Filter className="h-3.5 w-3.5" strokeWidth={1.75} />
       </div>
 
-      <GlassMonthPicker
-        className="w-[8.25rem] shrink-0"
-        value={filters.competencia}
-        onChange={(competencia) => update({ competencia })}
-      />
+      {multiMes ? (
+        <GlassMonthPicker
+          multiple
+          className="min-w-[8.25rem] w-auto max-w-[14rem] shrink-0"
+          values={multiMesValues}
+          onChangeValues={(competencias) => {
+            const sorted = [...competencias].sort()
+            update({
+              competencias: sorted,
+              competencia: sorted[sorted.length - 1] ?? filters.competencia,
+            })
+          }}
+          ariaLabel="Meses"
+          shortcutLabel="Mês atual"
+        />
+      ) : (
+        <GlassMonthPicker
+          className="w-[8.25rem] shrink-0"
+          value={filters.competencia}
+          onChange={(competencia) =>
+            update({ competencia, competencias: [competencia] })
+          }
+        />
+      )}
 
       <GlassSelect
         className="min-w-[8.5rem] flex-1 basis-[8.5rem]"

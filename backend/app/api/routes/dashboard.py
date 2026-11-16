@@ -1,3 +1,4 @@
+from calendar import monthrange
 from collections import Counter
 from datetime import date, timedelta
 from typing import Annotated, Any
@@ -71,17 +72,12 @@ def summary(
             return _empty_summary()
         scope_rid = str(scope)
 
-    def build(table: str, columns: str):
+    def build_obrigacoes(columns: str):
         def _query():
-            if table == "obrigacoes":
-                query = client.table(table).select(
-                    select_with_responsavel_filter(columns, scope_rid)
-                )
-                query = apply_responsavel_filter(query, scope_rid)
-            else:
-                query = client.table(table).select(columns)
-                if scope_rid:
-                    query = query.eq("responsavel_id", scope_rid)
+            query = client.table("obrigacoes").select(
+                select_with_responsavel_filter(columns, scope_rid)
+            )
+            query = apply_responsavel_filter(query, scope_rid)
             if atividade_id:
                 query = query.eq("atividade_id", str(atividade_id))
             if competencia:
@@ -90,17 +86,31 @@ def summary(
 
         return _query
 
+    def build_tarefas(columns: str):
+        def _query():
+            query = client.table("tarefas").select(columns)
+            if scope_rid:
+                query = query.eq("responsavel_id", scope_rid)
+            if atividade_id:
+                query = query.eq("atividade_id", str(atividade_id))
+            # Tarefas avulsas entram pelo mês do prazo, não pela coluna competencia.
+            if competencia:
+                first = competencia.replace(day=1)
+                last = date(first.year, first.month, monthrange(first.year, first.month)[1])
+                query = query.gte("prazo", first.isoformat()).lte("prazo", last.isoformat())
+            return query.order("id")
+
+        return _query
+
     obr_rows = fetch_all(
-        build(
-            "obrigacoes",
+        build_obrigacoes(
             "id,status,prazo_legal,prazo_fiscal,data_entrega,entrega_original,responsavel_id,"
             "empresas(bu,razao_social),responsaveis(id,nome,capacidade_max),"
             "obrigacao_responsaveis(responsavel_id,responsaveis(id,nome,capacidade_max))",
         )
     )
     tar_rows = fetch_all(
-        build(
-            "tarefas",
+        build_tarefas(
             "id,status,prazo,entrega_original,responsavel_id,"
             "empresas(bu,razao_social),responsaveis(nome,capacidade_max)",
         )

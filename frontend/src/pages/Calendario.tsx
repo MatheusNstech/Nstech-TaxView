@@ -8,7 +8,12 @@ import StatusBadge from '../components/StatusBadge'
 import TarefaDrawer from '../components/TarefaDrawer'
 import { CalendarSkeleton } from '../components/ui/PageSkeletons'
 import { apiFetch, buildQuery } from '../lib/api'
-import { formatDate, formatHorario, statusLabel } from '../lib/format'
+import {
+  formatDate,
+  formatHorario,
+  monthBounds as monthDateBounds,
+  statusLabel,
+} from '../lib/format'
 import { obrigacaoResponsaveisLabel } from '../lib/responsaveis'
 import { workItemFromObrigacao, workItemFromTarefa } from '../lib/workItems'
 import { useAuth } from '../context/AuthContext'
@@ -36,9 +41,8 @@ const STATUS_OPTS: StatusObrigacao[] = [
 
 function monthBounds(ym: string) {
   const [y, m] = ym.split('-').map(Number)
-  const de = `${y}-${String(m).padStart(2, '0')}-01`
+  const { de, ate } = monthDateBounds(ym)
   const last = new Date(y, m, 0).getDate()
-  const ate = `${y}-${String(m).padStart(2, '0')}-${String(last).padStart(2, '0')}`
   return { de, ate, year: y, month: m, last }
 }
 

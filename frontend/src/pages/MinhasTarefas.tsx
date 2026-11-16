@@ -27,6 +27,7 @@ import {
   formatHorario,
   isEntregue,
   monthToCompetencia,
+  monthsSpanBounds,
 } from '../lib/format'
 import { resolveAvatarUrl } from '../lib/avatars'
 import {
@@ -84,13 +85,17 @@ export default function MinhasTarefas() {
     session,
   } = useAuth()
   const [view, setView] = useState<ViewMode>('kanban')
-  const [filters, setFilters] = useState<FilterValues>({
-    competencia: currentCompetenciaMonth(),
-    bu: '',
-    status: '',
-    search: '',
-    responsavel_ids: [],
-    atividade_id: '',
+  const [filters, setFilters] = useState<FilterValues>(() => {
+    const mes = currentCompetenciaMonth()
+    return {
+      competencia: mes,
+      competencias: [mes],
+      bu: '',
+      status: '',
+      search: '',
+      responsavel_ids: [],
+      atividade_id: '',
+    }
   })
   const [atividades, setAtividades] = useState<Atividade[]>([])
   const [defaultedOwnResponsavel, setDefaultedOwnResponsavel] = useState(false)
@@ -115,7 +120,16 @@ export default function MinhasTarefas() {
 
   const [equipe, setEquipe] = useState<Responsavel[]>([])
 
-  const competenciaIso = monthToCompetencia(filters.competencia)
+  const mesesFiltro = useMemo(() => {
+    const raw =
+      filters.competencias && filters.competencias.length > 0
+        ? filters.competencias
+        : [filters.competencia]
+    return [...new Set(raw.filter(Boolean))].sort()
+  }, [filters.competencia, filters.competencias])
+  const competenciaIso = monthToCompetencia(
+    mesesFiltro[mesesFiltro.length - 1] ?? filters.competencia,
+  )
   const podeFiltrarResp = isAdmin || equipe.length > 1
   const selectedRespIds = useMemo(
     () =>
@@ -154,21 +168,41 @@ export default function MinhasTarefas() {
     }
     try {
       // Com várias pessoas marcadas busca o escopo inteiro e filtra aqui.
+      // Obrigações: por competência (1+ meses). Tarefas: span do prazo.
       const singleResponsavel =
         selectedRespIds.length === 1 ? selectedRespIds[0] : undefined
-      const params = {
-        competencia: competenciaIso,
+      const { de: prazoDe, ate: prazoAte } = monthsSpanBounds(mesesFiltro)
+      const shared = {
         bu: filters.bu || undefined,
         status: filters.status || undefined,
         responsavel_id: singleResponsavel,
         equipe: !isAdmin && !singleResponsavel ? 'true' : undefined,
         q: filters.search || undefined,
+        atividade_id: filters.atividade_id || undefined,
       }
-      const query = buildQuery({ ...params, atividade_id: filters.atividade_id || undefined })
-      const [obrData, tarData] = await Promise.all([
-        apiFetch<Obrigacao[]>(`/api/obrigacoes${query}`),
-        apiFetch<Tarefa[]>(`/api/tarefas${query}`),
+      const tarQuery = buildQuery({
+        ...shared,
+        prazo_de: prazoDe,
+        prazo_ate: prazoAte,
+      })
+      const [obrLists, tarData] = await Promise.all([
+        Promise.all(
+          mesesFiltro.map((ym) =>
+            apiFetch<Obrigacao[]>(
+              `/api/obrigacoes${buildQuery({
+                ...shared,
+                competencia: monthToCompetencia(ym),
+              })}`,
+            ),
+          ),
+        ),
+        apiFetch<Tarefa[]>(`/api/tarefas${tarQuery}`),
       ])
+      const obrById = new Map<string, Obrigacao>()
+      for (const list of obrLists) {
+        for (const o of list) obrById.set(o.id, o)
+      }
+      const obrData = [...obrById.values()]
       const anySelected = selectedRespIds.length > 0
       setObrigacoes(
         obrData.filter(
@@ -199,7 +233,7 @@ export default function MinhasTarefas() {
       if (!opts?.silent) setLoading(false)
     }
   }, [
-    competenciaIso,
+    mesesFiltro,
     filters.bu,
     filters.status,
     filters.search,
@@ -515,6 +549,7 @@ export default function MinhasTarefas() {
         responsaveis={isAdmin ? responsaveis : podeFiltrarResp ? equipe : undefined}
         atividades={atividades}
         multiResponsavel
+        multiMes
       />
 
       {error && (

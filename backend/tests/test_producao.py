@@ -50,6 +50,20 @@ class _Query:
         self.filters.append(lambda r: str(r.get(key)) == str(value))
         return self
 
+    def gte(self, key, value):
+        bound = str(value)[:10]
+        self.filters.append(
+            lambda r, k=key, b=bound: r.get(k) is not None and str(r.get(k))[:10] >= b
+        )
+        return self
+
+    def lte(self, key, value):
+        bound = str(value)[:10]
+        self.filters.append(
+            lambda r, k=key, b=bound: r.get(k) is not None and str(r.get(k))[:10] <= b
+        )
+        return self
+
     def in_(self, key, values):
         allowed = {str(v) for v in values}
         self.filters.append(
@@ -418,16 +432,30 @@ def test_filtro_por_tipo_de_servico_traz_obrigacoes_e_tarefas_do_servico():
             {"id": str(uuid4()), "atividade_id": str(icms), "competencia": comp, "status": "PENDENTE"},
         ],
         tarefas=[
-            {"id": str(uuid4()), "atividade_id": str(pis), "competencia": comp, "status": "PENDENTE"},
-            {"id": str(uuid4()), "atividade_id": None, "competencia": comp, "status": "PENDENTE"},
+            {
+                "id": str(uuid4()),
+                "atividade_id": str(pis),
+                "competencia": comp,
+                "prazo": "2026-09-15",
+                "status": "PENDENTE",
+            },
+            {
+                "id": str(uuid4()),
+                "atividade_id": None,
+                "competencia": comp,
+                "prazo": "2026-09-20",
+                "status": "PENDENTE",
+            },
         ],
     )
     admin = AuthUser(id=str(uuid4()), email="a@x.com", access_token="t", role="admin")
 
-    filtrado = dashboard_summary(admin, fake, competencia=date(2026, 9, 1), atividade_id=pis)  # type: ignore[arg-type]
-    assert (filtrado.total, filtrado.pendente, filtrado.entregue) == (3, 2, 1)
-    todos = dashboard_summary(admin, fake, competencia=date(2026, 9, 1))  # type: ignore[arg-type]
-    assert todos.total == 5
+    # Congela "hoje" no mês do filtro para o prazo não virar ATRASADO.
+    with patch("app.api.routes.dashboard.today_br", return_value=date(2026, 9, 1)):
+        filtrado = dashboard_summary(admin, fake, competencia=date(2026, 9, 1), atividade_id=pis)  # type: ignore[arg-type]
+        assert (filtrado.total, filtrado.pendente, filtrado.entregue) == (3, 2, 1)
+        todos = dashboard_summary(admin, fake, competencia=date(2026, 9, 1))  # type: ignore[arg-type]
+        assert todos.total == 5
 
     with patch("app.api.routes.obrigacoes.query_tarefas", return_value=[]) as query_tarefas:
         rows, _ = _export_rows(admin, fake, atividade_id=pis, competencia=date(2026, 9, 1))  # type: ignore[arg-type]

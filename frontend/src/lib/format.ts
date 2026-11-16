@@ -61,6 +61,35 @@ export function monthToCompetencia(month: string): string {
   return `${month}-01`
 }
 
+/** Limites inclusivos do mês "YYYY-MM" (1º dia → último dia). */
+export function monthBounds(ym: string): { de: string; ate: string } {
+  const [y, m] = ym.split('-').map(Number)
+  const de = `${y}-${String(m).padStart(2, '0')}-01`
+  const last = new Date(y, m, 0).getDate()
+  const ate = `${y}-${String(m).padStart(2, '0')}-${String(last).padStart(2, '0')}`
+  return { de, ate }
+}
+
+/** Do 1º dia do mês mais antigo ao último do mais recente. */
+export function monthsSpanBounds(months: string[]): { de: string; ate: string } {
+  const sorted = [...new Set(months.filter(Boolean))].sort()
+  if (sorted.length === 0) return monthBounds(currentCompetenciaMonth())
+  const first = monthBounds(sorted[0])
+  const last = monthBounds(sorted[sorted.length - 1])
+  return { de: first.de, ate: last.ate }
+}
+
+/** Rótulo do filtro multi-mês: "Out/2026", "Out–Nov/2026" ou "3 meses". */
+export function formatCompetenciasLabel(months: string[]): string {
+  const sorted = [...new Set(months.filter(Boolean))].sort()
+  if (sorted.length === 0) return formatCompetencia(`${currentCompetenciaMonth()}-01`)
+  if (sorted.length === 1) return formatCompetencia(`${sorted[0]}-01`)
+  if (sorted.length === 2) {
+    return `${formatCompetencia(`${sorted[0]}-01`)}–${formatCompetencia(`${sorted[1]}-01`)}`
+  }
+  return `${sorted.length} meses`
+}
+
 /** Logins cujos filtros abrem no mês do calendário, e não no anterior. */
 const LOGINS_MES_VIGENTE = ['matheus.silva-oliveira@nstech.com.br']
 
@@ -71,6 +100,11 @@ export function setCompetenciaPadraoPorLogin(email: string | null | undefined) {
   competenciaNoMesVigente = LOGINS_MES_VIGENTE.includes(
     (email ?? '').trim().toLowerCase(),
   )
+}
+
+/** Matheus (e logins do mesmo perfil): filtro multi-mês + mês vigente. */
+export function isLoginMesVigente(): boolean {
+  return competenciaNoMesVigente
 }
 
 /**

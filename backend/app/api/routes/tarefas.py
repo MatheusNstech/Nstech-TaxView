@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from calendar import monthrange
 from datetime import date, datetime, time, timezone
 from typing import Annotated, Any
 from uuid import UUID
@@ -149,6 +150,10 @@ def _notify_assignee(
         return
 
 
+def _competencia_from_prazo(prazo: date) -> date:
+    return prazo.replace(day=1)
+
+
 def query_tarefas(
     user: AuthUser,
     client: Client,
@@ -168,14 +173,21 @@ def query_tarefas(
     if resolved is not None and not resolved:
         return []
 
+    # Competência na UI das tarefas = mês do prazo (não a coluna competencia).
+    effective_de = prazo_de
+    effective_ate = prazo_ate
+    if competencia and not (prazo_de or prazo_ate):
+        first = competencia.replace(day=1)
+        last_day = monthrange(first.year, first.month)[1]
+        effective_de = first
+        effective_ate = date(first.year, first.month, last_day)
+
     def build():
         query = client.table("tarefas").select(_FULL_SELECT)
-        if competencia and not (prazo_de or prazo_ate):
-            query = query.eq("competencia", competencia.isoformat())
-        if prazo_de:
-            query = query.gte("prazo", prazo_de.isoformat())
-        if prazo_ate:
-            query = query.lte("prazo", prazo_ate.isoformat())
+        if effective_de:
+            query = query.gte("prazo", effective_de.isoformat())
+        if effective_ate:
+            query = query.lte("prazo", effective_ate.isoformat())
         if resolved and len(resolved) == 1:
             query = query.eq("responsavel_id", resolved[0])
         elif resolved:
@@ -325,13 +337,14 @@ def create_tarefa(
             )
         motivo_atraso = motivo
 
+    competencia = body.competencia or _competencia_from_prazo(body.prazo)
     payload = {
         "titulo": body.titulo.strip(),
         "solicitante_nome": solicitante,
         "descricao": body.descricao,
         "categoria": body.categoria.value,
         "status": body.status.value,
-        "competencia": body.competencia.isoformat() if body.competencia else None,
+        "competencia": competencia.isoformat(),
         "prazo": body.prazo.isoformat() if body.prazo else None,
         "hora_inicio": _time_value(body.hora_inicio),
         "hora_fim": _time_value(body.hora_fim),
@@ -378,6 +391,10 @@ def update_tarefa(
     for key in ("competencia", "prazo"):
         if key in patch and patch[key] is not None:
             patch[key] = patch[key].isoformat()
+    # Prazo manda: competência espelha o mês do prazo quando o prazo muda.
+    if "prazo" in patch and patch["prazo"]:
+        prazo_date = date.fromisoformat(str(patch["prazo"])[:10])
+        patch["competencia"] = _competencia_from_prazo(prazo_date).isoformat()
     for key in ("hora_inicio", "hora_fim"):
         if key in patch:
             patch[key] = _time_value(patch[key])

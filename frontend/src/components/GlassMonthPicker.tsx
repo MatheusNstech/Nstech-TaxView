@@ -1,6 +1,10 @@
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import { currentCompetenciaMonth, formatCompetencia } from '../lib/format'
+import {
+  currentCompetenciaMonth,
+  formatCompetencia,
+  formatCompetenciasLabel,
+} from '../lib/format'
 
 const MONTHS = [
   { value: 1, label: 'Jan' },
@@ -17,15 +21,29 @@ const MONTHS = [
   { value: 12, label: 'Dez' },
 ]
 
-interface GlassMonthPickerProps {
+interface GlassMonthPickerSingleProps {
+  multiple?: false
   value: string
   onChange: (value: string) => void
+  values?: never
+  onChangeValues?: never
+}
+
+interface GlassMonthPickerMultiProps {
+  multiple: true
+  values: string[]
+  onChangeValues: (values: string[]) => void
+  value?: never
+  onChange?: never
+}
+
+type GlassMonthPickerProps = {
   className?: string
   ariaLabel?: string
   align?: 'left' | 'right'
   shortcutValue?: string
   shortcutLabel?: string
-}
+} & (GlassMonthPickerSingleProps | GlassMonthPickerMultiProps)
 
 function parseMonth(value: string): { year: number; month: number } {
   const [y, m] = value.split('-').map(Number)
@@ -40,17 +58,31 @@ function toValue(year: number, month: number): string {
   return `${year}-${String(month).padStart(2, '0')}`
 }
 
-export default function GlassMonthPicker({
-  value,
-  onChange,
-  className = '',
-  ariaLabel = 'Competência',
-  align = 'left',
-  shortcutValue,
-  shortcutLabel = 'Competência atual',
-}: GlassMonthPickerProps) {
+function sortedUnique(months: string[]): string[] {
+  return [...new Set(months.filter(Boolean))].sort()
+}
+
+export default function GlassMonthPicker(props: GlassMonthPickerProps) {
+  const {
+    className = '',
+    ariaLabel = 'Competência',
+    align = 'left',
+    shortcutValue,
+    shortcutLabel = 'Competência atual',
+  } = props
+  const multiple = props.multiple === true
+  const selected = useMemo(
+    () =>
+      multiple
+        ? sortedUnique(props.values)
+        : sortedUnique([props.value].filter(Boolean)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- discriminated union
+    [multiple, multiple ? props.values.join('|') : props.value],
+  )
+  const primary = selected[selected.length - 1] ?? currentCompetenciaMonth()
+
   const [open, setOpen] = useState(false)
-  const parsed = useMemo(() => parseMonth(value), [value])
+  const parsed = useMemo(() => parseMonth(primary), [primary])
   const [viewYear, setViewYear] = useState(parsed.year)
   const rootRef = useRef<HTMLDivElement>(null)
   const panelId = useId()
@@ -80,6 +112,28 @@ export default function GlassMonthPicker({
   }, [open])
 
   const thisMonth = shortcutValue ?? currentCompetenciaMonth()
+  const display = multiple
+    ? formatCompetenciasLabel(selected)
+    : formatCompetencia(`${primary}-01`)
+
+  const commitSingle = (monthValue: string) => {
+    if (!multiple) {
+      props.onChange(monthValue)
+      setOpen(false)
+    }
+  }
+
+  const toggleMulti = (monthValue: string) => {
+    if (!multiple) return
+    const set = new Set(selected)
+    if (set.has(monthValue)) {
+      if (set.size <= 1) return
+      set.delete(monthValue)
+    } else {
+      set.add(monthValue)
+    }
+    props.onChangeValues(sortedUnique([...set]))
+  }
 
   return (
     <div ref={rootRef} className={`relative min-w-0 ${className}`}>
@@ -102,9 +156,7 @@ export default function GlassMonthPicker({
           className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-[color:var(--color-muted)]"
           strokeWidth={1.75}
         />
-        <span className="min-w-0 flex-1 truncate font-medium">
-          {formatCompetencia(`${value}-01`)}
-        </span>
+        <span className="min-w-0 flex-1 truncate font-medium">{display}</span>
       </button>
 
       {open && (
@@ -139,18 +191,26 @@ export default function GlassMonthPicker({
             </button>
           </div>
 
+          {multiple ? (
+            <p className="mb-2 text-[11px] text-[color:var(--color-muted)]">
+              Clique para marcar vários meses
+            </p>
+          ) : null}
+
           <div className="grid grid-cols-4 gap-1.5">
             {MONTHS.map((month) => {
               const monthValue = toValue(viewYear, month.value)
-              const isActive = monthValue === value
+              const isActive = selected.includes(monthValue)
               return (
                 <button
                   key={month.value}
                   type="button"
-                  onClick={() => {
-                    onChange(monthValue)
-                    setOpen(false)
-                  }}
+                  aria-pressed={isActive}
+                  onClick={() =>
+                    multiple
+                      ? toggleMulti(monthValue)
+                      : commitSingle(monthValue)
+                  }
                   className={[
                     'rounded-xl px-2 py-2 text-sm font-medium transition-colors',
                     isActive
@@ -168,7 +228,11 @@ export default function GlassMonthPicker({
             <button
               type="button"
               onClick={() => {
-                onChange(thisMonth)
+                if (multiple) {
+                  props.onChangeValues([thisMonth])
+                } else {
+                  props.onChange(thisMonth)
+                }
                 setOpen(false)
               }}
               className="rounded-lg px-2 py-1 text-xs font-semibold text-brand-600 transition-colors hover:bg-brand-500/10 dark:text-brand-400"

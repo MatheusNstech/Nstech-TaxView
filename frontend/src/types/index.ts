@@ -362,6 +362,8 @@ export interface ImportResult {
 
 export interface FilterValues {
   competencia: string
+  /** Multi-mês (perfil Matheus): meses "YYYY-MM" selecionados. */
+  competencias?: string[]
   bu: string
   status: string
   search: string

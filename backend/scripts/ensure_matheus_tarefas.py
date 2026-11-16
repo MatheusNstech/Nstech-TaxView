@@ -23,10 +23,14 @@ from app.core.config import get_settings  # noqa: E402
 
 EMAIL = "matheus.silva-oliveira@nstech.com.br"
 NOME = "Matheus Silva Oliveira"
-COMPETENCIA = "2026-08-01"
 HORA_INICIO = "09:00"
 HORA_FIM = "18:00"
 PRAZO_ABERTO = "2026-09-18"
+
+
+def competencia_do_prazo(prazo: str) -> str:
+    """Tarefas avulsas: competência = 1º dia do mês do prazo."""
+    return f"{prazo[:7]}-01"
 
 # (titulo, status, prazo, descricao, solicitante)
 CHECKPOINT_TAREFAS: list[tuple[str, str, str, str, str]] = [
@@ -288,12 +292,13 @@ def _ensure_tarefas(db, *, responsavel_id: str, created_by: str) -> tuple[int, i
     unchanged_n = 0
     for titulo, status, prazo, descricao, solicitante in CHECKPOINT_TAREFAS:
         key = titulo.strip().lower()
+        competencia = competencia_do_prazo(prazo)
         payload: dict = {
             "titulo": titulo,
             "descricao": descricao,
             "categoria": "outras",
             "status": status,
-            "competencia": COMPETENCIA,
+            "competencia": competencia,
             "prazo": prazo,
             "hora_inicio": HORA_INICIO,
             "hora_fim": HORA_FIM,
@@ -310,7 +315,7 @@ def _ensure_tarefas(db, *, responsavel_id: str, created_by: str) -> tuple[int, i
             update_payload = {
                 "descricao": descricao,
                 "status": status,
-                "competencia": COMPETENCIA,
+                "competencia": competencia,
                 "prazo": prazo,
                 "solicitante_nome": solicitante,
                 "entregue_em": payload["entregue_em"],
